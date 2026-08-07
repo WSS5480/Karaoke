@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: tesla-monitor
+    name: buddy-ev-monitor
     runtime: node
     plan: free
     buildCommand: ""
