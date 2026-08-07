@@ -1,0 +1,10 @@
+{
+  "name": "tesla-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tesla-app-style dashboard for monitoring your car via the Tesla Fleet API",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

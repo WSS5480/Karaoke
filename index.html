@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Model Y</title>
+<style>
+  :root{
+    --bg:#171a20;            /* Tesla brand dark */
+    --card:#1c2027;
+    --card-border:#262b33;
+    --elev:#2b3038;
+    --ink:#f4f4f4;
+    --ink-2:#9b9fa5;
+    --ink-3:#6b7076;
+    --accent:#3e6ae1;        /* Tesla blue */
+    --green:#3dbe5b;         /* charge green */
+    --green-track:#1e3a28;
+    --red:#e82127;
+    --hairline:#262b33;
+    --radius:16px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{background:var(--bg)}
+  body{
+    font-family:"Gotham SSm","Gotham",-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    display:flex;justify-content:center;
+  }
+  .app{width:100%;max-width:430px;padding:20px 20px 40px;position:relative}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:flex-start;justify-content:space-between;padding-top:8px}
+  .car-title h1{font-size:22px;font-weight:600;letter-spacing:.2px}
+  .car-title .sub{font-size:13px;color:var(--ink-2);margin-top:3px;display:flex;align-items:center;gap:6px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block}
+  .icon-btn{width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--card-border);
+    display:flex;align-items:center;justify-content:center;color:var(--ink-2);cursor:pointer}
+  .icon-btn:active{background:var(--elev)}
+
+  /* ---------- battery line ---------- */
+  .battery-row{display:flex;align-items:center;gap:10px;margin-top:18px}
+  .batt{position:relative;width:30px;height:14px;border:1.5px solid var(--ink-2);border-radius:3.5px}
+  .batt::after{content:"";position:absolute;right:-4.5px;top:3.5px;width:3px;height:5px;background:var(--ink-2);border-radius:0 1.5px 1.5px 0}
+  .batt-fill{position:absolute;left:1.5px;top:1.5px;bottom:1.5px;border-radius:1.5px;background:var(--green);width:74%}
+  .batt-label{font-size:15px;font-weight:600}
+  .batt-label small{color:var(--ink-2);font-weight:400;font-size:14px;margin-left:6px}
+  .charging-bolt{color:var(--green);display:none}
+  .is-charging .charging-bolt{display:inline-flex;animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ---------- car ---------- */
+  .car-stage{margin:2px -8px 0;position:relative}
+  .car-stage::before{content:"";position:absolute;inset:-6% 4% 6% 4%;border-radius:50%;
+    background:radial-gradient(closest-side, rgba(62,106,225,.16), rgba(62,106,225,0) 72%);pointer-events:none}
+  .car-stage svg{width:100%;height:auto;display:block}
+  .car-shadow{filter:blur(14px);opacity:.5}
+
+  /* ---------- quick controls ---------- */
+  .controls{display:flex;justify-content:space-between;margin:14px 4px 6px}
+  .ctrl{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:none;cursor:pointer;color:var(--ink);font-family:inherit}
+  .ctrl .circle{width:52px;height:52px;border-radius:50%;background:var(--card);border:1px solid var(--card-border);
+    display:flex;align-items:center;justify-content:center;color:var(--ink);transition:background .15s,color .15s,border-color .15s}
+  .ctrl span{font-size:11px;color:var(--ink-2)}
+  .ctrl.active .circle{background:var(--accent);border-color:var(--accent);color:#fff}
+  .ctrl:active .circle{background:var(--elev)}
+
+  /* ---------- stat tiles ---------- */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+  .tile{background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:12px 13px}
+  .tile .tl{font-size:11px;color:var(--ink-2);letter-spacing:.2px}
+  .tile .tv{font-size:19px;font-weight:600;margin-top:5px}
+  .tile .tv small{font-size:11px;font-weight:400;color:var(--ink-2);margin-left:3px}
+  .tile .td{font-size:10.5px;margin-top:4px;color:var(--ink-2)}
+  .tile .td.good{color:var(--green)}
+
+  .badge{font-size:9.5px;font-weight:700;letter-spacing:.8px;padding:2.5px 7px;border-radius:99px;
+    background:#3a3320;color:#e0b64a;border:1px solid #57492a;vertical-align:1px}
+  .badge.live{background:#1c3524;color:#4fd47a;border-color:#2a5238}
+
+  .meter-fill{overflow:hidden;position:absolute}
+  .is-charging .meter-fill::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);
+    animation:shimmer 2.2s linear infinite}
+  @keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+  .card,.tiles,.controls,.car-stage{animation:rise .45s ease both}
+  .card:nth-of-type(2){animation-delay:.05s}.card:nth-of-type(3){animation-delay:.1s}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){.card,.tiles,.controls,.car-stage{animation:none}.is-charging .meter-fill::after{animation:none}}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);padding:18px;margin-top:14px}
+  .card-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+  .card-head h2{font-size:16px;font-weight:600}
+  .card-head .meta{font-size:12.5px;color:var(--ink-2)}
+
+  /* charging card */
+  .charge-big{display:flex;align-items:baseline;gap:8px;margin-top:10px}
+  .charge-big .pct{font-size:44px;font-weight:600;letter-spacing:-.5px}
+  .charge-big .range{font-size:15px;color:var(--ink-2)}
+  .meter{position:relative;height:8px;border-radius:4px;background:var(--green-track);margin:14px 0 6px;overflow:hidden}
+  .meter-fill{position:absolute;left:0;top:0;bottom:0;background:var(--green);border-radius:4px 0 0 4px;width:74%}
+  .meter-limit{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-3);left:90%}
+  .meter-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);margin-bottom:10px}
+  .charge-stats{display:flex;border-top:1px solid var(--hairline);margin-top:12px;padding-top:12px}
+  .cs{flex:1}
+  .cs + .cs{border-left:1px solid var(--hairline);padding-left:14px}
+  .cs .v{font-size:16px;font-weight:600}
+  .cs .k{font-size:11.5px;color:var(--ink-2);margin-top:3px}
+
+  /* charts */
+  .chart-wrap{position:relative;margin-top:14px}
+  .chart-wrap svg{display:block;width:100%;height:auto}
+  .chart-title{font-size:12.5px;color:var(--ink-2);margin-top:16px}
+  .tooltip{
+    position:absolute;pointer-events:none;background:#0f1216;border:1px solid #333941;border-radius:10px;
+    padding:8px 11px;font-size:12px;line-height:1.5;color:var(--ink-2);white-space:nowrap;z-index:10;
+    opacity:0;transition:opacity .1s;box-shadow:0 6px 20px rgba(0,0,0,.45)
+  }
+  .tooltip .tv{color:var(--ink);font-weight:600;font-size:13px}
+  .axis-text{font-size:10px;fill:var(--ink-3)}
+  .grid-line{stroke:#22262d;stroke-width:1}
+
+  /* climate */
+  .climate-body{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+  .temp-main{font-size:40px;font-weight:600}
+  .temp-main small{font-size:16px;color:var(--ink-2);font-weight:400}
+  .temp-sub{font-size:13px;color:var(--ink-2);margin-top:2px}
+  .temp-ctrl{display:flex;align-items:center;gap:14px}
+  .temp-btn{width:40px;height:40px;border-radius:50%;background:var(--elev);border:none;color:var(--ink);
+    font-size:20px;cursor:pointer;font-family:inherit}
+  .temp-set{font-size:17px;font-weight:600;min-width:44px;text-align:center}
+
+  /* location */
+  .map{border-radius:12px;overflow:hidden;margin-top:12px;position:relative;border:1px solid var(--card-border)}
+  .map svg{display:block;width:100%;height:auto}
+  .loc-line{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13.5px;color:var(--ink-2)}
+  .loc-line svg{flex:none}
+
+  /* info rows */
+  .rows{margin-top:6px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--hairline);font-size:14px}
+  .row:last-child{border-bottom:none;padding-bottom:0}
+  .row .k{color:var(--ink-2)}
+  .row .v{font-weight:500}
+
+  /* footer */
+  .demo-note{margin-top:22px;text-align:center;font-size:12px;color:var(--ink-3);line-height:1.6}
+  .demo-note b{color:var(--ink-2);font-weight:600}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <header>
+    <div class="car-title">
+      <h1 id="carName">Steve's Model Y</h1>
+      <div class="sub"><span class="dot" id="statusDot"></span><span id="statusText">Charging · Home</span>&nbsp;<span class="badge" id="srcBadge">DEMO</span></div>
+    </div>
+    <div class="icon-btn" title="Account">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>
+    </div>
+  </header>
+
+  <div class="battery-row is-charging" id="batteryRow">
+    <div class="batt"><div class="batt-fill" id="battFill"></div></div>
+    <div class="batt-label"><span id="battPct">74%</span><small id="battRange">243 mi</small></div>
+    <span class="charging-bolt">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+    </span>
+  </div>
+
+  <div class="car-stage" id="carStage"><!-- car SVG injected by JS --></div>
+
+  <div class="controls">
+    <button class="ctrl active" id="ctrlLock" data-label-on="Locked" data-label-off="Unlocked">
+      <div class="circle">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path class="lock-shackle" d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+      </div><span>Locked</span>
+    </button>
+    <button class="ctrl" id="ctrlClimate">
+      <div class="circle">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5.5 6.5 12 10l6.5-3.5M5.5 17.5 12 14l6.5 3.5"/></svg>
+      </div><span>Climate</span>
+    </button>
+    <button class="ctrl active" id="ctrlPort">
+      <div class="circle">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 5 13h6l-1 9 8-11h-6l1-9z"/></svg>
+      </div><span>Charge Port</span>
+    </button>
+    <button class="ctrl" id="ctrlFrunk">
+      <div class="circle">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15h18M3 15c0-3 4-8 9-8s9 5 9 8M12 7V5"/></svg>
+      </div><span>Frunk</span>
+    </button>
+    <button class="ctrl" id="ctrlTrunk">
+      <div class="circle">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15H3M21 15c0-3-4-8-9-8M12 7c-2 0-4 .8-5.5 2M12 7V5"/></svg>
+      </div><span>Trunk</span>
+    </button>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="tl">Efficiency · 7d</div><div class="tv" id="tileEff">263<small>Wh/mi</small></div><div class="td good" id="tileEffD">▼ 4% vs prior week</div></div>
+    <div class="tile"><div class="tl">Driven · 7d</div><div class="tv" id="tileMi">186<small>mi</small></div><div class="td" id="tileMiD">▲ 12% vs prior week</div></div>
+    <div class="tile"><div class="tl">Charge cost · Aug</div><div class="tv" id="tileCost">$11.40</div><div class="td" id="tileCostD">92% at home</div></div>
+  </div>
+
+  <!-- Charging -->
+  <section class="card" id="chargingCard">
+    <div class="card-head"><h2>Charging</h2><div class="meta" id="chargeMeta">32 min until limit</div></div>
+    <div class="charge-big"><div class="pct" id="chargePct">74%</div><div class="range" id="chargeRange">243 mi</div></div>
+    <div class="meter is-charging" id="meterWrap"><div class="meter-fill" id="meterFill"></div><div class="meter-limit" id="meterLimit"></div></div>
+    <div class="meter-scale"><span>0%</span><span id="limitLabel">Limit 90%</span><span>100%</span></div>
+    <div class="charge-stats">
+      <div class="cs"><div class="v" id="csPower">7.4 kW</div><div class="k">Charge rate</div></div>
+      <div class="cs"><div class="v" id="csAmps">32 A · 240 V</div><div class="k">Current session</div></div>
+      <div class="cs"><div class="v" id="csAdded">+18.2 kWh</div><div class="k">Energy added</div></div>
+    </div>
+    <div class="chart-title">Tonight's charge session</div>
+    <div class="chart-wrap" id="chargeChartWrap">
+      <svg id="chargeChart" viewBox="0 0 360 130" role="img" aria-label="Charge level over tonight's session, 42 to 74 percent"></svg>
+      <div class="tooltip" id="chargeTip"></div>
+    </div>
+  </section>
+
+  <!-- Climate -->
+  <section class="card">
+    <div class="card-head"><h2>Climate</h2><div class="meta" id="climateMeta">Off</div></div>
+    <div class="climate-body">
+      <div>
+        <div class="temp-main" id="tempIn">71<small>°F inside</small></div>
+        <div class="temp-sub" id="tempOut">64°F outside</div>
+      </div>
+      <div class="temp-ctrl">
+        <button class="temp-btn" id="tempDown">−</button>
+        <div class="temp-set" id="tempSet">70°</div>
+        <button class="temp-btn" id="tempUp">+</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Location -->
+  <section class="card">
+    <div class="card-head"><h2>Location</h2><div class="meta">Parked · Home</div></div>
+    <div class="map" id="mapWrap"><!-- map SVG injected by JS --></div>
+    <div class="loc-line">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      <span id="address">2882 Sand Hill Rd, Menlo Park, CA</span>
+    </div>
+  </section>
+
+  <!-- Last 7 days -->
+  <section class="card">
+    <div class="card-head"><h2>Last 7 days</h2><div class="meta" id="weekMeta">186 mi driven</div></div>
+    <div class="chart-wrap" id="weekChartWrap">
+      <svg id="weekChart" viewBox="0 0 360 140" role="img" aria-label="Miles driven per day over the last seven days"></svg>
+      <div class="tooltip" id="weekTip"></div>
+    </div>
+  </section>
+
+  <!-- Vehicle -->
+  <section class="card">
+    <div class="card-head"><h2>Vehicle</h2></div>
+    <div class="rows">
+      <div class="row"><span class="k">Odometer</span><span class="v">18,443 mi</span></div>
+      <div class="row"><span class="k">Software</span><span class="v">2026.20.4</span></div>
+      <div class="row"><span class="k">Efficiency (7 days)</span><span class="v">263 Wh/mi</span></div>
+      <div class="row"><span class="k">Tire pressure</span><span class="v">42 · 42 · 41 · 42 psi</span></div>
+      <div class="row"><span class="k">Interior · Cabin overheat</span><span class="v">On</span></div>
+    </div>
+  </section>
+
+  <div class="demo-note">
+    <b id="footNote">Running on demo data.</b><br>
+    Add your Tesla Fleet API credentials on the server (see README) and this goes live automatically.
+  </div>
+
+</div>
+<script>
+"use strict";
+
+/* =====================================================================
+   DATA LAYER — swap this for your Tesla Fleet API proxy to go live.
+   The shape mirrors Fleet API's /api/1/vehicles/{id}/vehicle_data.
+   ===================================================================== */
+const DEMO_DATA = {
+  display_name: "Steve's Model Y",
+  state: "online",
+  charge_state: {
+    charging_state: "Charging",          // "Charging" | "Stopped" | "Disconnected"
+    battery_level: 74,                    // %
+    battery_range: 243,                   // mi
+    charge_limit_soc: 90,                 // %
+    charger_power: 7.4,                   // kW
+    charger_actual_current: 32,           // A
+    charger_voltage: 240,                 // V
+    charge_energy_added: 18.2,            // kWh
+    minutes_to_full_charge: 32,
+    session: [                            // [minutes since 20:30, battery %]
+      [0,42],[15,45],[30,48],[45,51],[60,54],[75,57],[90,60],
+      [105,62],[120,65],[135,67],[150,69],[165,71],[180,73],[195,74]
+    ]
+  },
+  climate_state: {
+    inside_temp_f: 71, outside_temp_f: 64,
+    driver_temp_setting_f: 70, is_climate_on: false
+  },
+  drive_state: { shift_state: null, address: "2882 Sand Hill Rd, Menlo Park, CA" },
+  vehicle_config: { car_type: "modely", exterior_color: "PearlWhite", wheel_type: "Gemini19" },
+  vehicle_state: {
+    odometer: 18443, car_version: "2026.20.4", locked: true,
+    tpms: [42,42,41,42]
+  },
+  week: [                                 // last 7 days of driving
+    {day:"Fri", mi:12},{day:"Sat", mi:41},{day:"Sun", mi:8},{day:"Mon", mi:26},
+    {day:"Tue", mi:31},{day:"Wed", mi:19},{day:"Thu", mi:49}
+  ]
+};
+
+let DATA_SOURCE = "demo";
+async function getVehicleData(){
+  /* The bundled server (server.js) exposes /api/vehicle. Until you add your
+     Tesla Fleet API credentials as environment variables on the server, it
+     answers {demo:true} and this dashboard runs on the demo dataset. */
+  try{
+    const r = await fetch("/api/vehicle", {cache:"no-store"});
+    if (r.ok){
+      const j = await r.json();
+      if (!j.demo){ DATA_SOURCE = "live"; return j; }
+    }
+  }catch(e){ /* file:// or offline -> demo */ }
+  DATA_SOURCE = "demo";
+  return DEMO_DATA;
+}
+
+/* ============================ CAR RENDER ============================ */
+/* Tesla's own configurator render — the same imagery the Tesla app uses.
+   Color + wheels come from your vehicle_config, so it looks like YOUR car.
+   Falls back to the built-in SVG if the image can't load. */
+const MODEL_SLUG = { modely:"my", model3:"m3", models:"ms", modelx:"mx" };
+const COLOR_CODES = {
+  PearlWhite:"$PPSW", White:"$PPSW", SolidBlack:"$PBSB", Black:"$PBSB",
+  MidnightSilver:"$PMNG", Silver:"$PMNG", SteelGrey:"$PMNG",
+  DeepBlue:"$PPSB", DeepBlueMetallic:"$PPSB", Blue:"$PPSB",
+  RedMulticoat:"$PPMR", Red:"$PPMR", UltraRed:"$PR01",
+  Quicksilver:"$PN01", StealthGrey:"$PN00", Grey:"$PN00", Gray:"$PN00",
+  MidnightCherryRed:"$PR00", DiamondBlack:"$PX02"
+};
+const WHEEL_CODES = {
+  Gemini19:"$WY19B", GeminiWheels19:"$WY19B", Photon19:"$WY19C",
+  Induction20:"$WY20P", InductionWheels20:"$WY20P", Crossflow20:"$WY20A",
+  Helix19:"$WY19D", Apollo19:"$WY19B"
+};
+function carImageURL(cfg){
+  cfg = cfg || {};
+  const model = MODEL_SLUG[cfg.car_type] || "my";
+  const color = COLOR_CODES[cfg.exterior_color] || "$PPSW";
+  const wheel = WHEEL_CODES[cfg.wheel_type] || "$WY19B";
+  return "https://static-assets.tesla.com/configurator/compositor?model=" + model +
+    "&options=" + encodeURIComponent(color + "," + wheel) +
+    "&view=STUD_SIDE&size=1400&bkba_opt=2";
+}
+function mountCarImage(cfg){
+  const stage = document.getElementById("carStage");
+  stage.innerHTML = carSVG();               // instant fallback
+  const img = new Image();
+  img.alt = "Your car";
+  img.style.cssText = "width:100%;display:block;filter:drop-shadow(0 20px 18px rgba(0,0,0,.45))";
+  img.onload = () => { stage.innerHTML = ""; stage.appendChild(img); };
+  img.src = carImageURL(cfg);               // if it fails, SVG stays
+}
+
+function carSVG(){
+  return `
+  <svg viewBox="0 0 760 300" aria-label="Model Y side profile">
+  <defs>
+    <linearGradient id="bodyG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#767d86"/>
+      <stop offset=".4" stop-color="#565d66"/>
+      <stop offset=".75" stop-color="#3b4148"/>
+      <stop offset="1" stop-color="#2e3339"/>
+    </linearGradient>
+    <linearGradient id="glassG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3d444e"/>
+      <stop offset="1" stop-color="#15181d"/>
+    </linearGradient>
+    <radialGradient id="shadowG" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#000" stop-opacity=".6"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="378" cy="252" rx="300" ry="15" fill="url(#shadowG)"/>
+
+  <!-- wheel wells (dark, behind body cutouts) -->
+  <circle cx="176" cy="200" r="52" fill="#0b0d10"/>
+  <circle cx="552" cy="200" r="52" fill="#0b0d10"/>
+
+  <!-- body -->
+  <path fill="url(#bodyG)" d="
+    M 118,218
+    C 100,214 90,206 88,194
+    C 87,180 87,170 92,162
+    C 102,148 122,141 142,137
+    C 166,131 192,125 214,118
+    C 240,84 278,52 322,42
+    C 374,36 428,46 464,66
+    C 492,84 508,93 520,100
+    C 546,106 580,112 606,116
+    L 626,114
+    C 640,117 646,126 646,138
+    C 646,166 640,188 628,200
+    C 619,209 610,215 600,218
+    A 55,55 0 1 0 499,218
+    L 229,218
+    A 55,55 0 1 0 123,218
+    L 118,218 Z"/>
+
+  <!-- black wheel-arch cladding (Model Y signature) -->
+  <path d="M 605,218 A 55,55 0 1 0 499,218" fill="none" stroke="#111317" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 229,218 A 55,55 0 1 0 123,218" fill="none" stroke="#111317" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- glass -->
+  <path fill="url(#glassG)" d="
+    M 228,112
+    C 250,80 288,50 326,44
+    C 374,38 422,47 458,66
+    C 484,79 502,91 514,99
+    C 450,96 320,102 228,112 Z"/>
+  <!-- B pillar -->
+  <path d="M 358,47 L 366,104" stroke="#14171c" stroke-width="6" opacity=".85"/>
+
+  <!-- beltline chrome-delete trim -->
+  <path d="M 228,113 C 320,103 450,97 516,100" stroke="#9fa6ae" stroke-width="1.6" fill="none" opacity=".8"/>
+  <path d="M 214,118 C 240,84 278,52 322,42 C 374,36 428,46 464,66" stroke="#aab1b9" stroke-width="1.4" fill="none" opacity=".35"/>
+
+  <!-- door seams -->
+  <path d="M 364,113 C 362,146 362,184 364,214" stroke="#232830" stroke-width="1.6" fill="none" opacity=".9"/>
+  <path d="M 254,117 C 252,146 252,184 254,216" stroke="#232830" stroke-width="1.4" fill="none" opacity=".7"/>
+  <path d="M 488,92 C 490,124 490,174 488,214" stroke="#232830" stroke-width="1.4" fill="none" opacity=".6"/>
+
+  <!-- handles -->
+  <rect x="294" y="128" width="32" height="4.5" rx="2.2" fill="#9aa0a8"/>
+  <rect x="416" y="128" width="32" height="4.5" rx="2.2" fill="#9aa0a8"/>
+
+  <!-- mirror -->
+  <path d="M 250,110 C 240,100 228,98 222,102 C 220,109 228,114 242,115 Z" fill="#6b727b"/>
+
+  <!-- headlight -->
+  <path d="M 94,154 C 106,148 122,143 140,140 L 146,144 C 128,148 112,154 102,160 Z" fill="#dfeaf6"/>
+
+  <!-- taillight -->
+  <path d="M 626,115 C 637,117 644,124 646,134 L 634,129 C 631,122 629,118 626,115 Z" fill="#d64541"/>
+
+  <!-- wheels -->
+  <g id="wheel1">
+    <circle cx="176" cy="200" r="48" fill="#0d0f13"/>
+    <circle cx="176" cy="200" r="29" fill="#363b42"/>
+    <circle cx="176" cy="200" r="29" fill="none" stroke="#484e56" stroke-width="2"/>
+    <g fill="#1a1d22">
+      <path d="M 176,200 L 166,175 A 27,27 0 0 1 186,175 Z"/>
+      <path d="M 176,200 L 201,192 A 27,27 0 0 1 195,216 Z"/>
+      <path d="M 176,200 L 184,225 A 27,27 0 0 1 160,218 Z"/>
+      <path d="M 176,200 L 151,208 A 27,27 0 0 1 153,184 Z"/>
+    </g>
+    <circle cx="176" cy="200" r="7" fill="#585e66"/>
+    <circle cx="176" cy="200" r="3" fill="#22252a"/>
+  </g>
+  <use href="#wheel1" x="376"/>
+</svg>`;
+}
+
+/* ============================ MAP RENDER ============================ */
+function mapSVG(){
+  return `
+  <svg viewBox="0 0 390 150" aria-label="Map showing the car parked at home">
+    <rect width="390" height="150" fill="#20242b"/>
+    <rect x="0" y="0" width="120" height="64" fill="#232d22" opacity=".8"/>
+    <rect x="300" y="96" width="90" height="54" fill="#232d22" opacity=".6"/>
+    <g stroke="#2e343d" stroke-width="10" stroke-linecap="round">
+      <path d="M -10,104 C 90,96 210,110 400,88" fill="none"/>
+      <path d="M 132,-10 C 128,50 140,110 132,160" fill="none"/>
+    </g>
+    <g stroke="#3a414c" stroke-width="4" stroke-linecap="round">
+      <path d="M -10,44 L 400,36" fill="none"/>
+      <path d="M 258,-10 L 266,160" fill="none"/>
+      <path d="M 40,150 L 60,70" fill="none"/>
+    </g>
+    <g stroke="#454d59" stroke-width="1.4" stroke-dasharray="7 7" opacity=".7">
+      <path d="M -10,102 C 90,94 210,108 400,86" fill="none"/>
+    </g>
+    <circle cx="196" cy="86" r="16" fill="#3e6ae1" opacity=".18"/>
+    <circle cx="196" cy="86" r="7" fill="#3e6ae1" stroke="#fff" stroke-width="2.5"/>
+  </svg>`;
+}
+
+/* ========================== CHART HELPERS =========================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(name, attrs, parent){
+  const n = document.createElementNS(NS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function fmtTime(min){ // minutes since 20:30
+  const t = 20*60+30 + min, h = Math.floor(t/60)%24, m = t%60;
+  const hh = ((h+11)%12)+1, ap = h < 12 ? "AM" : "PM";
+  return hh + ":" + String(m).padStart(2,"0") + " " + ap;
+}
+
+/* -------- charge session line chart (crosshair + tooltip) ---------- */
+function renderChargeChart(data){
+  const svg = document.getElementById("chargeChart");
+  const wrap = document.getElementById("chargeChartWrap");
+  const tip = document.getElementById("chargeTip");
+  svg.textContent = "";
+
+  const W=360, H=130, L=30, R=14, T=12, B=24;
+  const pts = data.charge_state.session;
+  const limit = data.charge_state.charge_limit_soc;
+  const xMax = 240;                       // show through 00:30 for projection
+  const yMin = 30, yMax = 100;
+  const x = m => L + (m/xMax)*(W-L-R);
+  const y = p => T + (1-(p-yMin)/(yMax-yMin))*(H-T-B);
+
+  // grid + y ticks
+  [40,60,80,100].forEach(p=>{
+    el("line",{x1:L,x2:W-R,y1:y(p),y2:y(p),class:"grid-line"},svg);
+    const t=el("text",{x:L-6,y:y(p)+3,"text-anchor":"end",class:"axis-text"},svg);
+    t.textContent=p;
+  });
+  // x ticks: 21:00, 22:00, 23:00, 00:00
+  [30,90,150,210].forEach((m,i)=>{
+    const t=el("text",{x:x(m),y:H-8,"text-anchor":"middle",class:"axis-text"},svg);
+    t.textContent=["9 PM","10 PM","11 PM","12 AM"][i];
+  });
+  // limit line
+  el("line",{x1:L,x2:W-R,y1:y(limit),y2:y(limit),stroke:"#6b7076","stroke-width":1,"stroke-dasharray":"3 4"},svg);
+  const lt=el("text",{x:W-R,y:y(limit)-4,"text-anchor":"end",class:"axis-text"},svg);
+  lt.textContent="Limit " + limit + "%";
+
+  // area + line (actual)
+  const last = pts[pts.length-1];
+  let dLine = "", dArea = "M " + x(pts[0][0]) + " " + y(yMin);
+  pts.forEach(([m,p],i)=>{
+    dLine += (i? " L ":"M ") + x(m).toFixed(1) + " " + y(p).toFixed(1);
+    dArea += " L " + x(m).toFixed(1) + " " + y(p).toFixed(1);
+  });
+  dArea += " L " + x(last[0]).toFixed(1) + " " + y(yMin) + " Z";
+  el("path",{d:dArea,fill:"#3dbe5b",opacity:.1},svg);
+  el("path",{d:dLine,fill:"none",stroke:"#3dbe5b","stroke-width":2,"stroke-linejoin":"round","stroke-linecap":"round"},svg);
+
+  // projection to limit (dashed)
+  const eta = last[0] + data.charge_state.minutes_to_full_charge;
+  el("path",{d:"M "+x(last[0])+" "+y(last[1])+" L "+x(eta)+" "+y(limit),
+    fill:"none",stroke:"#3dbe5b","stroke-width":2,"stroke-dasharray":"2 5",
+    "stroke-linecap":"round",opacity:.55},svg);
+
+  // end marker + label
+  el("circle",{cx:x(last[0]),cy:y(last[1]),r:4.5,fill:"#3dbe5b",stroke:"#1c2027","stroke-width":2},svg);
+  const endT=el("text",{x:x(last[0]),y:y(last[1])-9,"text-anchor":"middle",
+    class:"axis-text",style:"font-size:11px;font-weight:600;fill:#f4f4f4"},svg);
+  endT.textContent = last[1] + "%";
+
+  // crosshair + tooltip
+  const cross = el("line",{y1:T,y2:H-B,stroke:"#454d59","stroke-width":1,opacity:0},svg);
+  const hoverDot = el("circle",{r:4,fill:"#3dbe5b",stroke:"#1c2027","stroke-width":2,opacity:0},svg);
+
+  function showTip(evt){
+    const rect = svg.getBoundingClientRect();
+    const mx = (evt.clientX-rect.left) * (W/rect.width);
+    const minAtX = Math.max(0, Math.min(last[0], (mx-L)/(W-L-R)*xMax));
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p[0]-minAtX) < Math.abs(best[0]-minAtX)) best = p;
+    cross.setAttribute("x1",x(best[0])); cross.setAttribute("x2",x(best[0]));
+    cross.setAttribute("opacity",1);
+    hoverDot.setAttribute("cx",x(best[0])); hoverDot.setAttribute("cy",y(best[1]));
+    hoverDot.setAttribute("opacity",1);
+    tip.textContent="";
+    const v=document.createElement("div"); v.className="tv"; v.textContent=best[1]+"%";
+    const k=document.createElement("div"); k.textContent=fmtTime(best[0]);
+    tip.append(v,k);
+    const wr = wrap.getBoundingClientRect();
+    const px = x(best[0])/W*wr.width;
+    tip.style.left = Math.min(wr.width-96, Math.max(4, px+10)) + "px";
+    tip.style.top = "6px";
+    tip.style.opacity = 1;
+  }
+  function hideTip(){ tip.style.opacity=0; cross.setAttribute("opacity",0); hoverDot.setAttribute("opacity",0); }
+  svg.addEventListener("pointermove", showTip);
+  svg.addEventListener("pointerleave", hideTip);
+}
+
+/* --------------- weekly bar chart (per-bar tooltip) ----------------- */
+function renderWeekChart(data){
+  const svg = document.getElementById("weekChart");
+  const wrap = document.getElementById("weekChartWrap");
+  const tip = document.getElementById("weekTip");
+  svg.textContent = "";
+
+  const W=360, H=140, L=26, R=8, T=16, B=26;
+  const days = data.week;
+  const maxV = 50; // clean top
+  const slot = (W-L-R)/days.length;
+  const bw = Math.min(24, slot-14);
+  const y = v => T + (1-v/maxV)*(H-T-B);
+
+  [0,25,50].forEach(v=>{
+    el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v),class:"grid-line"},svg);
+    const t=el("text",{x:L-6,y:y(v)+3,"text-anchor":"end",class:"axis-text"},svg);
+    t.textContent=v;
+  });
+
+  const maxDay = days.reduce((a,b)=> b.mi>a.mi?b:a, days[0]);
+  days.forEach((d,i)=>{
+    const cx = L + slot*i + slot/2;
+    const bh = Math.max(0, y(0)-y(d.mi));
+    const r = Math.min(4, bh);
+    const bar = el("path",{
+      d:`M ${cx-bw/2} ${y(0)} L ${cx-bw/2} ${y(d.mi)+r} Q ${cx-bw/2} ${y(d.mi)} ${cx-bw/2+r} ${y(d.mi)}
+         L ${cx+bw/2-r} ${y(d.mi)} Q ${cx+bw/2} ${y(d.mi)} ${cx+bw/2} ${y(d.mi)+r} L ${cx+bw/2} ${y(0)} Z`,
+      fill:"#3e6ae1"},svg);
+    const lab=el("text",{x:cx,y:H-8,"text-anchor":"middle",class:"axis-text"},svg);
+    lab.textContent=d.day;
+    if (d===maxDay){
+      const v=el("text",{x:cx,y:y(d.mi)-6,"text-anchor":"middle",class:"axis-text",
+        style:"font-size:11px;font-weight:600;fill:#f4f4f4"},svg);
+      v.textContent=d.mi+" mi";
+    }
+    // oversized hit target
+    const hit = el("rect",{x:L+slot*i,y:T,width:slot,height:H-T-B,fill:"transparent"},svg);
+    function over(){
+      bar.setAttribute("fill","#5b82e8");
+      tip.textContent="";
+      const tv=document.createElement("div"); tv.className="tv"; tv.textContent=d.mi+" mi";
+      const tk=document.createElement("div"); tk.textContent=d.day;
+      tip.append(tv,tk);
+      const wr = wrap.getBoundingClientRect();
+      const px = cx/W*wr.width;
+      tip.style.left = Math.min(wr.width-80, Math.max(4, px-30)) + "px";
+      tip.style.top = "0px";
+      tip.style.opacity = 1;
+    }
+    function out(){ bar.setAttribute("fill","#3e6ae1"); tip.style.opacity=0; }
+    hit.addEventListener("pointerenter", over);
+    hit.addEventListener("pointerleave", out);
+  });
+}
+
+/* ============================ RENDER ================================ */
+function render(data){
+  const cs = data.charge_state, cl = data.climate_state, vs = data.vehicle_state;
+  const set = (id,txt)=>{ document.getElementById(id).textContent = txt; };
+
+  set("carName", data.display_name);
+  const badge = document.getElementById("srcBadge");
+  badge.textContent = DATA_SOURCE === "live" ? "LIVE" : "DEMO";
+  badge.classList.toggle("live", DATA_SOURCE === "live");
+  const charging = cs.charging_state === "Charging";
+  set("statusText", charging ? "Charging · Home" : "Parked · Home");
+  document.getElementById("batteryRow").classList.toggle("is-charging", charging);
+
+  set("battPct", cs.battery_level + "%");
+  set("battRange", cs.battery_range + " mi");
+  document.getElementById("battFill").style.width = cs.battery_level + "%";
+  document.getElementById("battFill").style.background =
+    cs.battery_level <= 20 ? "var(--red)" : "var(--green)";
+
+  set("chargePct", cs.battery_level + "%");
+  set("chargeRange", cs.battery_range + " mi");
+  set("chargeMeta", charging ? cs.minutes_to_full_charge + " min until limit" : "Plugged in");
+  document.getElementById("meterFill").style.width = cs.battery_level + "%";
+  document.getElementById("meterLimit").style.left = cs.charge_limit_soc + "%";
+  set("limitLabel", "Limit " + cs.charge_limit_soc + "%");
+  set("csPower", cs.charger_power.toFixed(1) + " kW");
+  set("csAmps", cs.charger_actual_current + " A · " + cs.charger_voltage + " V");
+  set("csAdded", "+" + cs.charge_energy_added.toFixed(1) + " kWh");
+
+  document.getElementById("tempIn").childNodes[0].textContent = cl.inside_temp_f;
+  set("tempOut", cl.outside_temp_f + "°F outside");
+  set("tempSet", cl.driver_temp_setting_f + "°");
+  set("climateMeta", cl.is_climate_on ? "Keeping " + cl.driver_temp_setting_f + "°" : "Off");
+
+  set("address", data.drive_state.address);
+  set("weekMeta", data.week.reduce((s,d)=>s+d.mi,0) + " mi driven");
+
+  mountCarImage(data.vehicle_config);
+  document.getElementById("mapWrap").innerHTML = mapSVG();
+  renderChargeChart(data);
+  renderWeekChart(data);
+}
+
+/* ========================= INTERACTIONS ============================= */
+function wireControls(data){
+  const lock = document.getElementById("ctrlLock");
+  lock.addEventListener("click", ()=>{
+    const on = lock.classList.toggle("active");
+    lock.querySelector("span").textContent = on ? "Locked" : "Unlocked";
+  });
+  const climate = document.getElementById("ctrlClimate");
+  climate.addEventListener("click", ()=>{
+    const on = climate.classList.toggle("active");
+    data.climate_state.is_climate_on = on;
+    document.getElementById("climateMeta").textContent =
+      on ? "Keeping " + data.climate_state.driver_temp_setting_f + "°" : "Off";
+  });
+  ["ctrlPort","ctrlFrunk","ctrlTrunk"].forEach(id=>{
+    const b = document.getElementById(id);
+    b.addEventListener("click", ()=> b.classList.toggle("active"));
+  });
+  const setEl = document.getElementById("tempSet");
+  document.getElementById("tempUp").addEventListener("click", ()=>{
+    data.climate_state.driver_temp_setting_f = Math.min(82, data.climate_state.driver_temp_setting_f+1);
+    setEl.textContent = data.climate_state.driver_temp_setting_f + "°";
+  });
+  document.getElementById("tempDown").addEventListener("click", ()=>{
+    data.climate_state.driver_temp_setting_f = Math.max(59, data.climate_state.driver_temp_setting_f-1);
+    setEl.textContent = data.climate_state.driver_temp_setting_f + "°";
+  });
+}
+
+/* ============================== BOOT ================================ */
+(async function(){
+  const data = await getVehicleData();
+  render(data);
+  wireControls(data);
+})();
+</script>
+</body>
+</html>

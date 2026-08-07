@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tesla-monitor
+    runtime: node
+    plan: free
+    buildCommand: ""
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: TESLA_TOKEN
+        sync: false
+      - key: TESLA_VEHICLE_ID
+        sync: false
+      - key: TESLA_REGION_BASE
+        sync: false
