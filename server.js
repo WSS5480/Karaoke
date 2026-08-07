@@ -78,20 +78,23 @@ async function tokenPost(params) {
 // rtHash -> { access_token, refresh_token, expires_at, vehicleId }
 const sessions = new Map();
 
-/** Resolve the caller's Tesla access token: cookie session first, env fallback. */
+/** Resolve the caller's Tesla access token: cookie, then x-bem-rt header
+    (localStorage fallback for cookie-hostile browsers), then env fallback. */
 async function getSession(req) {
   const cookieRt = decRT(parseCookies(req)[COOKIE] || "");
-  const fromCookie = !!cookieRt;
-  const rt = cookieRt || process.env.TESLA_REFRESH_TOKEN || null;
+  const headerRt = cookieRt ? null : decRT(String(req.headers["x-bem-rt"] || ""));
+  const userRt = cookieRt || headerRt;
+  const fromUser = !!userRt;
+  const rt = userRt || process.env.TESLA_REFRESH_TOKEN || null;
   if (!rt) {
     if (process.env.TESLA_TOKEN)
-      return { token: process.env.TESLA_TOKEN, sess: { vehicleId: null }, fromCookie: false, setCookie: null };
+      return { token: process.env.TESLA_TOKEN, sess: { vehicleId: null }, fromCookie: false, setCookie: null, newEnc: null };
     return null;
   }
   const key = crypto.createHash("sha256").update(rt).digest("hex").slice(0, 24);
   let sess = sessions.get(key);
   if (sess && Date.now() < sess.expires_at - 60000)
-    return { token: sess.access_token, sess, fromCookie, setCookie: null };
+    return { token: sess.access_token, sess, fromCookie: fromUser, setCookie: null, newEnc: null };
   if (!CLIENT_SECRET) return null;
   const j = await tokenPost({
     grant_type: "refresh_token", client_id: CLIENT_ID,
@@ -104,8 +107,12 @@ async function getSession(req) {
     vehicleId: (sess && sess.vehicleId) || null
   };
   sessions.set(key, sess);
-  const setCookie = fromCookie && sess.refresh_token !== cookieRt ? cookieSet(sess.refresh_token) : null;
-  return { token: sess.access_token, sess, fromCookie, setCookie };
+  const rotated = fromUser && sess.refresh_token !== userRt;
+  return {
+    token: sess.access_token, sess, fromCookie: fromUser,
+    setCookie: rotated ? cookieSet(sess.refresh_token) : null,
+    newEnc: rotated ? encRT(sess.refresh_token) : null
+  };
 }
 
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -201,7 +208,9 @@ async function handleVehicle(req, res) {
     res.writeHead(200, baseHeaders);
     return res.end(JSON.stringify({ demo: true }));
   }
-  const headers = g.setCookie ? Object.assign({ "Set-Cookie": g.setCookie }, baseHeaders) : baseHeaders;
+  const headers = Object.assign({}, baseHeaders);
+  if (g.setCookie) headers["Set-Cookie"] = g.setCookie;
+  if (g.newEnc) headers["x-bem-rt-new"] = g.newEnc;
   try {
     const vid = await getVehicleIdFor(g);
     const r = await fetch(`${BASE}/api/1/vehicles/${vid}/vehicle_data?endpoints=` + encodeURIComponent("charge_state;climate_state;drive_state;location_data;vehicle_state;vehicle_config"), {
@@ -301,8 +310,20 @@ async function handleCallback(req, res) {
       code, redirect_uri: REDIRECT_URI, audience: BASE
     });
     if (!j.refresh_token) throw new Error("No refresh token returned");
-    res.writeHead(302, { "Set-Cookie": cookieSet(j.refresh_token), Location: "/" });
-    res.end();
+    const enc = encRT(j.refresh_token);
+    // 200 page (not a redirect): cookies set on a top-level document load are
+    // accepted by strict browsers, and we ALSO stash the login in localStorage
+    // so cookie-hostile browsers still work via the x-bem-rt header.
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Set-Cookie": cookieSet(j.refresh_token) });
+    res.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>body{background:#171a20;color:#f4f4f4;font-family:-apple-system,sans-serif;padding:28px;line-height:1.6;text-align:center}
+    a.btn{display:block;margin-top:24px;background:#3e6ae1;color:#fff;padding:14px;border-radius:12px;font-weight:600;text-decoration:none;font-size:16px}</style>
+    <title>Connected</title></head><body>
+    <h2>Connected &#10003;</h2><p>Your Tesla is linked to this browser.</p>
+    <a class="btn" href="/">Open my dashboard &rarr;</a>
+    <script>try{localStorage.setItem("bem_rt","${enc}");}catch(e){}
+    setTimeout(function(){ location.href = "/"; }, 1200);</script>
+    </body></html>`);
   } catch (e) {
     page(res, "Sign-in failed", `<div class="card"><code>${esc(e.message)}</code></div>
       <div class="card"><a href="/auth/login">Try again</a></div>`, 500);

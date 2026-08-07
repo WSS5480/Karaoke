@@ -303,7 +303,8 @@
   <div class="demo-note" id="demoNote">
     <b id="footNote">Demo data.</b><br>
     <span id="footHint">Tap "Sign in with Tesla" above to see your own car.</span>
-    <a class="signout" id="signoutLink" href="/auth/logout" style="display:none">Sign out</a>
+    <a class="signout" id="signoutLink" href="/auth/logout" style="display:none"
+      onclick="try{localStorage.removeItem('bem_rt')}catch(e){}">Sign out</a>
   </div>
 
 </div>
@@ -351,13 +352,20 @@ const DEMO_DATA = {
 };
 
 let DATA_SOURCE = "demo";
+function authHeaders(){
+  try{ const t = localStorage.getItem("bem_rt"); return t ? { "x-bem-rt": t } : {}; }catch(e){ return {}; }
+}
+function noteRotation(r){
+  try{ const n = r.headers.get("x-bem-rt-new"); if (n) localStorage.setItem("bem_rt", n); }catch(e){}
+}
 async function getVehicleData(){
   /* The bundled server (server.js) exposes /api/vehicle. Until you add your
      Tesla Fleet API credentials as environment variables on the server, it
      answers {demo:true} and this dashboard runs on the demo dataset. */
   try{
-    const r = await fetch("/api/vehicle", {cache:"no-store"});
+    const r = await fetch("/api/vehicle", {cache:"no-store", headers: authHeaders()});
     if (r.ok){
+      noteRotation(r);
       const j = await r.json();
       if (!j.demo){ DATA_SOURCE = "live"; return j; }
     }
@@ -722,7 +730,7 @@ const DEMO_CHARGERS = [
 async function renderChargers(){
   let list = DEMO_CHARGERS;
   try{
-    const r = await fetch("/api/chargers", { cache: "no-store" });
+    const r = await fetch("/api/chargers", { cache: "no-store", headers: authHeaders() });
     if (r.ok){ const j = await r.json(); if (j.superchargers && j.superchargers.length) list = j.superchargers; }
   }catch(e){}
   const wrap = document.getElementById("scRows");
