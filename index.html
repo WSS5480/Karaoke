@@ -286,6 +286,18 @@
     </div>
   </section>
 
+  <!-- Specs -->
+  <section class="card">
+    <div class="card-head"><h2>Specs</h2><div class="meta">From Tesla</div></div>
+    <div class="rows">
+      <div class="row"><span class="k">Model</span><span class="v" id="specModel">Model Y</span></div>
+      <div class="row"><span class="k">Trim</span><span class="v" id="specTrim">—</span></div>
+      <div class="row"><span class="k">Paint</span><span class="v" id="specPaint">—</span></div>
+      <div class="row"><span class="k">Wheels</span><span class="v" id="specWheels">—</span></div>
+      <div class="row"><span class="k">Roof · Trim</span><span class="v" id="specExtra">—</span></div>
+    </div>
+  </section>
+
   <!-- Vehicle -->
   <section class="card">
     <div class="card-head"><h2>Vehicle</h2></div>
@@ -339,7 +351,8 @@ const DEMO_DATA = {
   },
   drive_state: { shift_state: null, latitude: 37.4419, longitude: -122.1806, speed: null,
     address: "2882 Sand Hill Rd, Menlo Park, CA" },
-  vehicle_config: { car_type: "modely", exterior_color: "PearlWhite", wheel_type: "Gemini19" },
+  vehicle_config: { car_type: "modely", exterior_color: "PearlWhite", wheel_type: "Gemini19",
+    trim_badging: "74d", roof_color: "RoofColorGlass", spoiler_type: "None", exterior_trim: "Black" },
   vehicle_state: {
     odometer: 18443, car_version: "2026.20.4", locked: true,
     tpms: [42,42,41,42], sentry_mode: false, doors_open: false, windows_open: false,
@@ -811,6 +824,13 @@ function render(data){
   set("weekMeta", wk.length ? wk.reduce((s,d)=>s+d.mi,0) + " mi driven" : "Sample data");
 
   mountCarImage(data.vehicle_config);
+  const vc = data.vehicle_config || {};
+  const nice = x => x ? String(x).replace(/([a-z])([A-Z])/g, "$1 $2") : "—";
+  set("specModel", ({modely:"Model Y", model3:"Model 3", models:"Model S", modelx:"Model X"})[vc.car_type] || vc.car_type || "—");
+  set("specTrim", vc.trim_badging ? String(vc.trim_badging).toUpperCase() : "—");
+  set("specPaint", nice(vc.exterior_color));
+  set("specWheels", nice(vc.wheel_type));
+  set("specExtra", [nice(vc.roof_color), nice(vc.exterior_trim)].filter(x=>x!=="—").join(" · ") || "—");
   renderChargeChart(data);
   renderWeekChart(data);
 }

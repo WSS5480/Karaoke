@@ -178,7 +178,11 @@ function mapFleetToApp(v) {
     vehicle_config: {
       car_type: (v.vehicle_config || {}).car_type || "modely",
       exterior_color: (v.vehicle_config || {}).exterior_color || null,
-      wheel_type: (v.vehicle_config || {}).wheel_type || null
+      wheel_type: (v.vehicle_config || {}).wheel_type || null,
+      trim_badging: (v.vehicle_config || {}).trim_badging || null,
+      roof_color: (v.vehicle_config || {}).roof_color || null,
+      spoiler_type: (v.vehicle_config || {}).spoiler_type || null,
+      exterior_trim: (v.vehicle_config || {}).exterior_trim || null
     },
     // Driving history also needs telemetry/storage; demo shape for now.
     week: []
