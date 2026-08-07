@@ -17,6 +17,7 @@
 "use strict";
 
 const http = require("http");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
@@ -29,12 +30,39 @@ const CLIENT_SECRET = process.env.TESLA_CLIENT_SECRET || "";
 const REDIRECT_URI = `https://${APP_DOMAIN}/auth/callback`;
 const SCOPES = "openid offline_access vehicle_device_data vehicle_location";
 
-/* ---- token management ----
-   Access tokens live ~8h. We keep one in memory and refresh it using, in order:
-   1) refresh token stored in env TESLA_REFRESH_TOKEN (survives restarts)
-   2) refresh token captured in-memory from a fresh /auth/login flow
-   3) a manually-set TESLA_TOKEN env (no refresh; legacy option)          */
-let mem = { access_token: null, refresh_token: null, expires_at: 0 };
+/* ---- per-user sessions ----
+   Each visitor signs in with THEIR Tesla account (/auth/login). Their refresh
+   token is stored in an encrypted, HttpOnly cookie, so each browser sees its
+   own car. Falls back to env TESLA_REFRESH_TOKEN / TESLA_TOKEN (owner mode)
+   for requests without a cookie -- delete those env vars once friends use it. */
+const COOKIE = "bem_rt";
+const KEY = crypto.createHash("sha256").update(CLIENT_SECRET || "bem-dev-key").digest();
+
+function encRT(rt) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv("aes-256-gcm", KEY, iv);
+  const ct = Buffer.concat([c.update(rt, "utf8"), c.final()]);
+  return Buffer.concat([iv, c.getAuthTag(), ct]).toString("base64url");
+}
+function decRT(b64) {
+  try {
+    const buf = Buffer.from(b64, "base64url");
+    const d = crypto.createDecipheriv("aes-256-gcm", KEY, buf.subarray(0, 12));
+    d.setAuthTag(buf.subarray(12, 28));
+    return Buffer.concat([d.update(buf.subarray(28)), d.final()]).toString("utf8");
+  } catch (e) { return null; }
+}
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || "").split(";").forEach(p => {
+    const i = p.indexOf("="); if (i > 0) out[p.slice(0, i).trim()] = p.slice(i + 1).trim();
+  });
+  return out;
+}
+function cookieSet(rt) {
+  return `${COOKIE}=${encRT(rt)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=15552000`;
+}
+const COOKIE_CLEAR = `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 
 async function tokenPost(params) {
   const r = await fetch(`${AUTH_BASE}/token`, {
@@ -47,21 +75,37 @@ async function tokenPost(params) {
   return j;
 }
 
-async function getAccessToken() {
-  if (mem.access_token && Date.now() < mem.expires_at - 60000) return mem.access_token;
-  const rt = mem.refresh_token || process.env.TESLA_REFRESH_TOKEN;
-  if (rt && CLIENT_SECRET) {
-    const j = await tokenPost({
-      grant_type: "refresh_token", client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET, refresh_token: rt
-    });
-    mem.access_token = j.access_token;
-    mem.refresh_token = j.refresh_token || rt;
-    mem.expires_at = Date.now() + (j.expires_in || 28800) * 1000;
-    return mem.access_token;
+// rtHash -> { access_token, refresh_token, expires_at, vehicleId }
+const sessions = new Map();
+
+/** Resolve the caller's Tesla access token: cookie session first, env fallback. */
+async function getSession(req) {
+  const cookieRt = decRT(parseCookies(req)[COOKIE] || "");
+  const fromCookie = !!cookieRt;
+  const rt = cookieRt || process.env.TESLA_REFRESH_TOKEN || null;
+  if (!rt) {
+    if (process.env.TESLA_TOKEN)
+      return { token: process.env.TESLA_TOKEN, sess: { vehicleId: null }, fromCookie: false, setCookie: null };
+    return null;
   }
-  if (process.env.TESLA_TOKEN) return process.env.TESLA_TOKEN;
-  return null;
+  const key = crypto.createHash("sha256").update(rt).digest("hex").slice(0, 24);
+  let sess = sessions.get(key);
+  if (sess && Date.now() < sess.expires_at - 60000)
+    return { token: sess.access_token, sess, fromCookie, setCookie: null };
+  if (!CLIENT_SECRET) return null;
+  const j = await tokenPost({
+    grant_type: "refresh_token", client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET, refresh_token: (sess && sess.refresh_token) || rt
+  });
+  sess = {
+    access_token: j.access_token,
+    refresh_token: j.refresh_token || rt,
+    expires_at: Date.now() + (j.expires_in || 28800) * 1000,
+    vehicleId: (sess && sess.vehicleId) || null
+  };
+  sessions.set(key, sess);
+  const setCookie = fromCookie && sess.refresh_token !== cookieRt ? cookieSet(sess.refresh_token) : null;
+  return { token: sess.access_token, sess, fromCookie, setCookie };
 }
 
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -134,43 +178,42 @@ function mapFleetToApp(v) {
   };
 }
 
-let cachedVehicleId = null;
-
-/** Auto-discover the account's vehicle (first one) unless TESLA_VEHICLE_ID is set. */
-async function getVehicleId(token) {
-  if (process.env.TESLA_VEHICLE_ID) return process.env.TESLA_VEHICLE_ID;
-  if (cachedVehicleId) return cachedVehicleId;
+/** First vehicle on the account (cached per session). Env override for owner mode. */
+async function getVehicleIdFor(g) {
+  if (!g.fromCookie && process.env.TESLA_VEHICLE_ID) return process.env.TESLA_VEHICLE_ID;
+  if (g.sess.vehicleId) return g.sess.vehicleId;
   const r = await fetch(`${BASE}/api/1/vehicles`, {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${g.token}` }
   });
   if (!r.ok) throw new Error(`Fleet API vehicles ${r.status}`);
   const j = await r.json();
   const list = j.response || [];
   if (!list.length) throw new Error("No vehicles on this Tesla account");
-  cachedVehicleId = list[0].id;
-  console.log(`Auto-discovered vehicle: ${list[0].display_name} (${list[0].vin})`);
-  return cachedVehicleId;
+  g.sess.vehicleId = list[0].id;
+  return g.sess.vehicleId;
 }
 
-async function handleVehicle(res) {
-  let token = null;
-  try { token = await getAccessToken(); } catch (e) { console.error("token error:", e.message); }
-  if (!token) {
-    res.writeHead(200, { "Content-Type": "application/json" });
+async function handleVehicle(req, res) {
+  let g = null;
+  try { g = await getSession(req); } catch (e) { console.error("session error:", e.message); }
+  const baseHeaders = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+  if (!g) {
+    res.writeHead(200, baseHeaders);
     return res.end(JSON.stringify({ demo: true }));
   }
+  const headers = g.setCookie ? Object.assign({ "Set-Cookie": g.setCookie }, baseHeaders) : baseHeaders;
   try {
-    const vid = await getVehicleId(token);
+    const vid = await getVehicleIdFor(g);
     const r = await fetch(`${BASE}/api/1/vehicles/${vid}/vehicle_data?endpoints=` + encodeURIComponent("charge_state;climate_state;drive_state;location_data;vehicle_state;vehicle_config"), {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${g.token}` }
     });
     if (!r.ok) throw new Error(`Fleet API ${r.status}`);
     const j = await r.json();
-    res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    res.writeHead(200, headers);
     res.end(JSON.stringify(mapFleetToApp(j.response)));
   } catch (e) {
     console.error("Fleet API error:", e.message);
-    res.writeHead(200, { "Content-Type": "application/json" });
+    res.writeHead(200, headers);
     res.end(JSON.stringify({ demo: true, error: e.message }));
   }
 }
@@ -181,15 +224,15 @@ const DEMO_CHARGERS = { demo: true, superchargers: [
   { name: "Redwood City, CA", distance_miles: 4.1, available_stalls: 11, total_stalls: 20 }
 ]};
 
-async function handleChargers(res) {
-  let token = null;
-  try { token = await getAccessToken(); } catch (e) {}
+async function handleChargers(req, res) {
+  let g = null;
+  try { g = await getSession(req); } catch (e) {}
   const send = (obj) => { res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(JSON.stringify(obj)); };
-  if (!token) return send(DEMO_CHARGERS);
+  if (!g) return send(DEMO_CHARGERS);
   try {
-    const vid = await getVehicleId(token);
+    const vid = await getVehicleIdFor(g);
     const r = await fetch(`${BASE}/api/1/vehicles/${vid}/nearby_charging_sites?count=8`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${g.token}` }
     });
     if (!r.ok) throw new Error(`nearby_charging_sites ${r.status}`);
     const j = await r.json();
@@ -257,30 +300,30 @@ async function handleCallback(req, res) {
       grant_type: "authorization_code", client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
       code, redirect_uri: REDIRECT_URI, audience: BASE
     });
-    mem.access_token = j.access_token;
-    mem.refresh_token = j.refresh_token;
-    mem.expires_at = Date.now() + (j.expires_in || 28800) * 1000;
-    page(res, "Connected ✓",
-      `<div class="card">Your car is linked! <a href="/">Open your dashboard →</a> (badge should say LIVE)</div>
-       <div class="card"><b>Make it permanent:</b> free hosting restarts sometimes, and this link lives in memory.
-       Copy the refresh token below into Render → buddy-ev-monitor → Environment as
-       <code>TESLA_REFRESH_TOKEN</code> so the car stays connected forever:<br><br>
-       <code>${esc(j.refresh_token || "(none returned)")}</code></div>`);
+    if (!j.refresh_token) throw new Error("No refresh token returned");
+    res.writeHead(302, { "Set-Cookie": cookieSet(j.refresh_token), Location: "/" });
+    res.end();
   } catch (e) {
     page(res, "Sign-in failed", `<div class="card"><code>${esc(e.message)}</code></div>
       <div class="card"><a href="/auth/login">Try again</a></div>`, 500);
   }
 }
 
+function handleLogout(res) {
+  res.writeHead(302, { "Set-Cookie": COOKIE_CLEAR, Location: "/" });
+  res.end();
+}
+
 const server = http.createServer((req, res) => {
   const p = req.url.split("?")[0];
-  if (p === "/api/vehicle") return handleVehicle(res);
-  if (p === "/api/chargers") return handleChargers(res);
+  if (p === "/api/vehicle") return handleVehicle(req, res);
+  if (p === "/api/chargers") return handleChargers(req, res);
   if (p === "/healthz") { res.writeHead(200); return res.end("ok"); }
   if (p === "/.well-known/appspecific/com.tesla.3p.public-key.pem") return servePublicKey(res);
   if (p === "/setup/register") return handleRegister(res);
   if (p === "/auth/login") return handleLogin(res);
   if (p === "/auth/callback") return handleCallback(req, res);
+  if (p === "/auth/logout") return handleLogout(res);
   // static: only index.html exists
   const file = path.join(__dirname, "index.html");
   fs.readFile(file, (err, buf) => {

@@ -53,6 +53,12 @@
   .is-charging .charging-bolt{display:inline-flex;animation:pulse 1.6s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
+  /* ---------- sign in ---------- */
+  .signin-btn{display:block;margin:14px 0 0;background:var(--accent);color:#fff;text-align:center;
+    padding:13px;border-radius:12px;font-size:15px;font-weight:600;text-decoration:none}
+  .signin-btn:active{opacity:.85}
+  .signout{color:var(--ink-3);text-decoration:underline}
+
   /* ---------- car ---------- */
   .car-stage{margin:2px -8px 0;position:relative}
   .car-stage::before{content:"";position:absolute;inset:-6% 4% 6% 4%;border-radius:50%;
@@ -183,6 +189,8 @@
     </span>
   </div>
 
+  <a class="signin-btn" id="signinBtn" href="/auth/login" style="display:none">Sign in with Tesla</a>
+
   <div class="car-stage" id="carStage"><!-- car SVG injected by JS --></div>
 
   <div class="controls">
@@ -292,9 +300,10 @@
     </div>
   </section>
 
-  <div class="demo-note">
-    <b id="footNote">Running on demo data.</b><br>
-    Add your Tesla Fleet API credentials on the server (see README) and this goes live automatically.
+  <div class="demo-note" id="demoNote">
+    <b id="footNote">Demo data.</b><br>
+    <span id="footHint">Tap "Sign in with Tesla" above to see your own car.</span>
+    <a class="signout" id="signoutLink" href="/auth/logout" style="display:none">Sign out</a>
   </div>
 
 </div>
@@ -742,8 +751,13 @@ function render(data){
 
   set("carName", data.display_name);
   const badge = document.getElementById("srcBadge");
-  badge.textContent = DATA_SOURCE === "live" ? "LIVE" : "DEMO";
-  badge.classList.toggle("live", DATA_SOURCE === "live");
+  const live = DATA_SOURCE === "live";
+  badge.textContent = live ? "LIVE" : "DEMO";
+  badge.classList.toggle("live", live);
+  document.getElementById("signinBtn").style.display = live ? "none" : "block";
+  document.getElementById("footNote").textContent = live ? "Connected to your Tesla." : "Demo data.";
+  document.getElementById("footHint").style.display = live ? "none" : "inline";
+  document.getElementById("signoutLink").style.display = live ? "inline" : "none";
   const charging = cs.charging_state === "Charging";
   set("statusText", charging ? "Charging · Home" : "Parked · Home");
   document.getElementById("batteryRow").classList.toggle("is-charging", charging);
