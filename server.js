@@ -105,14 +105,22 @@ function mapFleetToApp(v) {
     },
     drive_state: {
       shift_state: (v.drive_state || {}).shift_state || null,
-      address: "See Tesla app for precise location"
+      latitude: (v.drive_state || {}).latitude ?? null,
+      longitude: (v.drive_state || {}).longitude ?? null,
+      speed: (v.drive_state || {}).speed ?? null,
+      address: null
     },
     vehicle_state: {
       odometer: Math.round(vs.odometer ?? 0),
       car_version: (vs.car_version || "").split(" ")[0],
       locked: !!vs.locked,
       tpms: [vs.tpms_pressure_fl, vs.tpms_pressure_fr, vs.tpms_pressure_rl, vs.tpms_pressure_rr]
-        .map(p => (p ? Math.round(p * 14.5) : null)) // bar -> psi
+        .map(p => (p ? Math.round(p * 14.5) : null)), // bar -> psi
+      sentry_mode: !!vs.sentry_mode,
+      doors_open: [vs.df, vs.dr, vs.pf, vs.pr].some(Boolean),
+      windows_open: [vs.fd_window, vs.fp_window, vs.rd_window, vs.rp_window].some(Boolean),
+      update_status: (vs.software_update || {}).status || "",
+      update_version: ((vs.software_update || {}).version || "").split(" ")[0]
     },
     // Used by the frontend to render the REAL car image (Tesla's own
     // configurator render matching your color and wheels).
@@ -153,7 +161,7 @@ async function handleVehicle(res) {
   }
   try {
     const vid = await getVehicleId(token);
-    const r = await fetch(`${BASE}/api/1/vehicles/${vid}/vehicle_data`, {
+    const r = await fetch(`${BASE}/api/1/vehicles/${vid}/vehicle_data?endpoints=` + encodeURIComponent("charge_state;climate_state;drive_state;location_data;vehicle_state;vehicle_config"), {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!r.ok) throw new Error(`Fleet API ${r.status}`);
@@ -164,6 +172,37 @@ async function handleVehicle(res) {
     console.error("Fleet API error:", e.message);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ demo: true, error: e.message }));
+  }
+}
+
+const DEMO_CHARGERS = { demo: true, superchargers: [
+  { name: "Menlo Park, CA", distance_miles: 1.2, available_stalls: 9, total_stalls: 12 },
+  { name: "Palo Alto - Stanford Shopping Center", distance_miles: 2.8, available_stalls: 4, total_stalls: 16 },
+  { name: "Redwood City, CA", distance_miles: 4.1, available_stalls: 11, total_stalls: 20 }
+]};
+
+async function handleChargers(res) {
+  let token = null;
+  try { token = await getAccessToken(); } catch (e) {}
+  const send = (obj) => { res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(JSON.stringify(obj)); };
+  if (!token) return send(DEMO_CHARGERS);
+  try {
+    const vid = await getVehicleId(token);
+    const r = await fetch(`${BASE}/api/1/vehicles/${vid}/nearby_charging_sites?count=8`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!r.ok) throw new Error(`nearby_charging_sites ${r.status}`);
+    const j = await r.json();
+    const list = ((j.response || {}).superchargers || []).map(c => ({
+      name: c.name,
+      distance_miles: Math.round((c.distance_miles ?? 0) * 10) / 10,
+      available_stalls: c.available_stalls ?? null,
+      total_stalls: c.total_stalls ?? null
+    }));
+    send({ superchargers: list });
+  } catch (e) {
+    console.error("chargers error:", e.message);
+    send(DEMO_CHARGERS);
   }
 }
 
@@ -236,6 +275,7 @@ async function handleCallback(req, res) {
 const server = http.createServer((req, res) => {
   const p = req.url.split("?")[0];
   if (p === "/api/vehicle") return handleVehicle(res);
+  if (p === "/api/chargers") return handleChargers(res);
   if (p === "/healthz") { res.writeHead(200); return res.end("ok"); }
   if (p === "/.well-known/appspecific/com.tesla.3p.public-key.pem") return servePublicKey(res);
   if (p === "/setup/register") return handleRegister(res);

@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Model Y</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   :root{
     --bg:#171a20;            /* Tesla brand dark */
@@ -135,6 +137,14 @@
   .temp-set{font-size:17px;font-weight:600;min-width:44px;text-align:center}
 
   /* location */
+  #liveMap{height:180px;border-radius:12px;border:1px solid var(--card-border);z-index:0}
+  .leaflet-container{background:#20242b;font:inherit}
+  .sc-row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--hairline);font-size:13.5px}
+  .sc-row:last-child{border-bottom:none;padding-bottom:0}
+  .sc-name{max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sc-stat{font-weight:600}
+  .sc-stat small{color:var(--ink-2);font-weight:400;margin-left:6px}
+  .sc-good{color:var(--green)}.sc-mid{color:#e0b64a}.sc-low{color:var(--red)}
   .map{border-radius:12px;overflow:hidden;margin-top:12px;position:relative;border:1px solid var(--card-border)}
   .map svg{display:block;width:100%;height:auto}
   .loc-line{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13.5px;color:var(--ink-2)}
@@ -246,11 +256,17 @@
   <!-- Location -->
   <section class="card">
     <div class="card-head"><h2>Location</h2><div class="meta">Parked · Home</div></div>
-    <div class="map" id="mapWrap"><!-- map SVG injected by JS --></div>
+    <div class="map" id="mapWrap"><div id="liveMap"></div></div>
     <div class="loc-line">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
       <span id="address">2882 Sand Hill Rd, Menlo Park, CA</span>
     </div>
+  </section>
+
+  <!-- Superchargers -->
+  <section class="card">
+    <div class="card-head"><h2>Superchargers</h2><div class="meta" id="scMeta">Nearby</div></div>
+    <div class="rows" id="scRows"></div>
   </section>
 
   <!-- Last 7 days -->
@@ -266,10 +282,12 @@
   <section class="card">
     <div class="card-head"><h2>Vehicle</h2></div>
     <div class="rows">
-      <div class="row"><span class="k">Odometer</span><span class="v">18,443 mi</span></div>
-      <div class="row"><span class="k">Software</span><span class="v">2026.20.4</span></div>
+      <div class="row"><span class="k">Odometer</span><span class="v" id="rowOdo">18,443 mi</span></div>
+      <div class="row"><span class="k">Software</span><span class="v" id="rowSoftware">2026.20.4</span></div>
+      <div class="row"><span class="k">Sentry Mode</span><span class="v" id="rowSentry">Off</span></div>
+      <div class="row"><span class="k">Doors · Windows</span><span class="v" id="rowDoors">Closed</span></div>
       <div class="row"><span class="k">Efficiency (7 days)</span><span class="v">263 Wh/mi</span></div>
-      <div class="row"><span class="k">Tire pressure</span><span class="v">42 · 42 · 41 · 42 psi</span></div>
+      <div class="row"><span class="k">Tire pressure</span><span class="v" id="rowTires">42 · 42 · 41 · 42 psi</span></div>
       <div class="row"><span class="k">Interior · Cabin overheat</span><span class="v">On</span></div>
     </div>
   </section>
@@ -309,11 +327,13 @@ const DEMO_DATA = {
     inside_temp_f: 71, outside_temp_f: 64,
     driver_temp_setting_f: 70, is_climate_on: false
   },
-  drive_state: { shift_state: null, address: "2882 Sand Hill Rd, Menlo Park, CA" },
+  drive_state: { shift_state: null, latitude: 37.4419, longitude: -122.1806, speed: null,
+    address: "2882 Sand Hill Rd, Menlo Park, CA" },
   vehicle_config: { car_type: "modely", exterior_color: "PearlWhite", wheel_type: "Gemini19" },
   vehicle_state: {
     odometer: 18443, car_version: "2026.20.4", locked: true,
-    tpms: [42,42,41,42]
+    tpms: [42,42,41,42], sentry_mode: false, doors_open: false, windows_open: false,
+    update_status: "", update_version: ""
   },
   week: [                                 // last 7 days of driving
     {day:"Fri", mi:12},{day:"Sat", mi:41},{day:"Sun", mi:8},{day:"Mon", mi:26},
@@ -514,6 +534,9 @@ function fmtTime(min){ // minutes since 20:30
 
 /* -------- charge session line chart (crosshair + tooltip) ---------- */
 function renderChargeChart(data){
+  if (!data.charge_state.session || data.charge_state.session.length < 3)
+    data = Object.assign({}, data, { charge_state: Object.assign({}, DEMO_DATA.charge_state,
+      { battery_level: data.charge_state.battery_level, charge_limit_soc: data.charge_state.charge_limit_soc }) });
   const svg = document.getElementById("chargeChart");
   const wrap = document.getElementById("chargeChartWrap");
   const tip = document.getElementById("chargeTip");
@@ -597,6 +620,7 @@ function renderChargeChart(data){
 
 /* --------------- weekly bar chart (per-bar tooltip) ----------------- */
 function renderWeekChart(data){
+  if (!data.week || !data.week.length) data = Object.assign({}, data, { week: DEMO_DATA.week });
   const svg = document.getElementById("weekChart");
   const wrap = document.getElementById("weekChartWrap");
   const tip = document.getElementById("weekTip");
@@ -651,6 +675,66 @@ function renderWeekChart(data){
   });
 }
 
+/* ==================== LIVE MAP & SUPERCHARGERS ====================== */
+let liveMap = null, liveMarker = null;
+function renderMap(ds){
+  const el = document.getElementById("liveMap");
+  const lat = ds.latitude, lon = ds.longitude;
+  if (!el || typeof L === "undefined" || lat == null || lon == null){
+    // fallback: stylized static map
+    document.getElementById("mapWrap").innerHTML = mapSVG();
+    return;
+  }
+  el.style.display = "block";
+  if (!liveMap){
+    liveMap = L.map("liveMap", { zoomControl:false, attributionControl:false, dragging:true, scrollWheelZoom:false });
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(liveMap);
+  }
+  liveMap.setView([lat, lon], 15);
+  if (liveMarker) liveMarker.remove();
+  liveMarker = L.circleMarker([lat, lon], { radius:8, color:"#fff", weight:2.5, fillColor:"#3e6ae1", fillOpacity:1 }).addTo(liveMap);
+  // reverse geocode for a human address (best-effort)
+  fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`)
+    .then(r => r.json())
+    .then(j => {
+      const a = j.address || {};
+      const line = [a.house_number, a.road].filter(Boolean).join(" ");
+      const town = a.city || a.town || a.village || a.hamlet || "";
+      const txt = [line, town, a.state].filter(Boolean).join(", ");
+      if (txt) document.getElementById("address").textContent = txt;
+    }).catch(()=>{});
+}
+
+const DEMO_CHARGERS = [
+  { name: "Menlo Park, CA", distance_miles: 1.2, available_stalls: 9, total_stalls: 12 },
+  { name: "Palo Alto - Stanford", distance_miles: 2.8, available_stalls: 4, total_stalls: 16 },
+  { name: "Redwood City, CA", distance_miles: 4.1, available_stalls: 11, total_stalls: 20 }
+];
+async function renderChargers(){
+  let list = DEMO_CHARGERS;
+  try{
+    const r = await fetch("/api/chargers", { cache: "no-store" });
+    if (r.ok){ const j = await r.json(); if (j.superchargers && j.superchargers.length) list = j.superchargers; }
+  }catch(e){}
+  const wrap = document.getElementById("scRows");
+  wrap.textContent = "";
+  list.slice(0, 5).forEach(c => {
+    const row = document.createElement("div"); row.className = "sc-row";
+    const name = document.createElement("div"); name.className = "sc-name"; name.textContent = c.name;
+    const stat = document.createElement("div"); stat.className = "sc-stat";
+    if (c.available_stalls != null && c.total_stalls != null){
+      const frac = c.total_stalls ? c.available_stalls / c.total_stalls : 0;
+      const cls = frac > 0.4 ? "sc-good" : (frac > 0.15 ? "sc-mid" : "sc-low");
+      const strong = document.createElement("span"); strong.className = cls;
+      strong.textContent = `${c.available_stalls}/${c.total_stalls}`;
+      stat.appendChild(strong);
+    }
+    const dist = document.createElement("small"); dist.textContent = `${c.distance_miles} mi`;
+    stat.appendChild(dist);
+    row.append(name, stat); wrap.appendChild(row);
+  });
+}
+
 /* ============================ RENDER ================================ */
 function render(data){
   const cs = data.charge_state, cl = data.climate_state, vs = data.vehicle_state;
@@ -685,11 +769,26 @@ function render(data){
   set("tempSet", cl.driver_temp_setting_f + "°");
   set("climateMeta", cl.is_climate_on ? "Keeping " + cl.driver_temp_setting_f + "°" : "Off");
 
-  set("address", data.drive_state.address);
-  set("weekMeta", data.week.reduce((s,d)=>s+d.mi,0) + " mi driven");
+  if (data.drive_state.address) set("address", data.drive_state.address);
+  else set("address", "Locating…");
+  renderMap(data.drive_state);
+  renderChargers();
+
+  set("rowOdo", vs.odometer.toLocaleString() + " mi");
+  set("rowSoftware", vs.update_status
+    ? (vs.car_version + " → " + (vs.update_version || "update") + " " + vs.update_status)
+    : vs.car_version + " · Up to date");
+  set("rowSentry", vs.sentry_mode ? "On" : "Off");
+  set("rowDoors", (vs.doors_open || vs.windows_open)
+    ? [(vs.doors_open ? "Door open" : null), (vs.windows_open ? "Window open" : null)].filter(Boolean).join(" · ")
+    : "Closed");
+  if (vs.tpms && vs.tpms.some(p => p != null))
+    set("rowTires", vs.tpms.map(p => p ?? "–").join(" · ") + " psi");
+
+  const wk = data.week || [];
+  set("weekMeta", wk.length ? wk.reduce((s,d)=>s+d.mi,0) + " mi driven" : "Sample data");
 
   mountCarImage(data.vehicle_config);
-  document.getElementById("mapWrap").innerHTML = mapSVG();
   renderChargeChart(data);
   renderWeekChart(data);
 }
