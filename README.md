@@ -2,6 +2,8 @@
 
 Singers scan a QR code, enter their name and song, and see their spot in line. The KJ runs the list from a PIN-protected page.
 
+Live at https://dive-karaoke.onrender.com
+
 ## Pages
 - `/` — singer sign-up and live "up next" list (English and Spanish labels, song search from a 417-song list)
 - `/kj` — KJ queue: next singer, sing now, move up/down, remove, open or close sign-ups, start a new night
