@@ -112,6 +112,10 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .iosguide .close{background:none;border:0;color:var(--ink-2);font:inherit;text-decoration:underline;padding:6px}
 @keyframes bob{50%{transform:translateY(12px)}}
 @media (prefers-reduced-motion:reduce){.iosguide .arrow{animation:none}}
+.iosguide.top{justify-content:flex-start;padding-top:calc(24px + env(safe-area-inset-top,0px))}
+.iosguide.top .arrow{order:-1;align-self:flex-end;margin:0 10px 8px 0}
+.iosguide.top .arrow::before{content:"⬆"}
+.iosguide.top .arrow{font-size:0}.iosguide.top .arrow::before{font-size:64px}
 </style>
 </head>
 <body>
@@ -227,7 +231,8 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
     <p class="ok" id="mineMsg" role="status"></p>
   </section>
 
-    <a class="wall" href="/wall">See the wall of fame</a>
+    <button class="linkbtn" id="getApp" type="button" hidden>Get The Dive app on your phone</button>
+  <a class="wall" href="/wall">See the wall of fame</a>
 
   <section class="card">
     <h2>Up next</h2>
@@ -236,7 +241,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 </main>
 <div class="iosguide" id="iosGuide" hidden role="dialog" aria-label="Add The Dive app">
   <div class="box">
-    <div class="step"><span class="n">1</span><span>Tap the <span class="shareic" aria-hidden="true">⬆︎</span> <b>Share</b> button below</span></div>
+    <div class="step"><span class="n">1</span><span>Tap the <span class="shareic" aria-hidden="true">⬆︎</span> <b>Share</b> button <span id="iosShareWhere">below</span></span></div>
     <div class="step"><span class="n">2</span><span>Scroll down, tap <b>Add to Home Screen</b></span></div>
     <div class="step"><span class="n">3</span><span>Tap <b>Add</b>. Done!</span></div>
     <button class="close" id="iosGuideX" type="button">Close</button>
@@ -588,9 +593,12 @@ $("logout").addEventListener("click", async () => { await post("/api/auth/logout
 if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 (function(){
   const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-  let hidden = false; try{ hidden = localStorage.getItem("dive_install_x") === "1"; }catch(e){}
-  if(standalone || hidden) return;
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let hidden = false; try{ hidden = sessionStorage.getItem("dive_install_x") === "1"; }catch(e){}
+  if(standalone) return;
+  $("getApp").hidden = !hidden;
+  if(hidden) $("installBar").hidden = true;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), iosChrome = ios && /CriOS/i.test(navigator.userAgent);
+  if(iosChrome){ $("iosGuide").classList.add("top"); $("iosShareWhere").textContent = "at the top right"; }
   let promptEvt = null;
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEvt = e; $("installBar").hidden = false; $("installHow").textContent = "Sign up faster next time."; $("installBtn").hidden = false; });
   if(ios){ $("installBar").hidden = false; }
@@ -600,9 +608,10 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     $("installHow").innerHTML = ios ? "1. Tap <b style='display:inline'>Share</b> <span aria-hidden='true'>⬆︎</span> at the bottom of Safari<br>2. Tap <b style='display:inline'>Add to Home Screen</b>" : "Tap your browser menu ⋮, then <b style='display:inline'>Install app</b>.";
     $("installBtn").hidden = true;
   });
+  $("getApp").addEventListener("click", () => { if(ios){ $("iosGuide").hidden = false; } else if(promptEvt){ promptEvt.prompt(); } else { $("installBar").hidden = false; $("installHow").textContent = "Tap your browser menu ⋮, then Install app."; $("installBtn").hidden = true; } });
   $("iosGuideX").addEventListener("click", () => { $("iosGuide").hidden = true; });
   $("iosGuide").addEventListener("click", e => { if(e.target.id === "iosGuide") $("iosGuide").hidden = true; });
-  $("installX").addEventListener("click", () => { $("installBar").hidden = true; try{ localStorage.setItem("dive_install_x", "1"); }catch(e){} });
+  $("installX").addEventListener("click", () => { $("installBar").hidden = true; try{ sessionStorage.setItem("dive_install_x", "1"); }catch(e){} $("getApp").hidden = false; });
   window.addEventListener("appinstalled", () => { $("installBar").hidden = true; });
 })();
 async function refresh(){
