@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Wall of Fame · The Dive</title>
+<meta property="og:title" content="Karaoke Wall of Fame · The Dive on 495">
+<meta property="og:description" content="Who sang what at The Dive on 495 in McAllen, TX.">
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--ink:#eef3ee;--ink-2:#9fae9f;--gold:#ffc93c;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+main{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-top:18px}
+.logo{display:block;width:120px;margin:0 auto;filter:drop-shadow(0 0 22px rgba(57,181,74,.55))}
+h1{font-family:var(--slab);font-weight:800;font-size:30px;margin:0;text-align:center}
+.seg{display:flex;gap:8px;justify-content:center}
+.seg button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 18px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--green);color:#041206;border-color:var(--green)}
+button:focus-visible,a:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
+ol{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+li{display:flex;gap:12px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
+li:first-child{border-top:0}
+li .t{flex:1;min-width:0}
+li .t b{display:block;font-weight:600;overflow-wrap:anywhere}
+li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
+.st{color:var(--gold);font-size:18px;letter-spacing:2px;white-space:nowrap}
+.empty{padding:16px;color:var(--ink-2);text-align:center;display:block}
+.back{color:var(--green-hi);text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="/logo.png" alt="The Dive on 495">
+  <h1>Wall of fame</h1>
+  <div class="seg">
+    <button id="top" aria-pressed="true">Top rated</button>
+    <button id="new" aria-pressed="false">Newest</button>
+  </div>
+  <ol id="list"><li class="empty">Loading…</li></ol>
+  <a class="back" href="/">Sign up to sing</a>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let sort = "top";
+const fmt = d => new Date(d).toLocaleDateString([], { month: "short", day: "numeric" });
+async function load(){
+  $("top").setAttribute("aria-pressed", sort === "top"); $("new").setAttribute("aria-pressed", sort === "new");
+  try{
+    const j = await (await fetch("/api/wall?sort=" + sort, { cache: "no-store" })).json(), ol = $("list"); ol.innerHTML = "";
+    if(!j.items.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No one's on the wall yet. Sing, rate yourself and add your name."; ol.appendChild(li); return; }
+    j.items.forEach(r => {
+      const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
+      const b = document.createElement("b"); b.textContent = r.name;
+      const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "") + " · " + fmt(r.at);
+      t.append(b, s);
+      const st = document.createElement("span"); st.className = "st"; st.textContent = r.rating ? "★".repeat(r.rating) + "☆".repeat(5 - r.rating) : "";
+      st.setAttribute("aria-label", (r.rating || 0) + " out of 5 stars");
+      li.append(t, st); ol.appendChild(li);
+    });
+  }catch(e){ $("list").innerHTML = '<li class="empty">Couldn\'t load. Check your connection.</li>'; }
+}
+$("top").addEventListener("click", () => { sort = "top"; load(); });
+$("new").addEventListener("click", () => { sort = "new"; load(); });
+load();
+</script>
+</body>
+</html>

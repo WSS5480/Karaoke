@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Customer History · The Dive</title>
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--ink:#eef3ee;--ink-2:#9fae9f;--gold:#ffc93c;--warn:#ff6b6b;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+main{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-top:16px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header img{width:52px}
+header h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;flex:1}
+a{color:var(--green-hi)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input{flex:1 1 200px;min-width:0;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px;font:inherit;font-size:16px}
+#pin{letter-spacing:.3em;text-align:center;font-size:20px}
+button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 16px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
+button[aria-pressed="true"],.go{background:var(--green);color:#041206;border-color:var(--green)}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:var(--panel-2);border-radius:10px;padding:10px 12px}
+.stat b{display:block;font-family:var(--slab);font-size:24px;font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;color:var(--ink-2)}
+.wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:15px;min-width:620px}
+th,td{text-align:left;padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
+th{border-top:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);background:var(--panel)}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink-2)}
+.st{color:var(--gold);letter-spacing:1px;white-space:nowrap}
+.muted{color:var(--ink-2)}
+.pill{font-size:12px;border:1px solid var(--green);color:var(--green-hi);border-radius:999px;padding:1px 8px}
+.err{color:var(--warn);font-size:14px;min-height:20px;margin:0}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/logo.png" alt="The Dive on 495">
+    <h1>Customer history</h1>
+    <a href="/kj">Back to KJ queue</a>
+  </header>
+
+  <section class="card" id="login">
+    <form id="pinForm" class="row" novalidate>
+      <input id="pin" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="KJ PIN" placeholder="PIN">
+      <button class="go" type="submit">Open history</button>
+    </form>
+    <p class="err" id="err" role="alert"></p>
+  </section>
+
+  <div id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="stats" id="stats"></div>
+    <div class="row">
+      <button id="top" aria-pressed="true">Sort by rating</button>
+      <button id="new" aria-pressed="false">Sort by newest</button>
+      <input type="search" id="q" placeholder="Search name or song" aria-label="Search name or song">
+    </div>
+    <div class="wrap"><table>
+      <thead><tr><th>Singer</th><th>Song</th><th>Rating</th><th>Date</th><th>Wall</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let pin = "", sort = "top", t = null;
+try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
+const fmt = d => new Date(d).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+async function load(){
+  $("top").setAttribute("aria-pressed", sort === "top"); $("new").setAttribute("aria-pressed", sort === "new");
+  const r = await fetch("/api/kj/history?sort=" + sort + "&q=" + encodeURIComponent($("q").value.trim()), { headers: { "x-kj-pin": pin }, cache: "no-store" });
+  if(r.status === 401){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("err").textContent = "Wrong PIN."; return false; }
+  const j = await r.json(), items = j.items, tb = $("rows"); tb.innerHTML = "";
+  const rated = items.filter(x => x.rating), avg = rated.length ? (rated.reduce((s, x) => s + x.rating, 0) / rated.length).toFixed(1) : "–";
+  const singers = new Set(items.map(x => x.name.toLowerCase())).size;
+  $("stats").innerHTML = "";
+  [[items.length, "songs sung"], [singers, "singers"], [avg, "average rating"], [items.filter(x => x.public).length, "on the wall"]].forEach(([v, l]) => {
+    const d = document.createElement("div"); d.className = "stat"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; d.append(b, s); $("stats").appendChild(d);
+  });
+  if(!items.length){ const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 5; td.className = "muted"; td.textContent = "No songs logged yet. Singers show up here after you tap Next singer."; tr.appendChild(td); tb.appendChild(tr); return true; }
+  items.forEach(x => {
+    const tr = document.createElement("tr");
+    const c = (txt, cls) => { const td = document.createElement("td"); if(cls) td.className = cls; td.textContent = txt; tr.appendChild(td); return td; };
+    c(x.name); c(x.song + (x.artist ? " – " + x.artist : ""));
+    const st = c(x.rating ? "★".repeat(x.rating) + "☆".repeat(5 - x.rating) : "Not rated", x.rating ? "st" : "muted");
+    c(fmt(x.at), "n");
+    const w = c(""); if(x.public){ const p = document.createElement("span"); p.className = "pill"; p.textContent = "Yes"; w.appendChild(p); } else { w.className = "muted"; w.textContent = "No"; }
+    tb.appendChild(tr);
+  });
+  return true;
+}
+async function start(){ $("login").hidden = true; $("panel").hidden = false; await load(); }
+$("pinForm").addEventListener("submit", async e => {
+  e.preventDefault(); const v = $("pin").value.trim(); if(!v){ $("err").textContent = "Enter the PIN."; return; }
+  pin = v; if(await load()){ try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("err").textContent = ""; $("login").hidden = true; $("panel").hidden = false; }
+});
+$("pin").addEventListener("input", () => $("err").textContent = "");
+$("top").addEventListener("click", () => { sort = "top"; load(); });
+$("new").addEventListener("click", () => { sort = "new"; load(); });
+$("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(load, 300); });
+if(pin) start();
+</script>
+</body>
+</html>

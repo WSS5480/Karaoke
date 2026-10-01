@@ -9,6 +9,9 @@ Live at https://dive-karaoke.onrender.com
 - `/kj` — KJ queue: next singer, sing now, move up/down, remove, open or close sign-ups, start a new night
 - `/tv` — cast screen: big QR code, now singing and up next
 - `/tent` — printable fold-over table tent or 4×6 cards
+- `/wall` — public wall of fame (singers who opted in), sort by rating or newest
+- `/history` — KJ customer history (PIN), sort by rating, search
+- `/s/:id` — share card for Facebook
 - `/poster` — printable "Scan to sing" poster with the QR code
 
 ## Run on Render

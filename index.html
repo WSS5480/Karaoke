@@ -49,6 +49,19 @@ li.up .n{color:var(--green-hi)}
 li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .empty{padding:14px;color:var(--ink-2);text-align:center}
 .closed{text-align:center;color:var(--ink-2)}
+.rate{text-align:center}
+.rate h2{justify-content:center}
+.stars{display:flex;justify-content:center;gap:6px}
+.stars button{background:none;border:0;font-size:44px;line-height:1;color:var(--line);cursor:pointer;padding:2px}
+.stars button.on{color:#ffc93c}
+.rate .song{font-size:17px;font-weight:500}
+.chk{display:flex;gap:10px;align-items:center;justify-content:center;font-size:15px;color:var(--ink);text-transform:none;letter-spacing:0;margin:0}
+.chk input{width:20px;height:20px;accent-color:var(--green)}
+.shares{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.shares button,.shares a{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:11px 10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer;text-decoration:none;text-align:center}
+.shares .main{grid-column:1/-1;background:var(--green);color:#041206;border-color:var(--green)}
+.ok{color:var(--green-hi);font-size:14px;min-height:20px;margin:0}
+.wall{color:var(--green-hi);text-align:center;display:block}
 </style>
 </head>
 <body>
@@ -86,9 +99,31 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
     <button class="ghost" id="cancel" type="button">Cancel my song</button>
   </section>
 
+  <section class="card rate" id="rateCard" hidden>
+    <h2>How'd you do? <span style="text-transform:none;letter-spacing:0">/ ¿Cómo te fue?</span></h2>
+    <div class="song" id="rateSong"></div>
+    <div class="stars" id="stars" role="radiogroup" aria-label="Rate your performance"></div>
+    <label class="chk" for="pub"><input type="checkbox" id="pub"> Add me to The Dive's wall of fame</label>
+    <button class="go" id="saveRate" type="button">Save my rating</button>
+    <p class="ok" id="rateMsg" role="status"></p>
+    <div id="shareBox" hidden>
+      <div class="shares">
+        <button class="main" id="shareImg" type="button">Share my pic</button>
+        <a id="fb" href="#" target="_blank" rel="noopener">Facebook</a>
+        <button id="ig" type="button">Instagram</button>
+        <button id="tt" type="button">TikTok</button>
+        <button id="dl" type="button">Save pic</button>
+      </div>
+      <p class="ok" id="shareMsg" role="status"></p>
+    </div>
+    <button class="ghost" id="rateDone" type="button">Done</button>
+  </section>
+
   <section class="card closed" id="closedCard" hidden>
     <p>Sign-ups are closed right now. Ask the KJ.</p>
   </section>
+
+  <a class="wall" href="/wall">See the wall of fame</a>
 
   <section class="card">
     <h2>Up next</h2>
@@ -143,6 +178,7 @@ $("cancel").addEventListener("click", async () => {
 
 function render(data){
   mine = data.mine;
+  renderRate(data.last);
   $("closedCard").hidden = data.open || !!mine;
   $("formCard").hidden = !!mine || !data.open;
   $("mineCard").hidden = !mine;
@@ -164,6 +200,83 @@ function render(data){
     t.append(b, s); li.append(n, t); ol.appendChild(li);
   });
 }
+
+/* ---------- rate and share ---------- */
+let last = null, picked = 0, imgBlob = null;
+$("formCard").before($("rateCard"));
+const starsBox = $("stars");
+for(let i = 1; i <= 5; i++){
+  const b = document.createElement("button"); b.type = "button"; b.textContent = "★"; b.setAttribute("role", "radio");
+  b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : ""));
+  b.addEventListener("click", () => { picked = i; paintStars(); $("rateMsg").textContent = ""; });
+  starsBox.appendChild(b);
+}
+function paintStars(){ [...starsBox.children].forEach((b, i) => { b.classList.toggle("on", i < picked); b.setAttribute("aria-checked", i + 1 === picked); }); }
+function dismissed(id){ try{ return localStorage.getItem("dive_rated_done") === String(id); }catch(e){ return false; } }
+function renderRate(l){
+  if(!l || dismissed(l.id) || mine){ $("rateCard").hidden = true; return; }
+  const first = !last || last.id !== l.id; last = l;
+  $("rateCard").hidden = false;
+  $("rateSong").textContent = l.song + (l.artist ? " – " + l.artist : "");
+  if(first){ picked = l.rating || 0; $("pub").checked = !!l.public; paintStars(); $("shareBox").hidden = !l.rating; if(l.rating) setFb(); }
+}
+function setFb(){
+  const u = location.origin + "/s/" + last.id;
+  $("fb").href = $("pub").checked ? "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(u) : "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(location.origin + "/");
+}
+$("saveRate").addEventListener("click", async () => {
+  if(!picked){ $("rateMsg").textContent = "Tap the stars to rate yourself."; return; }
+  try{
+    const r = await fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating: picked, public: $("pub").checked }) });
+    const j = await r.json();
+    if(!r.ok){ $("rateMsg").textContent = j.error || "Couldn't save. Try again."; return; }
+    last.rating = picked; last.public = $("pub").checked;
+    $("rateMsg").textContent = $("pub").checked ? "Saved. You're on the wall of fame." : "Saved.";
+    $("shareBox").hidden = false; imgBlob = null; setFb();
+  }catch(e){ $("rateMsg").textContent = "No connection. Try again."; }
+});
+$("pub").addEventListener("change", () => { $("rateMsg").textContent = "Tap Save my rating to update."; });
+$("rateDone").addEventListener("click", () => { try{ localStorage.setItem("dive_rated_done", String(last.id)); }catch(e){} $("rateCard").hidden = true; });
+
+function wrapText(c, text, x, y, maxW, lh){
+  const words = text.split(" "); let line = "", lines = [];
+  words.forEach(w => { const t = line ? line + " " + w : w; if(c.measureText(t).width > maxW && line){ lines.push(line); line = w; } else line = t; });
+  lines.push(line); lines.slice(0, 3).forEach((l, i) => c.fillText(l, x, y + i * lh)); return Math.min(lines.length, 3);
+}
+async function makeImage(){
+  if(imgBlob) return imgBlob;
+  const W = 1080, H = 1920, cv = document.createElement("canvas"); cv.width = W; cv.height = H; const c = cv.getContext("2d");
+  c.fillStyle = "#0a0c0a"; c.fillRect(0, 0, W, H);
+  const g = c.createRadialGradient(W/2, 560, 80, W/2, 560, 520); g.addColorStop(0, "rgba(57,181,74,.55)"); g.addColorStop(1, "rgba(57,181,74,0)");
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  const logo = new Image(); logo.src = "/logo.png"; await logo.decode().catch(() => {});
+  if(logo.width) c.drawImage(logo, W/2 - 300, 260, 600, 600 * logo.height / logo.width);
+  c.textAlign = "center"; c.fillStyle = "#9fae9f"; c.font = "500 44px Outfit, system-ui, sans-serif"; c.fillText("I just sang", W/2, 1010);
+  c.fillStyle = "#ffffff"; c.font = "800 92px 'Roboto Slab', Georgia, serif";
+  const n = wrapText(c, last.song, W/2, 1120, W - 140, 104);
+  let y = 1120 + n * 104;
+  if(last.artist){ c.fillStyle = "#9fae9f"; c.font = "500 50px Outfit, system-ui, sans-serif"; c.fillText(last.artist, W/2, y); y += 90; }
+  c.fillStyle = "#ffc93c"; c.font = "100px system-ui, sans-serif"; c.fillText("★".repeat(last.rating || 0) + "☆".repeat(5 - (last.rating || 0)), W/2, y + 60);
+  c.fillStyle = "#5fd36e"; c.font = "800 56px 'Roboto Slab', Georgia, serif"; c.fillText(last.name, W/2, y + 190);
+  c.fillStyle = "#eef3ee"; c.font = "500 44px Outfit, system-ui, sans-serif"; c.fillText("Karaoke at The Dive on 495 · McAllen, TX", W/2, H - 170);
+  c.fillStyle = "#5fd36e"; c.font = "600 40px Outfit, system-ui, sans-serif"; c.fillText("#TheDiveOn495  #Karaoke  #McAllen", W/2, H - 105);
+  imgBlob = await new Promise(r => cv.toBlob(r, "image/png"));
+  return imgBlob;
+}
+const shareText = () => "I just sang " + last.song + " at The Dive on 495! #TheDiveOn495 #Karaoke #McAllen";
+async function sharePic(app){
+  const b = await makeImage(), f = new File([b], "the-dive-karaoke.png", { type: "image/png" });
+  if(navigator.canShare && navigator.canShare({ files: [f] })){
+    try{ await navigator.share({ files: [f], text: shareText() }); $("shareMsg").textContent = app ? "Pick " + app + " from the list." : ""; return; }
+    catch(e){ if(e.name === "AbortError") return; }
+  }
+  savePic(b); $("shareMsg").textContent = (app ? "Saved your pic. Open " + app + ", start a new post or story, and pick it from your photos." : "Saved your pic to your phone.");
+}
+function savePic(b){ const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "the-dive-karaoke.png"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+$("shareImg").addEventListener("click", () => sharePic(""));
+$("ig").addEventListener("click", () => sharePic("Instagram"));
+$("tt").addEventListener("click", () => sharePic("TikTok"));
+$("dl").addEventListener("click", async () => { savePic(await makeImage()); $("shareMsg").textContent = "Saved your pic."; });
 async function refresh(){
   try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
 }
