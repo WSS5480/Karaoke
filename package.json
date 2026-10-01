@@ -1,10 +1,18 @@
 {
-  "name": "tesla-monitor",
+  "name": "dive-karaoke-signup",
   "version": "1.0.0",
   "private": true,
-  "description": "Tesla-app-style dashboard for monitoring your car via the Tesla Fleet API",
-  "engines": { "node": ">=18" },
+  "description": "QR code karaoke sign-up and singer queue for The Dive on 495",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4"
   }
 }

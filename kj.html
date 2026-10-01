@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>KJ Queue · The Dive</title>
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--ink:#eef3ee;--ink-2:#9fae9f;--warn:#ff6b6b;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+main{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-top:16px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header img{width:56px}
+header h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;flex:1}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+h2{font-family:var(--slab);font-weight:800;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-hi);margin:0;display:flex;justify-content:space-between;gap:8px}
+h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+.now{font-family:var(--slab);font-weight:800;font-size:30px;line-height:1.15;overflow-wrap:anywhere}
+.now small{display:block;font-family:var(--body);font-weight:400;font-size:17px;color:var(--ink-2)}
+button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
+button:hover{border-color:var(--green)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
+.next{background:var(--green);color:#041206;border-color:var(--green);font-family:var(--slab);font-weight:800;font-size:20px;letter-spacing:.06em;text-transform:uppercase;padding:14px 22px}
+.danger{color:var(--warn)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+ol{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+li{display:flex;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line);flex-wrap:wrap}
+li:first-child{border-top:0}
+li .n{font-family:var(--slab);font-weight:800;color:var(--ink-2);width:26px;text-align:right;font-variant-numeric:tabular-nums}
+li .t{min-width:0;flex:1 1 180px}
+li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
+li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
+li .acts{display:flex;gap:6px;flex-wrap:wrap}
+li .acts button{padding:6px 11px;font-size:14px}
+.empty{padding:14px;color:var(--ink-2);text-align:center;display:block}
+input{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:20px;letter-spacing:.3em;text-align:center}
+.err{color:var(--warn);font-size:14px;min-height:20px;margin:0}
+.pill{font-size:13px;border-radius:999px;padding:3px 10px;border:1px solid var(--line)}
+.pill.on{color:var(--green-hi);border-color:var(--green)}
+.pill.off{color:var(--warn);border-color:var(--warn)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}
+a{color:var(--green-hi)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/logo.png" alt="The Dive on 495">
+    <h1>KJ queue</h1>
+    <span class="pill" id="openPill"></span>
+  </header>
+
+  <section class="card" id="login">
+    <h2>Enter KJ PIN</h2>
+    <form id="pinForm" novalidate>
+      <input id="pin" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="KJ PIN">
+      <p class="err" id="pinErr" role="alert"></p>
+      <button class="next" type="submit" style="width:100%">Open queue</button>
+    </form>
+  </section>
+
+  <div id="panel" hidden style="display:flex;flex-direction:column;gap:16px">
+    <section class="card">
+      <h2>Now singing</h2>
+      <div class="now" id="now">Nobody yet</div>
+      <div class="row">
+        <button class="next" id="nextBtn">Next singer</button>
+      </div>
+      <p class="err" id="err" role="alert"></p>
+    </section>
+
+    <section class="card">
+      <h2>Waiting <span id="waitCount"></span></h2>
+      <ol id="queue"></ol>
+    </section>
+
+    <section class="card">
+      <h2>Night controls</h2>
+      <div class="row">
+        <button id="toggleOpen"></button>
+        <a href="/poster" target="_blank" rel="noopener">QR code poster</a>
+        <button class="danger" id="newNight">Start a new night</button>
+      </div>
+      <div class="confirm" id="nnConfirm" hidden>
+        <span>Clear tonight's whole list?</span>
+        <button class="danger" id="nnYes">Clear it</button>
+        <button id="nnNo">Keep it</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Already sang <span id="doneCount"></span></h2>
+      <ol id="done"></ol>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let pin = "", state = null, timer = null;
+try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
+
+async function api(path, body){
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST", cache: "no-store", headers: { "Content-Type": "application/json", "x-kj-pin": pin }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if(r.status === 401){ logout("Wrong PIN."); throw new Error("pin"); }
+  if(!r.ok) throw new Error(j.error || "Something went wrong. Try again.");
+  return j;
+}
+function logout(msg){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
+async function load(){
+  try{ state = await api("/api/kj/state"); render(); $("err").textContent = ""; }
+  catch(e){ if(e.message !== "pin") $("err").textContent = "Lost connection. Retrying…"; }
+}
+async function act(path, body){
+  try{ await api(path, body || {}); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
+  load();
+}
+function item(r, i, waiting){
+  const li = document.createElement("li");
+  const n = document.createElement("span"); n.className = "n"; n.textContent = waiting ? i + 1 : "✓";
+  const t = document.createElement("div"); t.className = "t";
+  const b = document.createElement("b"); b.textContent = r.name;
+  const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
+  t.append(b, s); li.append(n, t);
+  if(waiting){
+    const a = document.createElement("div"); a.className = "acts";
+    const mk = (label, action, cls) => { const x = document.createElement("button"); x.textContent = label; if(cls) x.className = cls; x.addEventListener("click", () => act(`/api/kj/${r.id}/${action}`)); return x; };
+    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mk("Remove", "remove", "danger"));
+    a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
+    li.appendChild(a);
+  }
+  return li;
+}
+function render(){
+  const up = state.queue.find(r => r.status === "up"), waiting = state.queue.filter(r => r.status === "queued");
+  const now = $("now"); now.innerHTML = "";
+  if(up){ now.textContent = up.name; const s = document.createElement("small"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); now.appendChild(s); }
+  else now.textContent = waiting.length ? "Tap Next singer to start" : "Nobody yet";
+  $("nextBtn").textContent = up ? "Done, next singer" : "Start first singer";
+  $("waitCount").textContent = waiting.length + " waiting";
+  const q = $("queue"); q.innerHTML = "";
+  if(!waiting.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No one waiting. Put the QR poster where people can see it."; q.appendChild(li); }
+  waiting.forEach((r, i) => q.appendChild(item(r, i, true)));
+  const d = $("done"); d.innerHTML = "";
+  $("doneCount").textContent = state.done.length ? state.done.length + " tonight" : "";
+  if(!state.done.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Singers move here when you tap Next."; d.appendChild(li); }
+  state.done.forEach((r, i) => d.appendChild(item(r, i, false)));
+  $("openPill").textContent = state.open ? "Sign-ups open" : "Sign-ups closed";
+  $("openPill").className = "pill " + (state.open ? "on" : "off");
+  $("toggleOpen").textContent = state.open ? "Close sign-ups" : "Open sign-ups";
+}
+function start(){ $("login").hidden = true; $("panel").hidden = false; load(); clearInterval(timer); timer = setInterval(load, 4000); }
+
+$("pinForm").addEventListener("submit", async e => {
+  e.preventDefault(); const v = $("pin").value.trim();
+  if(!v){ $("pinErr").textContent = "Enter the PIN."; return; }
+  pin = v;
+  try{ await api("/api/kj/state"); try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("pinErr").textContent = ""; start(); }
+  catch(e){ if(e.message !== "pin") $("pinErr").textContent = "Couldn't reach the server. Try again."; }
+});
+$("pin").addEventListener("input", () => $("pinErr").textContent = "");
+$("nextBtn").addEventListener("click", () => act("/api/kj/next"));
+$("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !state.open }));
+$("newNight").addEventListener("click", () => $("nnConfirm").hidden = false);
+$("nnNo").addEventListener("click", () => $("nnConfirm").hidden = true);
+$("nnYes").addEventListener("click", () => { $("nnConfirm").hidden = true; act("/api/kj-newnight"); });
+if(pin) start();
+</script>
+</body>
+</html>

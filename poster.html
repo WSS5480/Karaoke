@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scan to Sing · The Dive</title>
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+:root{--ink:#0a0c0a;--green:#2e9a3d;--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,sans-serif;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:#ffffff;color:var(--ink);font-family:var(--body)}
+.sheet{max-width:8.5in;margin:0 auto;padding:.6in .5in;display:flex;flex-direction:column;align-items:center;gap:.25in;text-align:center}
+.logo{width:3.2in;max-width:70%}
+h1{font-family:var(--slab);font-weight:800;font-size:64px;line-height:1;margin:0;letter-spacing:.02em}
+.es{font-family:var(--slab);font-weight:600;font-size:30px;color:var(--green);margin:-8px 0 0}
+.qr{width:4.2in;max-width:85%;border:6px solid var(--green);border-radius:18px;padding:12px;background:#fff}
+.qr img{display:block;width:100%}
+.steps{font-size:22px;line-height:1.4;margin:0}
+.url{font-size:16px;color:#4a554a;overflow-wrap:anywhere}
+.bar{display:flex;gap:10px;justify-content:center;margin:16px}
+.bar button{font:inherit;font-weight:600;font-size:16px;border-radius:999px;padding:10px 18px;border:1px solid #9aa79a;background:#fff;cursor:pointer}
+@media print{.bar{display:none}.sheet{padding:.4in}}
+</style>
+</head>
+<body>
+<div class="bar"><button onclick="window.print()">Print poster</button></div>
+<div class="sheet">
+  <img class="logo" src="/logo.png" alt="The Dive on 495, Bar + Stage, McAllen, TX">
+  <h1>Scan to sing</h1>
+  <p class="es">Escanea para cantar</p>
+  <div class="qr"><img src="/qr.svg" alt="QR code to the karaoke sign-up page"></div>
+  <p class="steps">Point your phone camera here, add your name and song,<br>and we'll call you up.</p>
+  <p class="url" id="url"></p>
+</div>
+<script>fetch("/api/url").then(r => r.json()).then(j => document.getElementById("url").textContent = j.url.replace(/^https?:\/\//, "")).catch(() => {});</script>
+</body>
+</html>

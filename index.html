@@ -1,875 +1,175 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Model Y</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sing at The Dive</title>
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
 <style>
-  :root{
-    --bg:#171a20;            /* Tesla brand dark */
-    --card:#1c2027;
-    --card-border:#262b33;
-    --elev:#2b3038;
-    --ink:#f4f4f4;
-    --ink-2:#9b9fa5;
-    --ink-3:#6b7076;
-    --accent:#3e6ae1;        /* Tesla blue */
-    --green:#3dbe5b;         /* charge green */
-    --green-track:#1e3a28;
-    --red:#e82127;
-    --hairline:#262b33;
-    --radius:16px;
-  }
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{background:var(--bg)}
-  body{
-    font-family:"Gotham SSm","Gotham",-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-    color:var(--ink);
-    -webkit-font-smoothing:antialiased;
-    min-height:100vh;
-    display:flex;justify-content:center;
-  }
-  .app{width:100%;max-width:430px;padding:20px 20px 40px;position:relative}
-
-  /* ---------- header ---------- */
-  header{display:flex;align-items:flex-start;justify-content:space-between;padding-top:8px}
-  .car-title h1{font-size:22px;font-weight:600;letter-spacing:.2px}
-  .car-title .sub{font-size:13px;color:var(--ink-2);margin-top:3px;display:flex;align-items:center;gap:6px}
-  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block}
-  .icon-btn{width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--card-border);
-    display:flex;align-items:center;justify-content:center;color:var(--ink-2);cursor:pointer}
-  .icon-btn:active{background:var(--elev)}
-
-  /* ---------- battery line ---------- */
-  .battery-row{display:flex;align-items:center;gap:10px;margin-top:18px}
-  .batt{position:relative;width:30px;height:14px;border:1.5px solid var(--ink-2);border-radius:3.5px}
-  .batt::after{content:"";position:absolute;right:-4.5px;top:3.5px;width:3px;height:5px;background:var(--ink-2);border-radius:0 1.5px 1.5px 0}
-  .batt-fill{position:absolute;left:1.5px;top:1.5px;bottom:1.5px;border-radius:1.5px;background:var(--green);width:74%}
-  .batt-label{font-size:15px;font-weight:600}
-  .batt-label small{color:var(--ink-2);font-weight:400;font-size:14px;margin-left:6px}
-  .charging-bolt{color:var(--green);display:none}
-  .is-charging .charging-bolt{display:inline-flex;animation:pulse 1.6s ease-in-out infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-
-  /* ---------- sign in ---------- */
-  .signin-btn{display:block;margin:14px 0 0;background:var(--accent);color:#fff;text-align:center;
-    padding:13px;border-radius:12px;font-size:15px;font-weight:600;text-decoration:none}
-  .signin-btn:active{opacity:.85}
-  .signout{color:var(--ink-3);text-decoration:underline}
-
-  /* ---------- car ---------- */
-  .car-stage{margin:2px -8px 0;position:relative}
-  .car-stage::before{content:"";position:absolute;inset:-6% 4% 6% 4%;border-radius:50%;
-    background:radial-gradient(closest-side, rgba(62,106,225,.16), rgba(62,106,225,0) 72%);pointer-events:none}
-  .car-stage svg{width:100%;height:auto;display:block}
-  .car-shadow{filter:blur(14px);opacity:.5}
-
-  /* ---------- quick controls ---------- */
-  .controls{display:flex;justify-content:space-between;margin:14px 4px 6px}
-  .ctrl{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:none;cursor:pointer;color:var(--ink);font-family:inherit}
-  .ctrl .circle{width:52px;height:52px;border-radius:50%;background:var(--card);border:1px solid var(--card-border);
-    display:flex;align-items:center;justify-content:center;color:var(--ink);transition:background .15s,color .15s,border-color .15s}
-  .ctrl span{font-size:11px;color:var(--ink-2)}
-  .ctrl.active .circle{background:var(--accent);border-color:var(--accent);color:#fff}
-  .ctrl:active .circle{background:var(--elev)}
-
-  /* ---------- stat tiles ---------- */
-  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
-  .tile{background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:12px 13px}
-  .tile .tl{font-size:11px;color:var(--ink-2);letter-spacing:.2px}
-  .tile .tv{font-size:19px;font-weight:600;margin-top:5px}
-  .tile .tv small{font-size:11px;font-weight:400;color:var(--ink-2);margin-left:3px}
-  .tile .td{font-size:10.5px;margin-top:4px;color:var(--ink-2)}
-  .tile .td.good{color:var(--green)}
-
-  .badge{font-size:9.5px;font-weight:700;letter-spacing:.8px;padding:2.5px 7px;border-radius:99px;
-    background:#3a3320;color:#e0b64a;border:1px solid #57492a;vertical-align:1px}
-  .badge.live{background:#1c3524;color:#4fd47a;border-color:#2a5238}
-
-  .meter-fill{overflow:hidden;position:absolute}
-  .is-charging .meter-fill::after{content:"";position:absolute;inset:0;
-    background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);
-    animation:shimmer 2.2s linear infinite}
-  @keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-
-  .card,.tiles,.controls,.car-stage{animation:rise .45s ease both}
-  .card:nth-of-type(2){animation-delay:.05s}.card:nth-of-type(3){animation-delay:.1s}
-  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  @media (prefers-reduced-motion: reduce){.card,.tiles,.controls,.car-stage{animation:none}.is-charging .meter-fill::after{animation:none}}
-
-  /* ---------- cards ---------- */
-  .card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);padding:18px;margin-top:14px}
-  .card-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
-  .card-head h2{font-size:16px;font-weight:600}
-  .card-head .meta{font-size:12.5px;color:var(--ink-2)}
-
-  /* charging card */
-  .charge-big{display:flex;align-items:baseline;gap:8px;margin-top:10px}
-  .charge-big .pct{font-size:44px;font-weight:600;letter-spacing:-.5px}
-  .charge-big .range{font-size:15px;color:var(--ink-2)}
-  .meter{position:relative;height:8px;border-radius:4px;background:var(--green-track);margin:14px 0 6px;overflow:hidden}
-  .meter-fill{position:absolute;left:0;top:0;bottom:0;background:var(--green);border-radius:4px 0 0 4px;width:74%}
-  .meter-limit{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-3);left:90%}
-  .meter-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);margin-bottom:10px}
-  .charge-stats{display:flex;border-top:1px solid var(--hairline);margin-top:12px;padding-top:12px}
-  .cs{flex:1}
-  .cs + .cs{border-left:1px solid var(--hairline);padding-left:14px}
-  .cs .v{font-size:16px;font-weight:600}
-  .cs .k{font-size:11.5px;color:var(--ink-2);margin-top:3px}
-
-  /* charts */
-  .chart-wrap{position:relative;margin-top:14px}
-  .chart-wrap svg{display:block;width:100%;height:auto}
-  .chart-title{font-size:12.5px;color:var(--ink-2);margin-top:16px}
-  .tooltip{
-    position:absolute;pointer-events:none;background:#0f1216;border:1px solid #333941;border-radius:10px;
-    padding:8px 11px;font-size:12px;line-height:1.5;color:var(--ink-2);white-space:nowrap;z-index:10;
-    opacity:0;transition:opacity .1s;box-shadow:0 6px 20px rgba(0,0,0,.45)
-  }
-  .tooltip .tv{color:var(--ink);font-weight:600;font-size:13px}
-  .axis-text{font-size:10px;fill:var(--ink-3)}
-  .grid-line{stroke:#22262d;stroke-width:1}
-
-  /* climate */
-  .climate-body{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
-  .temp-main{font-size:40px;font-weight:600}
-  .temp-main small{font-size:16px;color:var(--ink-2);font-weight:400}
-  .temp-sub{font-size:13px;color:var(--ink-2);margin-top:2px}
-  .temp-ctrl{display:flex;align-items:center;gap:14px}
-  .temp-btn{width:40px;height:40px;border-radius:50%;background:var(--elev);border:none;color:var(--ink);
-    font-size:20px;cursor:pointer;font-family:inherit}
-  .temp-set{font-size:17px;font-weight:600;min-width:44px;text-align:center}
-
-  /* location */
-  #liveMap{height:180px;border-radius:12px;border:1px solid var(--card-border);z-index:0}
-  .leaflet-container{background:#20242b;font:inherit}
-  .sc-row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--hairline);font-size:13.5px}
-  .sc-row:last-child{border-bottom:none;padding-bottom:0}
-  .sc-name{max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .sc-stat{font-weight:600}
-  .sc-stat small{color:var(--ink-2);font-weight:400;margin-left:6px}
-  .sc-good{color:var(--green)}.sc-mid{color:#e0b64a}.sc-low{color:var(--red)}
-  .map{border-radius:12px;overflow:hidden;margin-top:12px;position:relative;border:1px solid var(--card-border)}
-  .map svg{display:block;width:100%;height:auto}
-  .loc-line{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13.5px;color:var(--ink-2)}
-  .loc-line svg{flex:none}
-
-  /* info rows */
-  .rows{margin-top:6px}
-  .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--hairline);font-size:14px}
-  .row:last-child{border-bottom:none;padding-bottom:0}
-  .row .k{color:var(--ink-2)}
-  .row .v{font-weight:500}
-
-  /* footer */
-  .demo-note{margin-top:22px;text-align:center;font-size:12px;color:var(--ink-3);line-height:1.6}
-  .demo-note b{color:var(--ink-2);font-weight:600}
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--ink:#eef3ee;--ink-2:#9fae9f;--warn:#ff6b6b;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+main{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:18px;padding-top:18px}
+.logo{display:block;width:150px;max-width:50%;margin:0 auto;filter:drop-shadow(0 0 22px rgba(57,181,74,.55))}
+h1{font-family:var(--slab);font-weight:800;font-size:30px;line-height:1.1;margin:0;text-align:center;text-wrap:balance}
+h1 small{display:block;font-family:var(--body);font-weight:500;font-size:15px;color:var(--ink-2);margin-top:6px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:14px}
+label{display:block;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
+label span{text-transform:none;letter-spacing:0}
+input{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:13px 12px;font:inherit;font-size:17px}
+input:focus-visible,button:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
+.field{position:relative}
+.sugg{position:absolute;left:0;right:0;top:100%;z-index:5;margin-top:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sugg button{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);color:var(--ink);padding:10px 12px;font:inherit;cursor:pointer}
+.sugg button:first-child{border-top:0}
+.sugg button b{font-weight:500}
+.sugg button span{display:block;font-size:13px;color:var(--ink-2)}
+.go{width:100%;background:var(--green);color:#041206;border:0;border-radius:999px;padding:15px;font-family:var(--slab);font-weight:800;font-size:19px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.go[disabled]{opacity:.6}
+.err{color:var(--warn);font-size:14px;min-height:20px;margin:0}
+.spot{text-align:center}
+.spot .num{font-family:var(--slab);font-weight:800;font-size:64px;line-height:1;color:var(--green-hi)}
+.spot .song{font-size:18px;font-weight:500}
+.spot p{margin:4px 0;color:var(--ink-2)}
+.ghost{background:none;border:1px solid var(--line);color:var(--ink-2);border-radius:999px;padding:10px 16px;font:inherit;cursor:pointer;align-self:center}
+h2{font-family:var(--slab);font-weight:800;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-hi);margin:0}
+ol{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+li{display:flex;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
+li:first-child{border-top:0}
+li .n{font-family:var(--slab);font-weight:800;color:var(--ink-2);width:26px;text-align:right;font-variant-numeric:tabular-nums;flex:none}
+li .t{min-width:0;flex:1}
+li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
+li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
+li.up{background:rgba(57,181,74,.14)}
+li.up .n{color:var(--green-hi)}
+li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
+.empty{padding:14px;color:var(--ink-2);text-align:center}
+.closed{text-align:center;color:var(--ink-2)}
 </style>
 </head>
 <body>
-<div class="app" id="app">
+<main>
+  <img class="logo" src="/logo.png" alt="The Dive on 495, Bar + Stage, McAllen, TX">
+  <h1>Sign up to sing<small>Anótate para cantar</small></h1>
 
-  <header>
-    <div class="car-title">
-      <h1 id="carName">Steve's Model Y</h1>
-      <div class="sub"><span class="dot" id="statusDot"></span><span id="statusText">Charging · Home</span>&nbsp;<span class="badge" id="srcBadge">DEMO</span></div>
-    </div>
-    <div class="icon-btn" title="Account">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>
-    </div>
-  </header>
-
-  <div class="battery-row is-charging" id="batteryRow">
-    <div class="batt"><div class="batt-fill" id="battFill"></div></div>
-    <div class="batt-label"><span id="battPct">74%</span><small id="battRange">243 mi</small></div>
-    <span class="charging-bolt">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
-    </span>
-  </div>
-
-  <a class="signin-btn" id="signinBtn" href="/auth/login" style="display:none">Sign in with Tesla</a>
-
-  <div class="car-stage" id="carStage"><!-- car SVG injected by JS --></div>
-
-  <div class="controls">
-    <button class="ctrl active" id="ctrlLock" data-label-on="Locked" data-label-off="Unlocked">
-      <div class="circle">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path class="lock-shackle" d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
-      </div><span>Locked</span>
-    </button>
-    <button class="ctrl" id="ctrlClimate">
-      <div class="circle">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5.5 6.5 12 10l6.5-3.5M5.5 17.5 12 14l6.5 3.5"/></svg>
-      </div><span>Climate</span>
-    </button>
-    <button class="ctrl active" id="ctrlPort">
-      <div class="circle">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 5 13h6l-1 9 8-11h-6l1-9z"/></svg>
-      </div><span>Charge Port</span>
-    </button>
-    <button class="ctrl" id="ctrlFrunk">
-      <div class="circle">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15h18M3 15c0-3 4-8 9-8s9 5 9 8M12 7V5"/></svg>
-      </div><span>Frunk</span>
-    </button>
-    <button class="ctrl" id="ctrlTrunk">
-      <div class="circle">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15H3M21 15c0-3-4-8-9-8M12 7c-2 0-4 .8-5.5 2M12 7V5"/></svg>
-      </div><span>Trunk</span>
-    </button>
-  </div>
-
-  <div class="tiles">
-    <div class="tile"><div class="tl">Efficiency · 7d</div><div class="tv" id="tileEff">263<small>Wh/mi</small></div><div class="td good" id="tileEffD">▼ 4% vs prior week</div></div>
-    <div class="tile"><div class="tl">Driven · 7d</div><div class="tv" id="tileMi">186<small>mi</small></div><div class="td" id="tileMiD">▲ 12% vs prior week</div></div>
-    <div class="tile"><div class="tl">Charge cost · Aug</div><div class="tv" id="tileCost">$11.40</div><div class="td" id="tileCostD">92% at home</div></div>
-  </div>
-
-  <!-- Charging -->
-  <section class="card" id="chargingCard">
-    <div class="card-head"><h2>Charging</h2><div class="meta" id="chargeMeta">32 min until limit</div></div>
-    <div class="charge-big"><div class="pct" id="chargePct">74%</div><div class="range" id="chargeRange">243 mi</div></div>
-    <div class="meter is-charging" id="meterWrap"><div class="meter-fill" id="meterFill"></div><div class="meter-limit" id="meterLimit"></div></div>
-    <div class="meter-scale"><span>0%</span><span id="limitLabel">Limit 90%</span><span>100%</span></div>
-    <div class="charge-stats">
-      <div class="cs"><div class="v" id="csPower">7.4 kW</div><div class="k">Charge rate</div></div>
-      <div class="cs"><div class="v" id="csAmps">32 A · 240 V</div><div class="k">Current session</div></div>
-      <div class="cs"><div class="v" id="csAdded">+18.2 kWh</div><div class="k">Energy added</div></div>
-    </div>
-    <div class="chart-title">Tonight's charge session</div>
-    <div class="chart-wrap" id="chargeChartWrap">
-      <svg id="chargeChart" viewBox="0 0 360 130" role="img" aria-label="Charge level over tonight's session, 42 to 74 percent"></svg>
-      <div class="tooltip" id="chargeTip"></div>
-    </div>
-  </section>
-
-  <!-- Climate -->
-  <section class="card">
-    <div class="card-head"><h2>Climate</h2><div class="meta" id="climateMeta">Off</div></div>
-    <div class="climate-body">
-      <div>
-        <div class="temp-main" id="tempIn">71<small>°F inside</small></div>
-        <div class="temp-sub" id="tempOut">64°F outside</div>
+  <section class="card" id="formCard">
+    <form id="form" novalidate>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label for="name">Your name <span>/ Tu nombre</span></label>
+          <input id="name" name="name" maxlength="30" autocomplete="given-name" placeholder="Maria" required>
+        </div>
+        <div class="field">
+          <label for="song">Song <span>/ Canción</span></label>
+          <input id="song" name="song" maxlength="80" autocomplete="off" placeholder="Bidi Bidi Bom Bom" required>
+          <div class="sugg" id="sugg" hidden></div>
+        </div>
+        <div>
+          <label for="artist">Artist <span>/ Artista</span></label>
+          <input id="artist" name="artist" maxlength="60" autocomplete="off" placeholder="Selena">
+        </div>
+        <p class="err" id="err" role="alert"></p>
+        <button class="go" id="submit" type="submit">Put me on the list</button>
       </div>
-      <div class="temp-ctrl">
-        <button class="temp-btn" id="tempDown">−</button>
-        <div class="temp-set" id="tempSet">70°</div>
-        <button class="temp-btn" id="tempUp">+</button>
-      </div>
-    </div>
+    </form>
   </section>
 
-  <!-- Location -->
+  <section class="card spot" id="mineCard" hidden>
+    <div class="num" id="mineNum"></div>
+    <p id="mineLine"></p>
+    <div class="song" id="mineSong"></div>
+    <p>Keep this page open. It updates on its own.</p>
+    <button class="ghost" id="cancel" type="button">Cancel my song</button>
+  </section>
+
+  <section class="card closed" id="closedCard" hidden>
+    <p>Sign-ups are closed right now. Ask the KJ.</p>
+  </section>
+
   <section class="card">
-    <div class="card-head"><h2>Location</h2><div class="meta">Parked · Home</div></div>
-    <div class="map" id="mapWrap"><div id="liveMap"></div></div>
-    <div class="loc-line">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
-      <span id="address">2882 Sand Hill Rd, Menlo Park, CA</span>
-    </div>
+    <h2>Up next</h2>
+    <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
   </section>
-
-  <!-- Superchargers -->
-  <section class="card">
-    <div class="card-head"><h2>Superchargers</h2><div class="meta" id="scMeta">Nearby</div></div>
-    <div class="rows" id="scRows"></div>
-  </section>
-
-  <!-- Last 7 days -->
-  <section class="card">
-    <div class="card-head"><h2>Last 7 days</h2><div class="meta" id="weekMeta">186 mi driven</div></div>
-    <div class="chart-wrap" id="weekChartWrap">
-      <svg id="weekChart" viewBox="0 0 360 140" role="img" aria-label="Miles driven per day over the last seven days"></svg>
-      <div class="tooltip" id="weekTip"></div>
-    </div>
-  </section>
-
-  <!-- Specs -->
-  <section class="card">
-    <div class="card-head"><h2>Specs</h2><div class="meta">From Tesla</div></div>
-    <div class="rows">
-      <div class="row"><span class="k">Model</span><span class="v" id="specModel">Model Y</span></div>
-      <div class="row"><span class="k">Trim</span><span class="v" id="specTrim">—</span></div>
-      <div class="row"><span class="k">Paint</span><span class="v" id="specPaint">—</span></div>
-      <div class="row"><span class="k">Wheels</span><span class="v" id="specWheels">—</span></div>
-      <div class="row"><span class="k">Roof · Trim</span><span class="v" id="specExtra">—</span></div>
-    </div>
-  </section>
-
-  <!-- Vehicle -->
-  <section class="card">
-    <div class="card-head"><h2>Vehicle</h2></div>
-    <div class="rows">
-      <div class="row"><span class="k">Odometer</span><span class="v" id="rowOdo">18,443 mi</span></div>
-      <div class="row"><span class="k">Software</span><span class="v" id="rowSoftware">2026.20.4</span></div>
-      <div class="row"><span class="k">Sentry Mode</span><span class="v" id="rowSentry">Off</span></div>
-      <div class="row"><span class="k">Doors · Windows</span><span class="v" id="rowDoors">Closed</span></div>
-      <div class="row"><span class="k">Efficiency (7 days)</span><span class="v">263 Wh/mi</span></div>
-      <div class="row"><span class="k">Tire pressure</span><span class="v" id="rowTires">42 · 42 · 41 · 42 psi</span></div>
-      <div class="row"><span class="k">Interior · Cabin overheat</span><span class="v">On</span></div>
-    </div>
-  </section>
-
-  <div class="demo-note" id="demoNote">
-    <b id="footNote">Demo data.</b><br>
-    <span id="footHint">Tap "Sign in with Tesla" above to see your own car.</span>
-    <a class="signout" id="signoutLink" href="/auth/logout" style="display:none"
-      onclick="try{localStorage.removeItem('bem_rt')}catch(e){}">Sign out</a>
-  </div>
-
-</div>
+</main>
 <script>
-"use strict";
+const $ = id => document.getElementById(id);
+let songs = [], mine = null, buzzed = false;
+fetch("/songs.json").then(r => r.json()).then(s => songs = s).catch(() => {});
 
-/* =====================================================================
-   DATA LAYER — swap this for your Tesla Fleet API proxy to go live.
-   The shape mirrors Fleet API's /api/1/vehicles/{id}/vehicle_data.
-   ===================================================================== */
-const DEMO_DATA = {
-  display_name: "Steve's Model Y",
-  state: "online",
-  charge_state: {
-    charging_state: "Charging",          // "Charging" | "Stopped" | "Disconnected"
-    battery_level: 74,                    // %
-    battery_range: 243,                   // mi
-    charge_limit_soc: 90,                 // %
-    charger_power: 7.4,                   // kW
-    charger_actual_current: 32,           // A
-    charger_voltage: 240,                 // V
-    charge_energy_added: 18.2,            // kWh
-    minutes_to_full_charge: 32,
-    session: [                            // [minutes since 20:30, battery %]
-      [0,42],[15,45],[30,48],[45,51],[60,54],[75,57],[90,60],
-      [105,62],[120,65],[135,67],[150,69],[165,71],[180,73],[195,74]
-    ]
-  },
-  climate_state: {
-    inside_temp_f: 71, outside_temp_f: 64,
-    driver_temp_setting_f: 70, is_climate_on: false
-  },
-  drive_state: { shift_state: null, latitude: 37.4419, longitude: -122.1806, speed: null,
-    address: "2882 Sand Hill Rd, Menlo Park, CA" },
-  vehicle_config: { car_type: "modely", exterior_color: "PearlWhite", wheel_type: "Gemini19",
-    trim_badging: "74d", roof_color: "RoofColorGlass", spoiler_type: "None", exterior_trim: "Black" },
-  vehicle_state: {
-    odometer: 18443, car_version: "2026.20.4", locked: true,
-    tpms: [42,42,41,42], sentry_mode: false, doors_open: false, windows_open: false,
-    update_status: "", update_version: ""
-  },
-  week: [                                 // last 7 days of driving
-    {day:"Fri", mi:12},{day:"Sat", mi:41},{day:"Sun", mi:8},{day:"Mon", mi:26},
-    {day:"Tue", mi:31},{day:"Wed", mi:19},{day:"Thu", mi:49}
-  ]
-};
+function suggest(){
+  const q = $("song").value.trim().toLowerCase(), box = $("sugg");
+  if(q.length < 2 || !songs.length){ box.hidden = true; return; }
+  const hits = songs.filter(s => s.t.toLowerCase().includes(q) || s.a.toLowerCase().includes(q)).slice(0, 6);
+  box.innerHTML = "";
+  hits.forEach(s => {
+    const b = document.createElement("button"); b.type = "button";
+    const t = document.createElement("b"); t.textContent = s.t;
+    const a = document.createElement("span"); a.textContent = s.a;
+    b.append(t, a);
+    b.addEventListener("click", () => { $("song").value = s.t; $("artist").value = s.a; box.hidden = true; $("err").textContent = ""; });
+    box.appendChild(b);
+  });
+  box.hidden = !hits.length;
+}
+$("song").addEventListener("input", () => { $("err").textContent = ""; suggest(); });
+$("name").addEventListener("input", () => { $("err").textContent = ""; });
+document.addEventListener("click", e => { if(!e.target.closest(".field")) $("sugg").hidden = true; });
 
-let DATA_SOURCE = "demo";
-function authHeaders(){
-  try{ const t = localStorage.getItem("bem_rt"); return t ? { "x-bem-rt": t } : {}; }catch(e){ return {}; }
-}
-function noteRotation(r){
-  try{ const n = r.headers.get("x-bem-rt-new"); if (n) localStorage.setItem("bem_rt", n); }catch(e){}
-}
-async function getVehicleData(){
-  /* The bundled server (server.js) exposes /api/vehicle. Until you add your
-     Tesla Fleet API credentials as environment variables on the server, it
-     answers {demo:true} and this dashboard runs on the demo dataset. */
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("name").value.trim(), song = $("song").value.trim(), artist = $("artist").value.trim();
+  if(!name){ $("err").textContent = "Enter your name or stage name."; $("name").focus(); return; }
+  if(!song){ $("err").textContent = "Enter the song you want to sing."; $("song").focus(); return; }
+  $("submit").disabled = true; $("submit").textContent = "Adding you…";
   try{
-    const r = await fetch("/api/vehicle", {cache:"no-store", headers: authHeaders()});
-    if (r.ok){
-      noteRotation(r);
-      const j = await r.json();
-      if (!j.demo){ DATA_SOURCE = "live"; return j; }
-    }
-  }catch(e){ /* file:// or offline -> demo */ }
-  DATA_SOURCE = "demo";
-  return DEMO_DATA;
-}
+    const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist }) });
+    const j = await r.json();
+    if(!r.ok){ $("err").textContent = j.error || "Couldn't add you. Try again."; }
+    else { try{ localStorage.setItem("dive_name", name); }catch(e){} }
+  }catch(e){ $("err").textContent = "No connection. Check your signal and try again."; }
+  $("submit").disabled = false; $("submit").textContent = "Put me on the list";
+  refresh();
+});
 
-/* ============================ CAR RENDER ============================ */
-/* Tesla's own configurator render — the same imagery the Tesla app uses.
-   Color + wheels come from your vehicle_config, so it looks like YOUR car.
-   Falls back to the built-in SVG if the image can't load. */
-const MODEL_SLUG = { modely:"my", model3:"m3", models:"ms", modelx:"mx" };
-const COLOR_CODES = {
-  PearlWhite:"$PPSW", White:"$PPSW", SolidBlack:"$PBSB", Black:"$PBSB",
-  MidnightSilver:"$PMNG", Silver:"$PMNG", SteelGrey:"$PMNG",
-  DeepBlue:"$PPSB", DeepBlueMetallic:"$PPSB", Blue:"$PPSB",
-  RedMulticoat:"$PPMR", Red:"$PPMR", UltraRed:"$PR01",
-  Quicksilver:"$PN01", StealthGrey:"$PN00", Grey:"$PN00", Gray:"$PN00",
-  MidnightCherryRed:"$PR00", DiamondBlack:"$PX02"
-};
-const WHEEL_CODES = {
-  Gemini19:"$WY19B", GeminiWheels19:"$WY19B", Photon19:"$WY19C",
-  Induction20:"$WY20P", InductionWheels20:"$WY20P", Crossflow20:"$WY20A",
-  Helix19:"$WY19D", Apollo19:"$WY19B"
-};
-function carImageURL(cfg){
-  cfg = cfg || {};
-  const model = MODEL_SLUG[cfg.car_type] || "my";
-  const color = COLOR_CODES[cfg.exterior_color] || "$PPSW";
-  const wheel = WHEEL_CODES[cfg.wheel_type] || "$WY19B";
-  return "https://static-assets.tesla.com/configurator/compositor?model=" + model +
-    "&options=" + encodeURIComponent(color + "," + wheel) +
-    "&view=STUD_SIDE&size=1400&bkba_opt=2";
-}
-function mountCarImage(cfg){
-  const stage = document.getElementById("carStage");
-  stage.innerHTML = carSVG();               // instant fallback
-  const img = new Image();
-  img.alt = "Your car";
-  img.style.cssText = "width:100%;display:block;filter:drop-shadow(0 20px 18px rgba(0,0,0,.45))";
-  img.onload = () => { stage.innerHTML = ""; stage.appendChild(img); };
-  img.src = carImageURL(cfg);               // if it fails, SVG stays
-}
+$("cancel").addEventListener("click", async () => {
+  if($("cancel").dataset.armed !== "1"){ $("cancel").dataset.armed = "1"; $("cancel").textContent = "Tap again to cancel"; setTimeout(() => { $("cancel").dataset.armed = ""; $("cancel").textContent = "Cancel my song"; }, 4000); return; }
+  await fetch("/api/cancel", { method: "POST" }).catch(() => {});
+  $("cancel").dataset.armed = ""; $("cancel").textContent = "Cancel my song"; refresh();
+});
 
-function carSVG(){
-  return `
-  <svg viewBox="0 0 760 300" aria-label="Model Y side profile">
-  <defs>
-    <linearGradient id="bodyG" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#767d86"/>
-      <stop offset=".4" stop-color="#565d66"/>
-      <stop offset=".75" stop-color="#3b4148"/>
-      <stop offset="1" stop-color="#2e3339"/>
-    </linearGradient>
-    <linearGradient id="glassG" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3d444e"/>
-      <stop offset="1" stop-color="#15181d"/>
-    </linearGradient>
-    <radialGradient id="shadowG" cx=".5" cy=".5" r=".5">
-      <stop offset="0" stop-color="#000" stop-opacity=".6"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-
-  <ellipse cx="378" cy="252" rx="300" ry="15" fill="url(#shadowG)"/>
-
-  <!-- wheel wells (dark, behind body cutouts) -->
-  <circle cx="176" cy="200" r="52" fill="#0b0d10"/>
-  <circle cx="552" cy="200" r="52" fill="#0b0d10"/>
-
-  <!-- body -->
-  <path fill="url(#bodyG)" d="
-    M 118,218
-    C 100,214 90,206 88,194
-    C 87,180 87,170 92,162
-    C 102,148 122,141 142,137
-    C 166,131 192,125 214,118
-    C 240,84 278,52 322,42
-    C 374,36 428,46 464,66
-    C 492,84 508,93 520,100
-    C 546,106 580,112 606,116
-    L 626,114
-    C 640,117 646,126 646,138
-    C 646,166 640,188 628,200
-    C 619,209 610,215 600,218
-    A 55,55 0 1 0 499,218
-    L 229,218
-    A 55,55 0 1 0 123,218
-    L 118,218 Z"/>
-
-  <!-- black wheel-arch cladding (Model Y signature) -->
-  <path d="M 605,218 A 55,55 0 1 0 499,218" fill="none" stroke="#111317" stroke-width="6" stroke-linecap="round"/>
-  <path d="M 229,218 A 55,55 0 1 0 123,218" fill="none" stroke="#111317" stroke-width="6" stroke-linecap="round"/>
-
-  <!-- glass -->
-  <path fill="url(#glassG)" d="
-    M 228,112
-    C 250,80 288,50 326,44
-    C 374,38 422,47 458,66
-    C 484,79 502,91 514,99
-    C 450,96 320,102 228,112 Z"/>
-  <!-- B pillar -->
-  <path d="M 358,47 L 366,104" stroke="#14171c" stroke-width="6" opacity=".85"/>
-
-  <!-- beltline chrome-delete trim -->
-  <path d="M 228,113 C 320,103 450,97 516,100" stroke="#9fa6ae" stroke-width="1.6" fill="none" opacity=".8"/>
-  <path d="M 214,118 C 240,84 278,52 322,42 C 374,36 428,46 464,66" stroke="#aab1b9" stroke-width="1.4" fill="none" opacity=".35"/>
-
-  <!-- door seams -->
-  <path d="M 364,113 C 362,146 362,184 364,214" stroke="#232830" stroke-width="1.6" fill="none" opacity=".9"/>
-  <path d="M 254,117 C 252,146 252,184 254,216" stroke="#232830" stroke-width="1.4" fill="none" opacity=".7"/>
-  <path d="M 488,92 C 490,124 490,174 488,214" stroke="#232830" stroke-width="1.4" fill="none" opacity=".6"/>
-
-  <!-- handles -->
-  <rect x="294" y="128" width="32" height="4.5" rx="2.2" fill="#9aa0a8"/>
-  <rect x="416" y="128" width="32" height="4.5" rx="2.2" fill="#9aa0a8"/>
-
-  <!-- mirror -->
-  <path d="M 250,110 C 240,100 228,98 222,102 C 220,109 228,114 242,115 Z" fill="#6b727b"/>
-
-  <!-- headlight -->
-  <path d="M 94,154 C 106,148 122,143 140,140 L 146,144 C 128,148 112,154 102,160 Z" fill="#dfeaf6"/>
-
-  <!-- taillight -->
-  <path d="M 626,115 C 637,117 644,124 646,134 L 634,129 C 631,122 629,118 626,115 Z" fill="#d64541"/>
-
-  <!-- wheels -->
-  <g id="wheel1">
-    <circle cx="176" cy="200" r="48" fill="#0d0f13"/>
-    <circle cx="176" cy="200" r="29" fill="#363b42"/>
-    <circle cx="176" cy="200" r="29" fill="none" stroke="#484e56" stroke-width="2"/>
-    <g fill="#1a1d22">
-      <path d="M 176,200 L 166,175 A 27,27 0 0 1 186,175 Z"/>
-      <path d="M 176,200 L 201,192 A 27,27 0 0 1 195,216 Z"/>
-      <path d="M 176,200 L 184,225 A 27,27 0 0 1 160,218 Z"/>
-      <path d="M 176,200 L 151,208 A 27,27 0 0 1 153,184 Z"/>
-    </g>
-    <circle cx="176" cy="200" r="7" fill="#585e66"/>
-    <circle cx="176" cy="200" r="3" fill="#22252a"/>
-  </g>
-  <use href="#wheel1" x="376"/>
-</svg>`;
-}
-
-/* ============================ MAP RENDER ============================ */
-function mapSVG(){
-  return `
-  <svg viewBox="0 0 390 150" aria-label="Map showing the car parked at home">
-    <rect width="390" height="150" fill="#20242b"/>
-    <rect x="0" y="0" width="120" height="64" fill="#232d22" opacity=".8"/>
-    <rect x="300" y="96" width="90" height="54" fill="#232d22" opacity=".6"/>
-    <g stroke="#2e343d" stroke-width="10" stroke-linecap="round">
-      <path d="M -10,104 C 90,96 210,110 400,88" fill="none"/>
-      <path d="M 132,-10 C 128,50 140,110 132,160" fill="none"/>
-    </g>
-    <g stroke="#3a414c" stroke-width="4" stroke-linecap="round">
-      <path d="M -10,44 L 400,36" fill="none"/>
-      <path d="M 258,-10 L 266,160" fill="none"/>
-      <path d="M 40,150 L 60,70" fill="none"/>
-    </g>
-    <g stroke="#454d59" stroke-width="1.4" stroke-dasharray="7 7" opacity=".7">
-      <path d="M -10,102 C 90,94 210,108 400,86" fill="none"/>
-    </g>
-    <circle cx="196" cy="86" r="16" fill="#3e6ae1" opacity=".18"/>
-    <circle cx="196" cy="86" r="7" fill="#3e6ae1" stroke="#fff" stroke-width="2.5"/>
-  </svg>`;
-}
-
-/* ========================== CHART HELPERS =========================== */
-const NS = "http://www.w3.org/2000/svg";
-function el(name, attrs, parent){
-  const n = document.createElementNS(NS, name);
-  for (const k in attrs) n.setAttribute(k, attrs[k]);
-  if (parent) parent.appendChild(n);
-  return n;
-}
-function fmtTime(min){ // minutes since 20:30
-  const t = 20*60+30 + min, h = Math.floor(t/60)%24, m = t%60;
-  const hh = ((h+11)%12)+1, ap = h < 12 ? "AM" : "PM";
-  return hh + ":" + String(m).padStart(2,"0") + " " + ap;
-}
-
-/* -------- charge session line chart (crosshair + tooltip) ---------- */
-function renderChargeChart(data){
-  if (!data.charge_state.session || data.charge_state.session.length < 3)
-    data = Object.assign({}, data, { charge_state: Object.assign({}, DEMO_DATA.charge_state,
-      { battery_level: data.charge_state.battery_level, charge_limit_soc: data.charge_state.charge_limit_soc }) });
-  const svg = document.getElementById("chargeChart");
-  const wrap = document.getElementById("chargeChartWrap");
-  const tip = document.getElementById("chargeTip");
-  svg.textContent = "";
-
-  const W=360, H=130, L=30, R=14, T=12, B=24;
-  const pts = data.charge_state.session;
-  const limit = data.charge_state.charge_limit_soc;
-  const xMax = 240;                       // show through 00:30 for projection
-  const yMin = 30, yMax = 100;
-  const x = m => L + (m/xMax)*(W-L-R);
-  const y = p => T + (1-(p-yMin)/(yMax-yMin))*(H-T-B);
-
-  // grid + y ticks
-  [40,60,80,100].forEach(p=>{
-    el("line",{x1:L,x2:W-R,y1:y(p),y2:y(p),class:"grid-line"},svg);
-    const t=el("text",{x:L-6,y:y(p)+3,"text-anchor":"end",class:"axis-text"},svg);
-    t.textContent=p;
-  });
-  // x ticks: 21:00, 22:00, 23:00, 00:00
-  [30,90,150,210].forEach((m,i)=>{
-    const t=el("text",{x:x(m),y:H-8,"text-anchor":"middle",class:"axis-text"},svg);
-    t.textContent=["9 PM","10 PM","11 PM","12 AM"][i];
-  });
-  // limit line
-  el("line",{x1:L,x2:W-R,y1:y(limit),y2:y(limit),stroke:"#6b7076","stroke-width":1,"stroke-dasharray":"3 4"},svg);
-  const lt=el("text",{x:W-R,y:y(limit)-4,"text-anchor":"end",class:"axis-text"},svg);
-  lt.textContent="Limit " + limit + "%";
-
-  // area + line (actual)
-  const last = pts[pts.length-1];
-  let dLine = "", dArea = "M " + x(pts[0][0]) + " " + y(yMin);
-  pts.forEach(([m,p],i)=>{
-    dLine += (i? " L ":"M ") + x(m).toFixed(1) + " " + y(p).toFixed(1);
-    dArea += " L " + x(m).toFixed(1) + " " + y(p).toFixed(1);
-  });
-  dArea += " L " + x(last[0]).toFixed(1) + " " + y(yMin) + " Z";
-  el("path",{d:dArea,fill:"#3dbe5b",opacity:.1},svg);
-  el("path",{d:dLine,fill:"none",stroke:"#3dbe5b","stroke-width":2,"stroke-linejoin":"round","stroke-linecap":"round"},svg);
-
-  // projection to limit (dashed)
-  const eta = last[0] + data.charge_state.minutes_to_full_charge;
-  el("path",{d:"M "+x(last[0])+" "+y(last[1])+" L "+x(eta)+" "+y(limit),
-    fill:"none",stroke:"#3dbe5b","stroke-width":2,"stroke-dasharray":"2 5",
-    "stroke-linecap":"round",opacity:.55},svg);
-
-  // end marker + label
-  el("circle",{cx:x(last[0]),cy:y(last[1]),r:4.5,fill:"#3dbe5b",stroke:"#1c2027","stroke-width":2},svg);
-  const endT=el("text",{x:x(last[0]),y:y(last[1])-9,"text-anchor":"middle",
-    class:"axis-text",style:"font-size:11px;font-weight:600;fill:#f4f4f4"},svg);
-  endT.textContent = last[1] + "%";
-
-  // crosshair + tooltip
-  const cross = el("line",{y1:T,y2:H-B,stroke:"#454d59","stroke-width":1,opacity:0},svg);
-  const hoverDot = el("circle",{r:4,fill:"#3dbe5b",stroke:"#1c2027","stroke-width":2,opacity:0},svg);
-
-  function showTip(evt){
-    const rect = svg.getBoundingClientRect();
-    const mx = (evt.clientX-rect.left) * (W/rect.width);
-    const minAtX = Math.max(0, Math.min(last[0], (mx-L)/(W-L-R)*xMax));
-    let best = pts[0];
-    for (const p of pts) if (Math.abs(p[0]-minAtX) < Math.abs(best[0]-minAtX)) best = p;
-    cross.setAttribute("x1",x(best[0])); cross.setAttribute("x2",x(best[0]));
-    cross.setAttribute("opacity",1);
-    hoverDot.setAttribute("cx",x(best[0])); hoverDot.setAttribute("cy",y(best[1]));
-    hoverDot.setAttribute("opacity",1);
-    tip.textContent="";
-    const v=document.createElement("div"); v.className="tv"; v.textContent=best[1]+"%";
-    const k=document.createElement("div"); k.textContent=fmtTime(best[0]);
-    tip.append(v,k);
-    const wr = wrap.getBoundingClientRect();
-    const px = x(best[0])/W*wr.width;
-    tip.style.left = Math.min(wr.width-96, Math.max(4, px+10)) + "px";
-    tip.style.top = "6px";
-    tip.style.opacity = 1;
-  }
-  function hideTip(){ tip.style.opacity=0; cross.setAttribute("opacity",0); hoverDot.setAttribute("opacity",0); }
-  svg.addEventListener("pointermove", showTip);
-  svg.addEventListener("pointerleave", hideTip);
-}
-
-/* --------------- weekly bar chart (per-bar tooltip) ----------------- */
-function renderWeekChart(data){
-  if (!data.week || !data.week.length) data = Object.assign({}, data, { week: DEMO_DATA.week });
-  const svg = document.getElementById("weekChart");
-  const wrap = document.getElementById("weekChartWrap");
-  const tip = document.getElementById("weekTip");
-  svg.textContent = "";
-
-  const W=360, H=140, L=26, R=8, T=16, B=26;
-  const days = data.week;
-  const maxV = 50; // clean top
-  const slot = (W-L-R)/days.length;
-  const bw = Math.min(24, slot-14);
-  const y = v => T + (1-v/maxV)*(H-T-B);
-
-  [0,25,50].forEach(v=>{
-    el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v),class:"grid-line"},svg);
-    const t=el("text",{x:L-6,y:y(v)+3,"text-anchor":"end",class:"axis-text"},svg);
-    t.textContent=v;
-  });
-
-  const maxDay = days.reduce((a,b)=> b.mi>a.mi?b:a, days[0]);
-  days.forEach((d,i)=>{
-    const cx = L + slot*i + slot/2;
-    const bh = Math.max(0, y(0)-y(d.mi));
-    const r = Math.min(4, bh);
-    const bar = el("path",{
-      d:`M ${cx-bw/2} ${y(0)} L ${cx-bw/2} ${y(d.mi)+r} Q ${cx-bw/2} ${y(d.mi)} ${cx-bw/2+r} ${y(d.mi)}
-         L ${cx+bw/2-r} ${y(d.mi)} Q ${cx+bw/2} ${y(d.mi)} ${cx+bw/2} ${y(d.mi)+r} L ${cx+bw/2} ${y(0)} Z`,
-      fill:"#3e6ae1"},svg);
-    const lab=el("text",{x:cx,y:H-8,"text-anchor":"middle",class:"axis-text"},svg);
-    lab.textContent=d.day;
-    if (d===maxDay){
-      const v=el("text",{x:cx,y:y(d.mi)-6,"text-anchor":"middle",class:"axis-text",
-        style:"font-size:11px;font-weight:600;fill:#f4f4f4"},svg);
-      v.textContent=d.mi+" mi";
-    }
-    // oversized hit target
-    const hit = el("rect",{x:L+slot*i,y:T,width:slot,height:H-T-B,fill:"transparent"},svg);
-    function over(){
-      bar.setAttribute("fill","#5b82e8");
-      tip.textContent="";
-      const tv=document.createElement("div"); tv.className="tv"; tv.textContent=d.mi+" mi";
-      const tk=document.createElement("div"); tk.textContent=d.day;
-      tip.append(tv,tk);
-      const wr = wrap.getBoundingClientRect();
-      const px = cx/W*wr.width;
-      tip.style.left = Math.min(wr.width-80, Math.max(4, px-30)) + "px";
-      tip.style.top = "0px";
-      tip.style.opacity = 1;
-    }
-    function out(){ bar.setAttribute("fill","#3e6ae1"); tip.style.opacity=0; }
-    hit.addEventListener("pointerenter", over);
-    hit.addEventListener("pointerleave", out);
-  });
-}
-
-/* ==================== LIVE MAP & SUPERCHARGERS ====================== */
-let liveMap = null, liveMarker = null;
-function renderMap(ds){
-  const el = document.getElementById("liveMap");
-  const lat = ds.latitude, lon = ds.longitude;
-  if (!el || typeof L === "undefined" || lat == null || lon == null){
-    // fallback: stylized static map
-    document.getElementById("mapWrap").innerHTML = mapSVG();
-    return;
-  }
-  el.style.display = "block";
-  if (!liveMap){
-    liveMap = L.map("liveMap", { zoomControl:false, attributionControl:false, dragging:true, scrollWheelZoom:false });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(liveMap);
-  }
-  liveMap.setView([lat, lon], 15);
-  if (liveMarker) liveMarker.remove();
-  liveMarker = L.circleMarker([lat, lon], { radius:8, color:"#fff", weight:2.5, fillColor:"#3e6ae1", fillOpacity:1 }).addTo(liveMap);
-  // reverse geocode for a human address (best-effort)
-  fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`)
-    .then(r => r.json())
-    .then(j => {
-      const a = j.address || {};
-      const line = [a.house_number, a.road].filter(Boolean).join(" ");
-      const town = a.city || a.town || a.village || a.hamlet || "";
-      const txt = [line, town, a.state].filter(Boolean).join(", ");
-      if (txt) document.getElementById("address").textContent = txt;
-    }).catch(()=>{});
-}
-
-const DEMO_CHARGERS = [
-  { name: "Menlo Park, CA", distance_miles: 1.2, available_stalls: 9, total_stalls: 12 },
-  { name: "Palo Alto - Stanford", distance_miles: 2.8, available_stalls: 4, total_stalls: 16 },
-  { name: "Redwood City, CA", distance_miles: 4.1, available_stalls: 11, total_stalls: 20 }
-];
-async function renderChargers(){
-  let list = DEMO_CHARGERS;
-  try{
-    const r = await fetch("/api/chargers", { cache: "no-store", headers: authHeaders() });
-    if (r.ok){ const j = await r.json(); if (j.superchargers && j.superchargers.length) list = j.superchargers; }
-  }catch(e){}
-  const wrap = document.getElementById("scRows");
-  wrap.textContent = "";
-  list.slice(0, 5).forEach(c => {
-    const row = document.createElement("div"); row.className = "sc-row";
-    const name = document.createElement("div"); name.className = "sc-name"; name.textContent = c.name;
-    const stat = document.createElement("div"); stat.className = "sc-stat";
-    if (c.available_stalls != null && c.total_stalls != null){
-      const frac = c.total_stalls ? c.available_stalls / c.total_stalls : 0;
-      const cls = frac > 0.4 ? "sc-good" : (frac > 0.15 ? "sc-mid" : "sc-low");
-      const strong = document.createElement("span"); strong.className = cls;
-      strong.textContent = `${c.available_stalls}/${c.total_stalls}`;
-      stat.appendChild(strong);
-    }
-    const dist = document.createElement("small"); dist.textContent = `${c.distance_miles} mi`;
-    stat.appendChild(dist);
-    row.append(name, stat); wrap.appendChild(row);
-  });
-}
-
-/* ============================ RENDER ================================ */
 function render(data){
-  const cs = data.charge_state, cl = data.climate_state, vs = data.vehicle_state;
-  const set = (id,txt)=>{ document.getElementById(id).textContent = txt; };
-
-  set("carName", data.display_name);
-  const badge = document.getElementById("srcBadge");
-  const live = DATA_SOURCE === "live";
-  badge.textContent = live ? "LIVE" : "DEMO";
-  badge.classList.toggle("live", live);
-  document.getElementById("signinBtn").style.display = live ? "none" : "block";
-  document.getElementById("footNote").textContent = live ? "Connected to your Tesla." : "Demo data.";
-  document.getElementById("footHint").style.display = live ? "none" : "inline";
-  document.getElementById("signoutLink").style.display = live ? "inline" : "none";
-  const charging = cs.charging_state === "Charging";
-  set("statusText", charging ? "Charging · Home" : "Parked · Home");
-  document.getElementById("batteryRow").classList.toggle("is-charging", charging);
-
-  set("battPct", cs.battery_level + "%");
-  set("battRange", cs.battery_range + " mi");
-  document.getElementById("battFill").style.width = cs.battery_level + "%";
-  document.getElementById("battFill").style.background =
-    cs.battery_level <= 20 ? "var(--red)" : "var(--green)";
-
-  set("chargePct", cs.battery_level + "%");
-  set("chargeRange", cs.battery_range + " mi");
-  set("chargeMeta", charging ? cs.minutes_to_full_charge + " min until limit" : "Plugged in");
-  document.getElementById("meterFill").style.width = cs.battery_level + "%";
-  document.getElementById("meterLimit").style.left = cs.charge_limit_soc + "%";
-  set("limitLabel", "Limit " + cs.charge_limit_soc + "%");
-  set("csPower", cs.charger_power.toFixed(1) + " kW");
-  set("csAmps", cs.charger_actual_current + " A · " + cs.charger_voltage + " V");
-  set("csAdded", "+" + cs.charge_energy_added.toFixed(1) + " kWh");
-
-  document.getElementById("tempIn").childNodes[0].textContent = cl.inside_temp_f;
-  set("tempOut", cl.outside_temp_f + "°F outside");
-  set("tempSet", cl.driver_temp_setting_f + "°");
-  set("climateMeta", cl.is_climate_on ? "Keeping " + cl.driver_temp_setting_f + "°" : "Off");
-
-  if (data.drive_state.address) set("address", data.drive_state.address);
-  else set("address", "Locating…");
-  renderMap(data.drive_state);
-  renderChargers();
-
-  set("rowOdo", vs.odometer.toLocaleString() + " mi");
-  set("rowSoftware", vs.update_status
-    ? (vs.car_version + " → " + (vs.update_version || "update") + " " + vs.update_status)
-    : vs.car_version + " · Up to date");
-  set("rowSentry", vs.sentry_mode ? "On" : "Off");
-  set("rowDoors", (vs.doors_open || vs.windows_open)
-    ? [(vs.doors_open ? "Door open" : null), (vs.windows_open ? "Window open" : null)].filter(Boolean).join(" · ")
-    : "Closed");
-  if (vs.tpms && vs.tpms.some(p => p != null))
-    set("rowTires", vs.tpms.map(p => p ?? "–").join(" · ") + " psi");
-
-  const wk = data.week || [];
-  set("weekMeta", wk.length ? wk.reduce((s,d)=>s+d.mi,0) + " mi driven" : "Sample data");
-
-  mountCarImage(data.vehicle_config);
-  const vc = data.vehicle_config || {};
-  const nice = x => x ? String(x).replace(/([a-z])([A-Z])/g, "$1 $2") : "—";
-  set("specModel", ({modely:"Model Y", model3:"Model 3", models:"Model S", modelx:"Model X"})[vc.car_type] || vc.car_type || "—");
-  set("specTrim", vc.trim_badging ? String(vc.trim_badging).toUpperCase() : "—");
-  set("specPaint", nice(vc.exterior_color));
-  set("specWheels", nice(vc.wheel_type));
-  set("specExtra", [nice(vc.roof_color), nice(vc.exterior_trim)].filter(x=>x!=="—").join(" · ") || "—");
-  renderChargeChart(data);
-  renderWeekChart(data);
-}
-
-/* ========================= INTERACTIONS ============================= */
-function wireControls(data){
-  const lock = document.getElementById("ctrlLock");
-  lock.addEventListener("click", ()=>{
-    const on = lock.classList.toggle("active");
-    lock.querySelector("span").textContent = on ? "Locked" : "Unlocked";
-  });
-  const climate = document.getElementById("ctrlClimate");
-  climate.addEventListener("click", ()=>{
-    const on = climate.classList.toggle("active");
-    data.climate_state.is_climate_on = on;
-    document.getElementById("climateMeta").textContent =
-      on ? "Keeping " + data.climate_state.driver_temp_setting_f + "°" : "Off";
-  });
-  ["ctrlPort","ctrlFrunk","ctrlTrunk"].forEach(id=>{
-    const b = document.getElementById(id);
-    b.addEventListener("click", ()=> b.classList.toggle("active"));
-  });
-  const setEl = document.getElementById("tempSet");
-  document.getElementById("tempUp").addEventListener("click", ()=>{
-    data.climate_state.driver_temp_setting_f = Math.min(82, data.climate_state.driver_temp_setting_f+1);
-    setEl.textContent = data.climate_state.driver_temp_setting_f + "°";
-  });
-  document.getElementById("tempDown").addEventListener("click", ()=>{
-    data.climate_state.driver_temp_setting_f = Math.max(59, data.climate_state.driver_temp_setting_f-1);
-    setEl.textContent = data.climate_state.driver_temp_setting_f + "°";
+  mine = data.mine;
+  $("closedCard").hidden = data.open || !!mine;
+  $("formCard").hidden = !!mine || !data.open;
+  $("mineCard").hidden = !mine;
+  if(mine){
+    const ahead = mine.spot;
+    $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + (ahead + 1);
+    $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
+    $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
+    if(mine.status === "up" && !buzzed && navigator.vibrate){ navigator.vibrate([200, 100, 200]); buzzed = true; }
+  }
+  const ol = $("queue"); ol.innerHTML = "";
+  if(!data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
+  data.queue.slice(0, 25).forEach((r, i) => {
+    const li = document.createElement("li"); if(r.status === "up") li.classList.add("up"); if(mine && r.id === mine.id) li.classList.add("me");
+    const n = document.createElement("span"); n.className = "n"; n.textContent = r.status === "up" ? "▶" : i + 1;
+    const t = document.createElement("div"); t.className = "t";
+    const b = document.createElement("b"); b.textContent = r.name;
+    const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
+    t.append(b, s); li.append(n, t); ol.appendChild(li);
   });
 }
-
-/* ============================== BOOT ================================ */
-(async function(){
-  const data = await getVehicleData();
-  render(data);
-  wireControls(data);
-})();
+async function refresh(){
+  try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
+}
+try{ const n = localStorage.getItem("dive_name"); if(n) $("name").value = n; }catch(e){}
+refresh(); setInterval(refresh, 5000);
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") refresh(); });
 </script>
 </body>
 </html>
