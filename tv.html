@@ -63,7 +63,8 @@ li .t span{display:block;font-size:2.8vmin;color:var(--ink-2);overflow-wrap:anyw
 const $ = id => document.getElementById(id);
 fetch("/api/url").then(r => r.json()).then(j => $("url").textContent = j.url.replace(/^https?:\/\//, "").replace(/\/$/, "")).catch(() => {});
 function render(d){
-  $("closed").hidden = d.open;
+  $("closed").hidden = d.open && !d.paused;
+  $("closed").textContent = !d.open ? "Sign-ups are closed" : d.pausedUntil ? "Sign-ups paused until " + new Date(d.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Sign-ups paused";
   const up = d.queue.find(r => r.status === "up"), wait = d.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
   const b = document.createElement("b"), s = document.createElement("span");

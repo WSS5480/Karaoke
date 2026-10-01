@@ -194,7 +194,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
   </section>
 
   <section class="card closed" id="closedCard" hidden>
-    <p>Sign-ups are closed right now. Ask the KJ.</p>
+    <p id="closedMsg">Sign-ups are closed right now. Ask the KJ.</p>
   </section>
 
   <section class="card" id="mySongs" hidden>
@@ -330,8 +330,10 @@ function render(data){
   mine = data.mine;
   geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn || !!qrToken;
   renderRate(data.last);
-  $("closedCard").hidden = data.open || !!mine;
-  $("formCard").hidden = !!mine || !data.open || (authOn && (!me || !me.name));
+  const blocked = !data.open || data.paused;
+  $("closedCard").hidden = !blocked || !!mine;
+  $("closedMsg").textContent = !data.open ? "Sign-ups are closed right now. Ask the KJ." : data.pausedUntil ? "Sign-ups are paused. Back at " + new Date(data.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + "." : "Sign-ups are paused for a bit. Check back soon.";
+  $("formCard").hidden = !!mine || !data.open || data.paused || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
   if(mine){
     const ahead = mine.spot;

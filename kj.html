@@ -81,6 +81,17 @@ a{color:var(--green-hi)}
     </section>
 
     <section class="card">
+      <h2>Pause sign-ups <span id="pauseState"></span></h2>
+      <div class="row">
+        <button id="p15" data-m="15">15 min</button>
+        <button id="p30" data-m="30">30 min</button>
+        <button id="p60" data-m="60">1 hour</button>
+        <button id="pOn" data-m="-1">Until I resume</button>
+        <button id="pOff" data-m="0" class="next" hidden>Resume now</button>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Waiting <span id="waitCount"></span></h2>
       <ol id="queue"></ol>
     </section>
@@ -162,8 +173,11 @@ function render(){
   $("doneCount").textContent = state.done.length ? state.done.length + " tonight" : "";
   if(!state.done.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Singers move here when you tap Next."; d.appendChild(li); }
   state.done.forEach((r, i) => d.appendChild(item(r, i, false)));
-  $("openPill").textContent = state.open ? "Sign-ups open" : "Sign-ups closed";
-  $("openPill").className = "pill " + (state.open ? "on" : "off");
+  const p = state.pause || { paused: false };
+  $("openPill").textContent = !state.open ? "Sign-ups closed" : p.paused ? "Sign-ups paused" : "Sign-ups open";
+  $("openPill").className = "pill " + (state.open && !p.paused ? "on" : "off");
+  $("pauseState").textContent = p.paused ? (p.until ? "paused until " + new Date(p.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "paused") : "";
+  $("pOff").hidden = !p.paused;
   $("toggleOpen").textContent = state.open ? "Close sign-ups" : "Open sign-ups";
   $("toggleGeo").textContent = state.geofence ? "Location check: on" : "Location check: off";
   $("togglePhone").hidden = !state.twilioReady;
@@ -180,6 +194,7 @@ $("pinForm").addEventListener("submit", async e => {
 });
 $("pin").addEventListener("input", () => $("pinErr").textContent = "");
 $("nextBtn").addEventListener("click", () => act("/api/kj/next"));
+["p15", "p30", "p60", "pOn", "pOff"].forEach(id => $(id).addEventListener("click", () => act("/api/kj-pause", { minutes: Number($(id).dataset.m) })));
 $("refreshBtn").addEventListener("click", async () => {
   const b = $("refreshBtn"); b.disabled = true; b.textContent = "Refreshing…";
   await load();

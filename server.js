@@ -177,6 +177,15 @@ function rateLimited(ip) {
 const wrap = fn => (req, res) => fn(req, res).catch(e => { console.error(e); res.status(500).json({ error: "Something went wrong on our end. Try again." }); });
 function siteUrl(req) { return (process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, ""); }
 
+
+// pause: "on" = until resumed, a number = paused until that time (ms)
+async function pauseState() {
+  const v = await db.getSetting("paused");
+  if (!v || v === "off") return { paused: false, until: null };
+  if (v === "on") return { paused: true, until: null };
+  const t = Number(v);
+  return t > Date.now() ? { paused: true, until: t } : { paused: false, until: null };
+}
 /* ---------- singer API ---------- */
 app.get("/api/queue", wrap(async (req, res) => {
   const d = owner(req, res);
@@ -184,14 +193,15 @@ app.get("/api/queue", wrap(async (req, res) => {
   const open = (await db.getSetting("open")) !== "no";
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
-  const geofence = (await db.getSetting("geofence")) !== "off";
-  res.json({ open, geofence, queue: list.map(publicRow), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
+  const geofence = (await db.getSetting("geofence")) !== "off", ps = await pauseState();
+  res.json({ open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: list.map(publicRow), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
     last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null });
 }));
 
 app.post("/api/signup", wrap(async (req, res) => {
   const d = owner(req, res);
   if ((await db.getSetting("open")) === "no") return res.status(403).json({ error: "Sign-ups are closed for tonight." });
+  { const ps = await pauseState(); if (ps.paused) return res.status(403).json({ error: ps.until ? "Sign-ups are paused until " + new Date(ps.until).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) + ". Try again then." : "Sign-ups are paused for a bit. Try again soon." }); }
   if ((await authOn()) && !currentUser(req)) return res.status(401).json({ error: "signin", message: "Sign in with your phone number first." });
   if (rateLimited(req.ip)) return res.status(429).json({ error: "Too many tries. Wait a minute and try again." });
   if ((await db.getSetting("geofence")) !== "off" && req.body.qr !== QR_TOKEN) {
@@ -273,7 +283,7 @@ app.post("/api/auth/logout", (req, res) => { res.append("Set-Cookie", "dive_user
 /* ---------- KJ API (PIN protected) ---------- */
 app.use("/api/kj", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }));
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
+  res.json({ open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
 }));
 app.get("/api/kj/history", wrap(async (req, res) => {
   res.json({ items: (await db.history({ sort: req.query.sort === "top" ? "top" : "new", q: clean(req.query.q, 40), limit: 500 })).map(histRow) });
@@ -308,6 +318,11 @@ app.post("/api/kj-geofence", (req, res, next) => pinOk(req) ? next() : res.statu
 }));
 app.post("/api/kj-phone", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
   await db.setSetting("phone_signin", req.body.on ? "on" : "off"); res.json({ ok: true });
+}));
+app.post("/api/kj-pause", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
+  const m = Number(req.body.minutes);
+  await db.setSetting("paused", m === 0 ? "off" : m > 0 ? String(Date.now() + Math.min(m, 240) * 60000) : "on");
+  res.json({ ok: true });
 }));
 app.post("/api/kj-newnight", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
   await db.newNight(); res.json({ ok: true });
