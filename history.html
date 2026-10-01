@@ -107,6 +107,20 @@ $("top").addEventListener("click", () => { sort = "top"; load(); });
 $("new").addEventListener("click", () => { sort = "new"; load(); });
 $("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(load, 300); });
 if(pin) start();
+
+/* ---------- stay fresh when the app comes back ---------- */
+(function(){
+  let hiddenAt = 0;
+  const back = () => {
+    if(hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000){ location.reload(); return; }
+    hiddenAt = 0; if(pin) load();
+  };
+  document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") hiddenAt = Date.now(); else back(); });
+  window.addEventListener("pageshow", e => { if(e.persisted) location.reload(); });
+  window.addEventListener("focus", back);
+  window.addEventListener("online", back);
+})();
+
 </script>
 </body>
 </html>

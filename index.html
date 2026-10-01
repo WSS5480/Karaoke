@@ -781,7 +781,20 @@ async function refresh(){
 }
 try{ const n = localStorage.getItem("dive_name"); if(n) $("name").value = n; }catch(e){}
 loadMe(); setInterval(refresh, 5000);
-document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") refresh(); });
+
+/* ---------- stay fresh when the app comes back ---------- */
+(function(){
+  let hiddenAt = 0;
+  const back = () => {
+    if(hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000){ location.reload(); return; }
+    hiddenAt = 0; if(true) refresh();
+  };
+  document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") hiddenAt = Date.now(); else back(); });
+  window.addEventListener("pageshow", e => { if(e.persisted) location.reload(); });
+  window.addEventListener("focus", back);
+  window.addEventListener("online", back);
+})();
+
 </script>
 </body>
 </html>
