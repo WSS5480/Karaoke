@@ -5,6 +5,14 @@ const QRCode = require("qrcode");
 
 const PORT = process.env.PORT || 3000;
 const KJ_PIN = process.env.KJ_PIN || "4950";
+const BAR_LAT = parseFloat(process.env.BAR_LAT || "26.2183801"), BAR_LNG = parseFloat(process.env.BAR_LNG || "-98.2287714");
+const GEOFENCE_M = parseFloat(process.env.GEOFENCE_M || "150");
+const QR_TOKEN = process.env.QR_TOKEN || "dive495";
+function metersAway(lat, lng) {
+  const R = 6371000, r = x => x * Math.PI / 180, dLat = r(lat - BAR_LAT), dLng = r(lng - BAR_LNG);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(r(BAR_LAT)) * Math.cos(r(lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
 const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "20kb" }));
@@ -106,7 +114,8 @@ app.get("/api/queue", wrap(async (req, res) => {
   const open = (await db.getSetting("open")) !== "no";
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
-  res.json({ open, queue: list.map(publicRow), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
+  const geofence = (await db.getSetting("geofence")) !== "off";
+  res.json({ open, geofence, queue: list.map(publicRow), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
     last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null });
 }));
 
@@ -114,6 +123,12 @@ app.post("/api/signup", wrap(async (req, res) => {
   const d = device(req, res);
   if ((await db.getSetting("open")) === "no") return res.status(403).json({ error: "Sign-ups are closed for tonight." });
   if (rateLimited(req.ip)) return res.status(429).json({ error: "Too many tries. Wait a minute and try again." });
+  if ((await db.getSetting("geofence")) !== "off" && req.body.qr !== QR_TOKEN) {
+    const lat = Number(req.body.lat), lng = Number(req.body.lng), acc = Math.min(Math.max(Number(req.body.acc) || 0, 0), 200);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(403).json({ error: "location", message: "Turn on location so we can see you're at The Dive, or scan the QR code at the bar." });
+    const away = metersAway(lat, lng);
+    if (away - acc > GEOFENCE_M) return res.status(403).json({ error: "far", miles: Math.round(away / 1609.34 * 10) / 10, message: "You need to be at The Dive to sign up." });
+  }
   const name = clean(req.body.name, 30), song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!name) return res.status(400).json({ error: "Enter your name or stage name." });
   if (!song) return res.status(400).json({ error: "Enter the song you want to sing." });
@@ -152,7 +167,7 @@ app.get("/api/wall", wrap(async (req, res) => {
 /* ---------- KJ API (PIN protected) ---------- */
 app.use("/api/kj", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }));
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ open: (await db.getSetting("open")) !== "no", queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
+  res.json({ open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
 }));
 app.get("/api/kj/history", wrap(async (req, res) => {
   res.json({ items: (await db.history({ sort: req.query.sort === "top" ? "top" : "new", q: clean(req.query.q, 40), limit: 500 })).map(histRow) });
@@ -182,13 +197,16 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
 app.post("/api/kj-open", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
   await db.setSetting("open", req.body.open ? "yes" : "no"); res.json({ ok: true });
 }));
+app.post("/api/kj-geofence", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
+  await db.setSetting("geofence", req.body.on ? "on" : "off"); res.json({ ok: true });
+}));
 app.post("/api/kj-newnight", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
   await db.newNight(); res.json({ ok: true });
 }));
 
 /* ---------- QR code ---------- */
 app.get("/qr.svg", wrap(async (req, res) => {
-  const svg = await QRCode.toString(siteUrl(req) + "/", { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#0a0c0a", light: "#ffffff" } });
+  const svg = await QRCode.toString(siteUrl(req) + "/?at=" + QR_TOKEN, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#0a0c0a", light: "#ffffff" } });
   res.type("image/svg+xml").set("Cache-Control", "public, max-age=3600").send(svg);
 }));
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -207,7 +225,7 @@ img{width:160px;filter:drop-shadow(0 0 20px rgba(57,181,74,.55))}h1{font-family:
 }));
 app.get("/api/url", (req, res) => res.json({ url: siteUrl(req) + "/" }));
 
-const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/logo.png": "logo.png", "/songs.json": "songs.json" };
+const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/logo.png": "logo.png", "/songs.json": "songs.json", "/manifest.json": "manifest.json" };
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(__dirname, file))));
 app.get("/healthz", (req, res) => res.send("ok"));
 

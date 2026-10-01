@@ -1,0 +1,16 @@
+{
+ "name": "The Dive Karaoke",
+ "short_name": "Dive Karaoke",
+ "start_url": "/",
+ "display": "standalone",
+ "background_color": "#0a0c0a",
+ "theme_color": "#0a0c0a",
+ "icons": [
+  {
+   "src": "/logo.png",
+   "sizes": "1000x965",
+   "type": "image/png",
+   "purpose": "any"
+  }
+ ]
+}

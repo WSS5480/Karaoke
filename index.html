@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Sing at The Dive</title>
 <link rel="icon" href="/logo.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/logo.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dive Karaoke">
+<meta name="theme-color" content="#0a0c0a">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
 <style>
@@ -106,6 +112,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
         </div>
         <p class="err" id="err" role="alert"></p>
         <button class="go" id="submit" type="submit">Put me on the list</button>
+        <p class="hint" id="locHint" style="color:var(--ink-2);text-align:center">Sign up from anywhere inside The Dive. Your phone will ask to use your location.</p>
       </div>
     </form>
   </section>
@@ -152,6 +159,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
     <p class="ok" id="mineMsg" role="status"></p>
   </section>
 
+  <p class="hint" style="color:var(--ink-2);text-align:center;margin:0">Tip: tap Share, then Add to Home Screen, to sign up next time without scanning.</p>
   <a class="wall" href="/wall">See the wall of fame</a>
 
   <section class="card">
@@ -161,6 +169,15 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 </main>
 <script>
 const $ = id => document.getElementById(id);
+let qrToken = "";
+try{ const at = new URLSearchParams(location.search).get("at"); if(at){ sessionStorage.setItem("dive_qr", at); history.replaceState(null, "", "/"); } qrToken = sessionStorage.getItem("dive_qr") || ""; }catch(e){}
+let geofenceOn = true;
+function getSpot(){
+  return new Promise((ok, bad) => {
+    if(!navigator.geolocation) return bad(new Error("none"));
+    navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), bad, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  });
+}
 let songs = [], mine = null, buzzed = false;
 fetch("/songs.json").then(r => r.json()).then(s => songs = s).catch(() => {});
 
@@ -236,9 +253,19 @@ $("form").addEventListener("submit", async e => {
   if(!$("artistPick").hidden && !$("artistPick").value){ $("err").textContent = "Pick which artist's version you're singing."; $("artistPick").focus(); return; }
   $("submit").disabled = true; $("submit").textContent = "Adding you…";
   try{
-    const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist }) });
+    let spot = {};
+    if(geofenceOn && !qrToken){
+      $("submit").textContent = "Checking you're at The Dive…";
+      try{ spot = await getSpot(); }
+      catch(ge){ spot = {}; }
+    }
+    const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, ...spot }) });
     const j = await r.json();
-    if(!r.ok){ $("err").textContent = j.error || "Couldn't add you. Try again."; }
+    if(!r.ok){
+      if(j.error === "far") $("err").textContent = "You need to be at The Dive to sign up. You're about " + j.miles + " miles away.";
+      else if(j.error === "location") $("err").textContent = "Allow location so we can see you're at The Dive, or scan the QR code at the bar. iPhone: Settings → Privacy → Location Services → Safari → While Using.";
+      else $("err").textContent = j.error || "Couldn't add you. Try again.";
+    }
     else { try{ localStorage.setItem("dive_name", name); }catch(e){} }
   }catch(e){ $("err").textContent = "No connection. Check your signal and try again."; }
   $("submit").disabled = false; $("submit").textContent = "Put me on the list";
@@ -253,6 +280,7 @@ $("cancel").addEventListener("click", async () => {
 
 function render(data){
   mine = data.mine;
+  geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn || !!qrToken;
   renderRate(data.last);
   $("closedCard").hidden = data.open || !!mine;
   $("formCard").hidden = !!mine || !data.open;
