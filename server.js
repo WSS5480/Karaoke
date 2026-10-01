@@ -24,6 +24,7 @@ if (process.env.DATABASE_URL) {
       await pool.query(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS rating INT`);
       await pool.query(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS public BOOLEAN NOT NULL DEFAULT false`);
     },
+    async mineAll(d, sort) { return (await pool.query(`SELECT * FROM signups WHERE device=$1 AND done_at IS NOT NULL AND status IN ('done','archived') ORDER BY ${sort === "top" ? "rating DESC NULLS LAST, done_at DESC" : "done_at DESC"} LIMIT 200`, [d])).rows; },
     async lastSung(d) { return (await pool.query(`SELECT * FROM signups WHERE device=$1 AND status IN ('done','archived') AND done_at > now() - interval '12 hours' ORDER BY done_at DESC LIMIT 1`, [d])).rows[0]; },
     async rate(id, rating, pub) { await pool.query(`UPDATE signups SET rating=$2, public=$3 WHERE id=$1`, [id, rating, pub]); },
     async history(o) {
@@ -51,6 +52,7 @@ if (process.env.DATABASE_URL) {
   const now = () => new Date().toISOString();
   db = {
     async init() {},
+    async mineAll(d, sort) { return rows.filter(r => r.device === d && r.done_at && (r.status === "done" || r.status === "archived")).sort(sort === "top" ? (a, b) => (b.rating ?? -1) - (a.rating ?? -1) || b.done_at.localeCompare(a.done_at) : (a, b) => b.done_at.localeCompare(a.done_at)).slice(0, 200); },
     async lastSung(d) { const cut = Date.now() - 12 * 3600e3; return rows.filter(r => r.device === d && (r.status === "done" || r.status === "archived") && r.done_at && Date.parse(r.done_at) > cut).sort((a, b) => b.done_at.localeCompare(a.done_at))[0]; },
     async rate(id, rating, pub) { const r = rows.find(x => x.id === id); if (r) { r.rating = rating; r.public = pub; } },
     async history(o) {
@@ -128,7 +130,10 @@ app.post("/api/cancel", wrap(async (req, res) => {
 }));
 
 app.post("/api/rate", wrap(async (req, res) => {
-  const d = device(req, res), last = await db.lastSung(d);
+  const d = device(req, res);
+  let last;
+  if (req.body.id) { const r = await db.get(parseInt(req.body.id, 10)); last = r && r.device === d && r.done_at ? r : null; }
+  else last = await db.lastSung(d);
   if (!last) return res.status(404).json({ error: "Rate your song after you sing." });
   const rating = parseInt(req.body.rating, 10);
   if (!(rating >= 1 && rating <= 5)) return res.status(400).json({ error: "Pick 1 to 5 stars." });
@@ -136,6 +141,10 @@ app.post("/api/rate", wrap(async (req, res) => {
   res.json({ ok: true, id: last.id });
 }));
 const histRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, rating: r.rating, public: !!r.public, at: r.done_at });
+app.get("/api/mine", wrap(async (req, res) => {
+  const d = device(req, res);
+  res.json({ items: (await db.mineAll(d, req.query.sort === "top" ? "top" : "new")).map(histRow) });
+}));
 app.get("/api/wall", wrap(async (req, res) => {
   res.json({ items: (await db.history({ onlyPublic: true, sort: req.query.sort === "top" ? "top" : "new", limit: 100 })).map(histRow) });
 }));

@@ -27,6 +27,8 @@ input:focus-visible,button:focus-visible{outline:3px solid var(--green-hi);outli
 .sugg button{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);color:var(--ink);padding:10px 12px;font:inherit;cursor:pointer}
 .sugg button:first-child{border-top:0}
 .sugg button b{font-weight:500}
+select{width:100%;background:var(--wall);color:var(--ink);border:2px solid var(--green);border-radius:10px;padding:13px 12px;font:inherit;font-size:17px}
+.hint{font-size:13px;color:var(--green-hi);margin:6px 0 0}
 .sugg button span{display:block;font-size:13px;color:var(--ink-2)}
 .go{width:100%;background:var(--green);color:#041206;border:0;border-radius:999px;padding:15px;font-family:var(--slab);font-weight:800;font-size:19px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
 .go[disabled]{opacity:.6}
@@ -62,6 +64,20 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .shares .main{grid-column:1/-1;background:var(--green);color:#041206;border-color:var(--green)}
 .ok{color:var(--green-hi);font-size:14px;min-height:20px;margin:0}
 .wall{color:var(--green-hi);text-align:center;display:block}
+.mine-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.mine-list li{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px;border-top:1px solid var(--line)}
+.mine-list li:first-child{border-top:0}
+.mine-list .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.mine-list b{font-weight:600;overflow-wrap:anywhere}
+.mine-list .d{font-size:13px;color:var(--ink-2);white-space:nowrap}
+.mine-list .a{font-size:14px;color:var(--ink-2)}
+.mini{display:flex;gap:2px}
+.mini button{background:none;border:0;font-size:28px;line-height:1;color:var(--line);cursor:pointer;padding:0 2px}
+.mini button.on{color:#ffc93c}
+.mrow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.sm{font:inherit;font-weight:600;font-size:14px;border-radius:999px;padding:7px 14px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
+.seg{display:flex;gap:8px}
+.seg button[aria-pressed="true"]{background:var(--green);color:#041206;border-color:var(--green)}
 </style>
 </head>
 <body>
@@ -81,9 +97,12 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
           <input id="song" name="song" maxlength="80" autocomplete="off" placeholder="Bidi Bidi Bom Bom" required>
           <div class="sugg" id="sugg" hidden></div>
         </div>
-        <div>
+        <div class="field">
           <label for="artist">Artist <span>/ Artista</span></label>
           <input id="artist" name="artist" maxlength="60" autocomplete="off" placeholder="Selena">
+          <select id="artistPick" hidden aria-label="Pick the artist"></select>
+          <div class="sugg" id="asugg" hidden></div>
+          <p class="hint" id="artistHint" hidden></p>
         </div>
         <p class="err" id="err" role="alert"></p>
         <button class="go" id="submit" type="submit">Put me on the list</button>
@@ -123,6 +142,16 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
     <p>Sign-ups are closed right now. Ask the KJ.</p>
   </section>
 
+  <section class="card" id="mySongs" hidden>
+    <h2>My songs <span style="text-transform:none;letter-spacing:0">/ Mis canciones</span></h2>
+    <div class="seg">
+      <button class="sm" id="mTop" type="button" aria-pressed="true">Top rated</button>
+      <button class="sm" id="mNew" type="button" aria-pressed="false">Newest</button>
+    </div>
+    <ol class="mine-list" id="mineList"></ol>
+    <p class="ok" id="mineMsg" role="status"></p>
+  </section>
+
   <a class="wall" href="/wall">See the wall of fame</a>
 
   <section class="card">
@@ -135,30 +164,76 @@ const $ = id => document.getElementById(id);
 let songs = [], mine = null, buzzed = false;
 fetch("/songs.json").then(r => r.json()).then(s => songs = s).catch(() => {});
 
+const norm = s => s.trim().toLowerCase();
+function sugBtn(box, title, sub, onPick){
+  const b = document.createElement("button"); b.type = "button";
+  const t = document.createElement("b"); t.textContent = title;
+  b.appendChild(t);
+  if(sub){ const a = document.createElement("span"); a.textContent = sub; b.appendChild(a); }
+  b.addEventListener("click", onPick); box.appendChild(b);
+}
+function knownArtist(){ const a = norm($("artist").value); return a && songs.some(s => norm(s.a) === a) ? a : ""; }
+/* song field: suggestions, filtered to the artist when one is chosen */
 function suggest(){
-  const q = $("song").value.trim().toLowerCase(), box = $("sugg");
-  if(q.length < 2 || !songs.length){ box.hidden = true; return; }
-  const hits = songs.filter(s => s.t.toLowerCase().includes(q) || s.a.toLowerCase().includes(q)).slice(0, 6);
+  const q = norm($("song").value), box = $("sugg"), art = knownArtist();
   box.innerHTML = "";
-  hits.forEach(s => {
-    const b = document.createElement("button"); b.type = "button";
-    const t = document.createElement("b"); t.textContent = s.t;
-    const a = document.createElement("span"); a.textContent = s.a;
-    b.append(t, a);
-    b.addEventListener("click", () => { $("song").value = s.t; $("artist").value = s.a; box.hidden = true; $("err").textContent = ""; });
-    box.appendChild(b);
-  });
+  if(!songs.length || (q.length < 2 && !art)){ box.hidden = true; return; }
+  const hits = songs.filter(s => (!art || norm(s.a) === art) && (!q || s.t.toLowerCase().includes(q) || (!art && s.a.toLowerCase().includes(q)))).slice(0, art ? 12 : 6);
+  hits.forEach(s => sugBtn(box, s.t, s.a, () => { $("song").value = s.t; box.hidden = true; $("err").textContent = ""; setArtistFor(s.t, s.a); }));
   box.hidden = !hits.length;
 }
-$("song").addEventListener("input", () => { $("err").textContent = ""; suggest(); });
+/* once a song is set: one artist fills in, several artists become a pick list */
+function setArtistFor(title, chosen){
+  const matches = [...new Set(songs.filter(s => norm(s.t) === norm(title)).map(s => s.a))];
+  const pick = $("artistPick"), input = $("artist"), hint = $("artistHint");
+  if(matches.length > 1){
+    pick.innerHTML = "";
+    const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Pick the artist / Elige el artista"; pick.appendChild(o0);
+    matches.forEach(a => { const o = document.createElement("option"); o.value = a; o.textContent = a; pick.appendChild(o); });
+    pick.value = chosen && matches.includes(chosen) ? chosen : "";
+    input.value = pick.value; input.hidden = true; pick.hidden = false;
+    hint.textContent = matches.length + " versions of this song. Pick yours."; hint.hidden = !!pick.value;
+  } else {
+    pick.hidden = true; input.hidden = false; hint.hidden = true;
+    if(matches.length === 1){ input.value = matches[0]; hint.textContent = "Artist filled in for you."; hint.hidden = false; }
+  }
+  $("asugg").hidden = true;
+}
+$("artistPick").addEventListener("change", () => { $("artist").value = $("artistPick").value; $("artistHint").hidden = !!$("artistPick").value; $("err").textContent = ""; });
+/* artist field: suggestions of artists; picking one shows their songs */
+function suggestArtist(){
+  const q = norm($("artist").value), box = $("asugg");
+  box.innerHTML = "";
+  if(q.length < 2 || !songs.length){ box.hidden = true; return; }
+  const counts = new Map(); songs.forEach(s => { if(s.a.toLowerCase().includes(q)) counts.set(s.a, (counts.get(s.a) || 0) + 1); });
+  const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  list.forEach(([a, n]) => sugBtn(box, a, n + " song" + (n > 1 ? "s" : ""), () => {
+    $("artist").value = a; box.hidden = true; $("artistHint").hidden = true;
+    const theirs = songs.filter(s => s.a === a);
+    if(theirs.length === 1 && !$("song").value.trim()){ $("song").value = theirs[0].t; return; }
+    if(!$("song").value.trim() || !theirs.some(s => norm(s.t) === norm($("song").value))){ $("song").value = ""; $("song").focus(); suggest(); }
+  }));
+  box.hidden = !list.length;
+}
+$("song").addEventListener("input", () => {
+  $("err").textContent = "";
+  if(!$("artistPick").hidden){ $("artistPick").hidden = true; $("artist").hidden = false; $("artist").value = ""; }
+  $("artistHint").hidden = true;
+  suggest();
+  const exact = songs.filter(s => norm(s.t) === norm($("song").value));
+  if(exact.length) setArtistFor($("song").value, knownArtist() ? $("artist").value : "");
+});
+$("song").addEventListener("focus", suggest);
+$("artist").addEventListener("input", () => { $("err").textContent = ""; $("artistHint").hidden = true; suggestArtist(); });
 $("name").addEventListener("input", () => { $("err").textContent = ""; });
-document.addEventListener("click", e => { if(!e.target.closest(".field")) $("sugg").hidden = true; });
+document.addEventListener("click", e => { if(!e.target.closest(".field")){ $("sugg").hidden = true; $("asugg").hidden = true; } });
 
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("name").value.trim(), song = $("song").value.trim(), artist = $("artist").value.trim();
   if(!name){ $("err").textContent = "Enter your name or stage name."; $("name").focus(); return; }
   if(!song){ $("err").textContent = "Enter the song you want to sing."; $("song").focus(); return; }
+  if(!$("artistPick").hidden && !$("artistPick").value){ $("err").textContent = "Pick which artist's version you're singing."; $("artistPick").focus(); return; }
   $("submit").disabled = true; $("submit").textContent = "Adding you…";
   try{
     const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist }) });
@@ -233,6 +308,7 @@ $("saveRate").addEventListener("click", async () => {
     last.rating = picked; last.public = $("pub").checked;
     $("rateMsg").textContent = $("pub").checked ? "Saved. You're on the wall of fame." : "Saved.";
     $("shareBox").hidden = false; imgBlob = null; setFb();
+    loadMine(true);
   }catch(e){ $("rateMsg").textContent = "No connection. Try again."; }
 });
 $("pub").addEventListener("change", () => { $("rateMsg").textContent = "Tap Save my rating to update."; });
@@ -277,8 +353,51 @@ $("shareImg").addEventListener("click", () => sharePic(""));
 $("ig").addEventListener("click", () => sharePic("Instagram"));
 $("tt").addEventListener("click", () => sharePic("TikTok"));
 $("dl").addEventListener("click", async () => { savePic(await makeImage()); $("shareMsg").textContent = "Saved your pic."; });
+
+/* ---------- my songs (this phone's history) ---------- */
+let mSort = "top", mineSig = "";
+async function loadMine(force){
+  try{
+    const j = await (await fetch("/api/mine?sort=" + mSort, { cache: "no-store" })).json();
+    const sig = mSort + JSON.stringify(j.items.map(x => [x.id, x.rating]));
+    if(!force && sig === mineSig) return; mineSig = sig;
+    $("mySongs").hidden = !j.items.length;
+    $("mTop").setAttribute("aria-pressed", mSort === "top"); $("mNew").setAttribute("aria-pressed", mSort === "new");
+    const ol = $("mineList"); ol.innerHTML = "";
+    j.items.forEach(x => {
+      const li = document.createElement("li");
+      const top = document.createElement("div"); top.className = "top";
+      const b = document.createElement("b"); b.textContent = x.song;
+      const d = document.createElement("span"); d.className = "d"; d.textContent = new Date(x.at).toLocaleDateString([], { month: "short", day: "numeric" });
+      top.append(b, d); li.appendChild(top);
+      if(x.artist){ const a = document.createElement("span"); a.className = "a"; a.textContent = x.artist; li.appendChild(a); }
+      const row = document.createElement("div"); row.className = "mrow";
+      const st = document.createElement("div"); st.className = "mini"; st.setAttribute("role", "radiogroup"); st.setAttribute("aria-label", "Rate " + x.song);
+      for(let i = 1; i <= 5; i++){
+        const s = document.createElement("button"); s.type = "button"; s.textContent = "★"; s.className = i <= (x.rating || 0) ? "on" : "";
+        s.setAttribute("aria-label", i + " stars");
+        s.addEventListener("click", async () => {
+          const r = await fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: x.id, rating: i, public: x.public }) }).catch(() => null);
+          $("mineMsg").textContent = r && r.ok ? "Rating saved." : "Couldn't save. Try again.";
+          loadMine(true);
+        });
+        st.appendChild(s);
+      }
+      const sh = document.createElement("button"); sh.type = "button"; sh.className = "sm"; sh.textContent = "Share";
+      sh.addEventListener("click", () => {
+        if(!x.rating){ $("mineMsg").textContent = "Rate it first, then share."; return; }
+        last = { id: x.id, name: x.name, song: x.song, artist: x.artist, rating: x.rating, public: x.public }; imgBlob = null;
+        sharePic("").then(() => { if(!$("shareMsg").textContent) return; $("mineMsg").textContent = $("shareMsg").textContent; });
+      });
+      row.append(st, sh); li.appendChild(row); ol.appendChild(li);
+    });
+  }catch(e){}
+}
+$("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
+$("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
 async function refresh(){
   try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
+  loadMine();
 }
 try{ const n = localStorage.getItem("dive_name"); if(n) $("name").value = n; }catch(e){}
 refresh(); setInterval(refresh, 5000);
