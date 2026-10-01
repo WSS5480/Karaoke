@@ -53,6 +53,7 @@ a{color:var(--green-hi)}
     <img src="/logo.png" alt="The Dive on 495">
     <h1>KJ queue</h1>
     <span class="pill" id="openPill"></span>
+    <button id="refreshBtn" type="button" aria-label="Refresh the list">↻ Refresh</button>
   </header>
 
   <section class="card" id="login">
@@ -174,6 +175,11 @@ $("pinForm").addEventListener("submit", async e => {
 });
 $("pin").addEventListener("input", () => $("pinErr").textContent = "");
 $("nextBtn").addEventListener("click", () => act("/api/kj/next"));
+$("refreshBtn").addEventListener("click", async () => {
+  const b = $("refreshBtn"); b.disabled = true; b.textContent = "Refreshing…";
+  await load();
+  b.disabled = false; b.textContent = "✓ Updated"; setTimeout(() => b.textContent = "↻ Refresh", 1500);
+});
 $("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !state.open }));
 $("toggleGeo").addEventListener("click", () => act("/api/kj-geofence", { on: !state.geofence }));
 $("togglePhone").addEventListener("click", () => act("/api/kj-phone", { on: !state.phoneSignin }));
