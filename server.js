@@ -42,9 +42,12 @@ app.use(express.json({ limit: "20kb" }));
 
 /* ---------- storage: Postgres on Render, memory when run locally ---------- */
 let db;
-if (process.env.DATABASE_URL) {
+const DB_URL = (process.env.DATABASE_URL || "").trim();
+const DB_OK = /^postgres(ql)?:\/\/[^\s]+@[^\s/]+\/\S+$/.test(DB_URL);
+if (DB_URL && !DB_OK) console.error("DATABASE_URL doesn't look like a Postgres link (it should start with postgresql://). Using in-memory storage until it's fixed.");
+if (DB_OK) {
   const { Pool } = require("pg");
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.PGSSL === "off" ? false : { rejectUnauthorized: false } });
+  const pool = new Pool({ connectionString: DB_URL, ssl: process.env.PGSSL === "off" ? false : { rejectUnauthorized: false } });
   db = {
     async init() {
       await pool.query(`CREATE TABLE IF NOT EXISTS signups (
