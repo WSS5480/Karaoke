@@ -8,6 +8,9 @@ const KJ_PIN = process.env.KJ_PIN || "4950";
 const BAR_LAT = parseFloat(process.env.BAR_LAT || "26.2183801"), BAR_LNG = parseFloat(process.env.BAR_LNG || "-98.2287714");
 const GEOFENCE_M = parseFloat(process.env.GEOFENCE_M || "150");
 const QR_TOKEN = process.env.QR_TOKEN || "dive495";
+const TW_SID = process.env.TWILIO_ACCOUNT_SID, TW_TOKEN = process.env.TWILIO_AUTH_TOKEN, TW_VERIFY = process.env.TWILIO_VERIFY_SID;
+const AUTH_ON = !!(TW_SID && TW_TOKEN && TW_VERIFY);
+let SESSION_SECRET = process.env.SESSION_SECRET || "";
 function metersAway(lat, lng) {
   const R = 6371000, r = x => x * Math.PI / 180, dLat = r(lat - BAR_LAT), dLng = r(lng - BAR_LNG);
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(r(BAR_LAT)) * Math.cos(r(lat)) * Math.sin(dLng / 2) ** 2;
@@ -31,7 +34,13 @@ if (process.env.DATABASE_URL) {
       await pool.query(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
       await pool.query(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS rating INT`);
       await pool.query(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS public BOOLEAN NOT NULL DEFAULT false`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS customers (id SERIAL PRIMARY KEY, phone TEXT UNIQUE NOT NULL, name TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT now(), last_seen TIMESTAMPTZ)`);
     },
+    async customerByPhone(p) { return (await pool.query(`SELECT * FROM customers WHERE phone=$1`, [p])).rows[0]; },
+    async customer(id) { return (await pool.query(`SELECT * FROM customers WHERE id=$1`, [id])).rows[0]; },
+    async addCustomer(p) { return (await pool.query(`INSERT INTO customers (phone) VALUES ($1) ON CONFLICT (phone) DO UPDATE SET last_seen=now() RETURNING *`, [p])).rows[0]; },
+    async setCustomerName(id, n) { await pool.query(`UPDATE customers SET name=$2, last_seen=now() WHERE id=$1`, [id, n]); },
+    async moveDevice(from, to) { await pool.query(`UPDATE signups SET device=$2 WHERE device=$1`, [from, to]); },
     async mineAll(d, sort) { return (await pool.query(`SELECT * FROM signups WHERE device=$1 AND done_at IS NOT NULL AND status IN ('done','archived') ORDER BY ${sort === "top" ? "rating DESC NULLS LAST, done_at DESC" : "done_at DESC"} LIMIT 200`, [d])).rows; },
     async lastSung(d) { return (await pool.query(`SELECT * FROM signups WHERE device=$1 AND status IN ('done','archived') AND done_at > now() - interval '12 hours' ORDER BY done_at DESC LIMIT 1`, [d])).rows[0]; },
     async rate(id, rating, pub) { await pool.query(`UPDATE signups SET rating=$2, public=$3 WHERE id=$1`, [id, rating, pub]); },
@@ -60,6 +69,12 @@ if (process.env.DATABASE_URL) {
   const now = () => new Date().toISOString();
   db = {
     async init() {},
+    customers: [],
+    async customerByPhone(p) { return this.customers.find(c => c.phone === p); },
+    async customer(id) { return this.customers.find(c => c.id === id); },
+    async addCustomer(p) { let c = this.customers.find(x => x.phone === p); if (!c) { c = { id: this.customers.length + 1, phone: p, name: "", created_at: now() }; this.customers.push(c); } return c; },
+    async setCustomerName(id, n) { const c = this.customers.find(x => x.id === id); if (c) c.name = n; },
+    async moveDevice(from, to) { rows.forEach(r => { if (r.device === from) r.device = to; }); },
     async mineAll(d, sort) { return rows.filter(r => r.device === d && r.done_at && (r.status === "done" || r.status === "archived")).sort(sort === "top" ? (a, b) => (b.rating ?? -1) - (a.rating ?? -1) || b.done_at.localeCompare(a.done_at) : (a, b) => b.done_at.localeCompare(a.done_at)).slice(0, 200); },
     async lastSung(d) { const cut = Date.now() - 12 * 3600e3; return rows.filter(r => r.device === d && (r.status === "done" || r.status === "archived") && r.done_at && Date.parse(r.done_at) > cut).sort((a, b) => b.done_at.localeCompare(a.done_at))[0]; },
     async rate(id, rating, pub) { const r = rows.find(x => x.id === id); if (r) { r.rating = rating; r.public = pub; } },
@@ -90,9 +105,35 @@ function device(req, res) {
   d = d && /^[a-f0-9]{32}$/.test(d[1]) ? d[1] : null;
   if (!d) {
     d = crypto.randomBytes(16).toString("hex");
-    res.setHeader("Set-Cookie", `dive_device=${d}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly${req.secure ? "; Secure" : ""}`);
+    res.append("Set-Cookie", `dive_device=${d}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly${req.secure ? "; Secure" : ""}`);
   }
   return d;
+}
+function cookieVal(req, k) { const c = (req.headers.cookie || "").split(/;\s*/).map(x => x.split("=")).find(([n]) => n === k); return c ? c[1] : null; }
+const sign = v => crypto.createHmac("sha256", SESSION_SECRET).update(String(v)).digest("hex").slice(0, 32);
+function currentUser(req) {
+  const v = cookieVal(req, "dive_user"); if (!v) return null;
+  const [id, mac] = v.split(".");
+  return mac && mac.length === 32 && crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(sign(id))) ? parseInt(id, 10) : null;
+}
+function setUserCookie(req, res, id) {
+  res.append("Set-Cookie", `dive_user=${id}.${sign(id)}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly${req.secure ? "; Secure" : ""}`);
+}
+// who "owns" a sign-up: the signed-in customer, otherwise this phone's browser
+function owner(req, res) { const u = currentUser(req); return u ? "c" + u : device(req, res); }
+function normPhone(p) {
+  const raw = String(p || "").trim(), d = raw.replace(/\D/g, "");
+  if (raw.startsWith("+") && d.length >= 10 && d.length <= 15) return "+" + d;
+  if (d.length === 10) return "+1" + d;
+  if (d.length === 11 && d.startsWith("1")) return "+" + d;
+  return null;
+}
+async function twilio(path, form) {
+  const r = await fetch(`${process.env.TWILIO_VERIFY_BASE || "https://verify.twilio.com"}/v2/Services/${TW_VERIFY}/${path}`, {
+    method: "POST", body: new URLSearchParams(form),
+    headers: { Authorization: "Basic " + Buffer.from(TW_SID + ":" + TW_TOKEN).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" }
+  });
+  return { ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) };
 }
 function pinOk(req) {
   const p = String(req.headers["x-kj-pin"] || "");
@@ -109,7 +150,7 @@ function siteUrl(req) { return (process.env.PUBLIC_URL || `${req.protocol}://${r
 
 /* ---------- singer API ---------- */
 app.get("/api/queue", wrap(async (req, res) => {
-  const d = device(req, res);
+  const d = owner(req, res);
   const list = await db.active();
   const open = (await db.getSetting("open")) !== "no";
   const mine = list.find(r => r.device === d);
@@ -120,8 +161,9 @@ app.get("/api/queue", wrap(async (req, res) => {
 }));
 
 app.post("/api/signup", wrap(async (req, res) => {
-  const d = device(req, res);
+  const d = owner(req, res);
   if ((await db.getSetting("open")) === "no") return res.status(403).json({ error: "Sign-ups are closed for tonight." });
+  if (AUTH_ON && !currentUser(req)) return res.status(401).json({ error: "signin", message: "Sign in with your phone number first." });
   if (rateLimited(req.ip)) return res.status(429).json({ error: "Too many tries. Wait a minute and try again." });
   if ((await db.getSetting("geofence")) !== "off" && req.body.qr !== QR_TOKEN) {
     const lat = Number(req.body.lat), lng = Number(req.body.lng), acc = Math.min(Math.max(Number(req.body.acc) || 0, 0), 200);
@@ -138,14 +180,14 @@ app.post("/api/signup", wrap(async (req, res) => {
 }));
 
 app.post("/api/cancel", wrap(async (req, res) => {
-  const d = device(req, res), mine = await db.byDevice(d);
+  const d = owner(req, res), mine = await db.byDevice(d);
   if (!mine) return res.status(404).json({ error: "You're not on the list right now." });
   await db.setStatus(mine.id, "removed");
   res.json({ ok: true });
 }));
 
 app.post("/api/rate", wrap(async (req, res) => {
-  const d = device(req, res);
+  const d = owner(req, res);
   let last;
   if (req.body.id) { const r = await db.get(parseInt(req.body.id, 10)); last = r && r.device === d && r.done_at ? r : null; }
   else last = await db.lastSung(d);
@@ -157,12 +199,47 @@ app.post("/api/rate", wrap(async (req, res) => {
 }));
 const histRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, rating: r.rating, public: !!r.public, at: r.done_at });
 app.get("/api/mine", wrap(async (req, res) => {
-  const d = device(req, res);
+  const d = owner(req, res);
   res.json({ items: (await db.mineAll(d, req.query.sort === "top" ? "top" : "new")).map(histRow) });
 }));
 app.get("/api/wall", wrap(async (req, res) => {
   res.json({ items: (await db.history({ onlyPublic: true, sort: req.query.sort === "top" ? "top" : "new", limit: 100 })).map(histRow) });
 }));
+
+/* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
+app.get("/api/me", wrap(async (req, res) => {
+  const u = currentUser(req), c = u ? await db.customer(u) : null;
+  res.json({ auth: AUTH_ON, user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null });
+}));
+const textHits = new Map();
+app.post("/api/auth/start", wrap(async (req, res) => {
+  if (!AUTH_ON) return res.status(400).json({ error: "Sign-in isn't set up yet." });
+  const phone = normPhone(req.body.phone);
+  if (!phone) return res.status(400).json({ error: "Enter a 10-digit phone number." });
+  const t = Date.now(), k = phone + "|" + req.ip, l = (textHits.get(k) || []).filter(x => t - x < 600000);
+  if (l.length >= 3) return res.status(429).json({ error: "Too many codes sent. Wait 10 minutes and try again." });
+  l.push(t); textHits.set(k, l);
+  const r = await twilio("Verifications", { To: phone, Channel: "sms", Locale: req.body.lang === "es" ? "es" : "en" });
+  if (!r.ok) { console.error("twilio start", r.status, r.body && r.body.message); return res.status(400).json({ error: "Couldn't text that number. Check it and try again." }); }
+  res.json({ ok: true });
+}));
+app.post("/api/auth/check", wrap(async (req, res) => {
+  if (!AUTH_ON) return res.status(400).json({ error: "Sign-in isn't set up yet." });
+  const phone = normPhone(req.body.phone), code = String(req.body.code || "").replace(/\D/g, "");
+  if (!phone || code.length < 4) return res.status(400).json({ error: "Enter the code from your text." });
+  const r = await twilio("VerificationCheck", { To: phone, Code: code });
+  if (!r.ok || r.body.status !== "approved") return res.status(400).json({ error: "That code didn't work. Check it or send a new one." });
+  const c = await db.addCustomer(phone), dev = device(req, res);
+  await db.moveDevice(dev, "c" + c.id);
+  setUserCookie(req, res, c.id);
+  res.json({ ok: true, user: { name: c.name, phone: "•••-•••-" + phone.slice(-4) }, isNew: !c.name });
+}));
+app.post("/api/auth/name", wrap(async (req, res) => {
+  const u = currentUser(req); if (!u) return res.status(401).json({ error: "Sign in first." });
+  const n = clean(req.body.name, 30); if (!n) return res.status(400).json({ error: "Enter your name or stage name." });
+  await db.setCustomerName(u, n); res.json({ ok: true });
+}));
+app.post("/api/auth/logout", (req, res) => { res.append("Set-Cookie", "dive_user=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly"); res.json({ ok: true }); });
 
 /* ---------- KJ API (PIN protected) ---------- */
 app.use("/api/kj", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }));
@@ -229,4 +306,7 @@ const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(__dirname, file))));
 app.get("/healthz", (req, res) => res.send("ok"));
 
-db.init().then(() => app.listen(PORT, () => console.log(`Dive sign-up running on port ${PORT}`)));
+db.init().then(async () => {
+  if (!SESSION_SECRET) { SESSION_SECRET = await db.getSetting("session_secret"); if (!SESSION_SECRET) { SESSION_SECRET = crypto.randomBytes(32).toString("hex"); await db.setSetting("session_secret", SESSION_SECRET); } }
+  console.log(AUTH_ON ? "Phone sign-in: on" : "Phone sign-in: off (set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SID)");
+}).then(() => app.listen(PORT, () => console.log(`Dive sign-up running on port ${PORT}`)));

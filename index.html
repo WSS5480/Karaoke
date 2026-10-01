@@ -84,12 +84,48 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .sm{font:inherit;font-weight:600;font-size:14px;border-radius:999px;padding:7px 14px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
 .seg{display:flex;gap:8px}
 .seg button[aria-pressed="true"]{background:var(--green);color:#041206;border-color:var(--green)}
+.who{display:flex;justify-content:center;gap:10px;align-items:center;font-size:14px;color:var(--ink-2);flex-wrap:wrap}
+.who button{background:none;border:0;color:var(--green-hi);font:inherit;text-decoration:underline;cursor:pointer;padding:4px}
+.linkbtn{background:none;border:0;color:var(--green-hi);font:inherit;font-size:15px;text-decoration:underline;cursor:pointer;padding:6px;align-self:center}
+#code{letter-spacing:.4em;text-align:center;font-size:24px}
+.post3{display:flex;flex-direction:column;gap:8px}
+.post3 button{font:inherit;font-weight:700;font-size:18px;border-radius:999px;padding:14px;border:0;cursor:pointer;color:#fff}
+.p-ig{background:#c13584}
+.p-tt{background:#111;border:1px solid #444!important}
+.p-fb{background:#1877f2}
 </style>
 </head>
 <body>
 <main>
   <img class="logo" src="/logo.png" alt="The Dive on 495, Bar + Stage, McAllen, TX">
   <h1>Sign up to sing<small>Anótate para cantar</small></h1>
+
+  <section class="card" id="authCard" hidden>
+    <div id="stepPhone" style="display:flex;flex-direction:column;gap:14px">
+      <h2>Sign in to sing <span style="text-transform:none;letter-spacing:0">/ Entra para cantar</span></h2>
+      <p style="margin:0;color:var(--ink-2)">We'll text you a code. Your songs and ratings follow you to any phone.</p>
+      <div>
+        <label for="phone">Phone number <span>/ Teléfono</span></label>
+        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="956-555-0123">
+      </div>
+      <button class="go" id="sendCode" type="button">Text me a code</button>
+    </div>
+    <div id="stepCode" hidden style="display:flex;flex-direction:column;gap:14px">
+      <h2>Enter your code <span style="text-transform:none;letter-spacing:0">/ Tu código</span></h2>
+      <p style="margin:0;color:var(--ink-2)" id="sentTo"></p>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" aria-label="Code from your text">
+      <button class="go" id="checkCode" type="button">Sign in</button>
+      <button class="linkbtn" id="resend" type="button">Send a new code</button>
+    </div>
+    <div id="stepName" hidden style="display:flex;flex-direction:column;gap:14px">
+      <h2>What should we call you? <span style="text-transform:none;letter-spacing:0">/ ¿Cómo te llamas?</span></h2>
+      <input id="acctName" maxlength="30" autocomplete="given-name" placeholder="Maria" aria-label="Your name or stage name">
+      <button class="go" id="saveName" type="button">Continue</button>
+    </div>
+    <p class="err" id="authErr" role="alert"></p>
+  </section>
+
+  <div class="who" id="who" hidden><span id="whoText"></span><button id="logout" type="button">Sign out</button></div>
 
   <section class="card" id="formCard">
     <form id="form" novalidate>
@@ -133,13 +169,13 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
     <button class="go" id="saveRate" type="button">Save my rating</button>
     <p class="ok" id="rateMsg" role="status"></p>
     <div id="shareBox" hidden>
-      <div class="shares">
-        <button class="main" id="shareImg" type="button">Share my pic</button>
-        <a id="fb" href="#" target="_blank" rel="noopener">Facebook</a>
-        <button id="ig" type="button">Instagram</button>
-        <button id="tt" type="button">TikTok</button>
-        <button id="dl" type="button">Save pic</button>
+      <p style="margin:0 0 4px;color:var(--ink-2)">Post it / Publícalo</p>
+      <div class="post3">
+        <button id="ig" type="button" class="p-ig">Instagram</button>
+        <button id="tt" type="button" class="p-tt">TikTok</button>
+        <button id="fbb" type="button" class="p-fb">Facebook</button>
       </div>
+      <button class="linkbtn" id="dl" type="button">Just save the picture</button>
       <p class="ok" id="shareMsg" role="status"></p>
     </div>
     <button class="ghost" id="rateDone" type="button">Done</button>
@@ -263,6 +299,7 @@ $("form").addEventListener("submit", async e => {
     const j = await r.json();
     if(!r.ok){
       if(j.error === "far") $("err").textContent = "You need to be at The Dive to sign up. You're about " + j.miles + " miles away.";
+      else if(j.error === "signin"){ $("err").textContent = j.message; loadMe(); }
       else if(j.error === "location") $("err").textContent = "Allow location so we can see you're at The Dive, or scan the QR code at the bar. iPhone: Settings → Privacy → Location Services → Safari → While Using.";
       else $("err").textContent = j.error || "Couldn't add you. Try again.";
     }
@@ -283,7 +320,7 @@ function render(data){
   geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn || !!qrToken;
   renderRate(data.last);
   $("closedCard").hidden = data.open || !!mine;
-  $("formCard").hidden = !!mine || !data.open;
+  $("formCard").hidden = !!mine || !data.open || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
   if(mine){
     const ahead = mine.spot;
@@ -323,7 +360,7 @@ function renderRate(l){
   $("rateSong").textContent = l.song + (l.artist ? " – " + l.artist : "");
   if(first){ picked = l.rating || 0; $("pub").checked = !!l.public; paintStars(); $("shareBox").hidden = !l.rating; if(l.rating) setFb(); }
 }
-function setFb(){
+function setFb(){ if(!$("fb")) return;
   const u = location.origin + "/s/" + last.id;
   $("fb").href = $("pub").checked ? "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(u) : "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(location.origin + "/");
 }
@@ -335,7 +372,7 @@ $("saveRate").addEventListener("click", async () => {
     if(!r.ok){ $("rateMsg").textContent = j.error || "Couldn't save. Try again."; return; }
     last.rating = picked; last.public = $("pub").checked;
     $("rateMsg").textContent = $("pub").checked ? "Saved. You're on the wall of fame." : "Saved.";
-    $("shareBox").hidden = false; imgBlob = null; setFb();
+    $("shareBox").hidden = false; imgBlob = null; setFb(); makeImage();
     loadMine(true);
   }catch(e){ $("rateMsg").textContent = "No connection. Try again."; }
 });
@@ -377,9 +414,23 @@ async function sharePic(app){
   savePic(b); $("shareMsg").textContent = (app ? "Saved your pic. Open " + app + ", start a new post or story, and pick it from your photos." : "Saved your pic to your phone.");
 }
 function savePic(b){ const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "the-dive-karaoke.png"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
-$("shareImg").addEventListener("click", () => sharePic(""));
-$("ig").addEventListener("click", () => sharePic("Instagram"));
-$("tt").addEventListener("click", () => sharePic("TikTok"));
+async function postTo(app){
+  const caption = shareText();
+  try{ await navigator.clipboard.writeText(caption); }catch(e){}
+  const b = await makeImage(), f = new File([b], "the-dive-karaoke.png", { type: "image/png" });
+  if(navigator.canShare && navigator.canShare({ files: [f] })){
+    try{
+      await navigator.share({ files: [f], text: caption });
+      $("shareMsg").textContent = "Picked " + app + "? Your caption is copied, just paste it.";
+      return;
+    }catch(e){ if(e.name === "AbortError"){ $("shareMsg").textContent = "Tap " + app + " again when you're ready."; return; } }
+  }
+  if(app === "Facebook" && last.public){ window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(location.origin + "/s/" + last.id), "_blank", "noopener"); return; }
+  savePic(b); $("shareMsg").textContent = "Picture saved. Open " + app + ", make a new post and pick it from your photos. Your caption is copied.";
+}
+$("ig").addEventListener("click", () => postTo("Instagram"));
+$("tt").addEventListener("click", () => postTo("TikTok"));
+$("fbb").addEventListener("click", () => postTo("Facebook"));
 $("dl").addEventListener("click", async () => { savePic(await makeImage()); $("shareMsg").textContent = "Saved your pic."; });
 
 /* ---------- my songs (this phone's history) ---------- */
@@ -415,7 +466,7 @@ async function loadMine(force){
       sh.addEventListener("click", () => {
         if(!x.rating){ $("mineMsg").textContent = "Rate it first, then share."; return; }
         last = { id: x.id, name: x.name, song: x.song, artist: x.artist, rating: x.rating, public: x.public }; imgBlob = null;
-        sharePic("").then(() => { if(!$("shareMsg").textContent) return; $("mineMsg").textContent = $("shareMsg").textContent; });
+        postTo("your app").then(() => { $("mineMsg").textContent = $("shareMsg").textContent; });
       });
       row.append(st, sh); li.appendChild(row); ol.appendChild(li);
     });
@@ -423,12 +474,70 @@ async function loadMine(force){
 }
 $("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
 $("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
+
+/* ---------- phone sign-in ---------- */
+let authOn = false, me = null, authPhone = "";
+const lang = (navigator.language || "").toLowerCase().startsWith("es") ? "es" : "en";
+function showAuth(step){
+  $("authCard").hidden = !step;
+  ["stepPhone", "stepCode", "stepName"].forEach(id => $(id).hidden = id !== step);
+  $("authErr").textContent = "";
+}
+function paintWho(){
+  $("who").hidden = !me;
+  if(me){ $("whoText").textContent = "Signed in as " + (me.name || "you") + " (" + me.phone + ")"; if(me.name && !$("name").value) $("name").value = me.name; }
+}
+async function loadMe(){
+  try{
+    const j = await (await fetch("/api/me", { cache: "no-store" })).json();
+    authOn = j.auth; me = j.user; paintWho();
+    if(authOn && !me) showAuth("stepPhone");
+    else if(me && !me.name) showAuth("stepName");
+    else showAuth(null);
+    refresh();
+  }catch(e){}
+}
+async function post(url, body){ const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }); return [r, await r.json().catch(() => ({}))]; }
+async function sendCode(){
+  const p = $("phone").value.trim();
+  if(p.replace(/\D/g, "").length < 10){ $("authErr").textContent = "Enter your 10-digit phone number."; return; }
+  $("sendCode").disabled = true; $("sendCode").textContent = "Sending…";
+  try{
+    const [r, j] = await post("/api/auth/start", { phone: p, lang });
+    if(!r.ok){ $("authErr").textContent = j.error || "Couldn't send a code. Try again."; }
+    else { authPhone = p; showAuth("stepCode"); $("sentTo").textContent = "We texted a code to " + p + "."; $("code").value = ""; $("code").focus(); }
+  }catch(e){ $("authErr").textContent = "No connection. Try again."; }
+  $("sendCode").disabled = false; $("sendCode").textContent = "Text me a code";
+}
+$("sendCode").addEventListener("click", sendCode);
+$("phone").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); sendCode(); } });
+$("resend").addEventListener("click", () => { $("phone").value = authPhone; showAuth("stepPhone"); sendCode(); });
+async function checkCode(){
+  const c = $("code").value.trim();
+  if(c.length < 4){ $("authErr").textContent = "Enter the code from your text."; return; }
+  $("checkCode").disabled = true;
+  try{
+    const [r, j] = await post("/api/auth/check", { phone: authPhone, code: c });
+    if(!r.ok){ $("authErr").textContent = j.error || "That code didn't work."; }
+    else { me = j.user; paintWho(); if(j.isNew){ showAuth("stepName"); $("acctName").focus(); } else { showAuth(null); mineSig = ""; refresh(); } }
+  }catch(e){ $("authErr").textContent = "No connection. Try again."; }
+  $("checkCode").disabled = false;
+}
+$("checkCode").addEventListener("click", checkCode);
+$("code").addEventListener("input", () => { $("authErr").textContent = ""; if($("code").value.replace(/\D/g, "").length === 6) checkCode(); });
+$("saveName").addEventListener("click", async () => {
+  const n = $("acctName").value.trim(); if(!n){ $("authErr").textContent = "Enter your name or stage name."; return; }
+  const [r, j] = await post("/api/auth/name", { name: n });
+  if(!r.ok){ $("authErr").textContent = j.error || "Couldn't save. Try again."; return; }
+  me.name = n; $("name").value = n; paintWho(); showAuth(null); refresh();
+});
+$("logout").addEventListener("click", async () => { await post("/api/auth/logout"); me = null; $("name").value = ""; mineSig = ""; paintWho(); loadMe(); });
 async function refresh(){
   try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
   loadMine();
 }
 try{ const n = localStorage.getItem("dive_name"); if(n) $("name").value = n; }catch(e){}
-refresh(); setInterval(refresh, 5000);
+loadMe(); setInterval(refresh, 5000);
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") refresh(); });
 </script>
 </body>
