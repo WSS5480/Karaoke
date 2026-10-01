@@ -50,10 +50,44 @@ input{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--
 .pill.off{color:var(--warn);border-color:var(--warn)}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}
 a{color:var(--green-hi)}
+.install{display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--green);border-radius:16px;padding:12px 14px}
+.install img{width:48px;height:48px;border-radius:12px;flex:none}
+.install .tx{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.install .tx b{display:block;font-size:16px}
+.install button{font:inherit;font-weight:700;border-radius:999px;padding:10px 16px;border:0;background:var(--green);color:#041206;cursor:pointer;flex:none}
+.install .x{background:none;color:var(--ink-2);padding:6px;font-size:20px;font-weight:400}
+.postwrap{display:flex;gap:14px;align-items:center}
+.postwrap img{width:96px;aspect-ratio:9/16;border-radius:10px;border:1px solid var(--line);flex:none;object-fit:cover;max-width:100%}
+.postside{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
+.go[disabled]{opacity:.55}
+.iosguide{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.82);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:24px 20px calc(70px + env(safe-area-inset-bottom,0px));text-align:center;color:#fff}
+.iosguide .box{background:var(--panel);border:2px solid var(--green);border-radius:18px;padding:18px;max-width:340px;display:flex;flex-direction:column;gap:12px}
+.iosguide .step{display:flex;gap:12px;align-items:center;text-align:left;font-size:17px;line-height:1.3}
+.iosguide .n{width:30px;height:30px;border-radius:50%;background:var(--green);color:#041206;font-weight:800;display:grid;place-items:center;flex:none}
+.iosguide .shareic{display:inline-grid;place-items:center;width:30px;height:30px;border:2px solid #4da3ff;border-radius:8px;color:#4da3ff;font-size:18px;vertical-align:middle}
+.iosguide .arrow{font-size:64px;line-height:1;color:var(--green-hi);margin-top:14px;animation:bob 1s ease-in-out infinite}
+.iosguide .close{background:none;border:0;color:var(--ink-2);font:inherit;text-decoration:underline;padding:6px}
+@keyframes bob{50%{transform:translateY(12px)}}
+@media (prefers-reduced-motion:reduce){.iosguide .arrow{animation:none}}
+.iosguide.top{justify-content:flex-start;padding-top:calc(24px + env(safe-area-inset-top,0px))}
+.iosguide.top .arrow{order:-1;align-self:flex-end;margin:0 10px 8px 0}
+.iosguide.top .arrow::before{content:"⬆"}
+.iosguide.top .arrow{font-size:0}.iosguide.top .arrow::before{font-size:64px}
+.postwrap video{width:96px;aspect-ratio:9/16;border-radius:10px;border:1px solid var(--line);flex:none;object-fit:cover;background:#000;max-width:100%}
+.vidwork{display:flex;flex-direction:column;gap:8px}
+.vidwork .bar{height:8px;border-radius:99px;background:var(--panel-2);overflow:hidden}
+.vidwork .bar span{display:block;height:100%;width:0;background:var(--green);transition:width .3s}
+#vidStage{position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:.01;pointer-events:none}
 </style>
 </head>
 <body>
 <main>
+  <div class="install" id="installBar" hidden>
+    <img src="/kj-icon-192.png" alt="">
+    <div class="tx"><b>Get the Dive KJ app</b><span id="installHow">Open the queue in one tap.</span></div>
+    <button id="installBtn" type="button">Add</button>
+    <button class="x" id="installX" type="button" aria-label="Hide">×</button>
+  </div>
   <header>
     <img src="/logo.png" alt="The Dive on 495">
     <h1>KJ queue</h1>
@@ -122,6 +156,14 @@ a{color:var(--green-hi)}
     </section>
   </div>
 </main>
+<div class="iosguide" id="iosGuide" hidden role="dialog" aria-label="Add The Dive app">
+  <div class="box">
+    <div class="step"><span class="n">1</span><span>Tap the <span class="shareic" aria-hidden="true">⬆︎</span> <b>Share</b> button <span id="iosShareWhere">below</span></span></div>
+    <div class="step"><span class="n">2</span><span>Scroll down, tap <b>Add to Home Screen</b></span></div>
+    <div class="step"><span class="n">3</span><span>Tap <b>Add</b>. Done!</span></div>
+    <button class="close" id="iosGuideX" type="button">Close</button>
+  </div>
+  <div class="arrow" aria-hidden="true">⬇</div>
 <script>
 const $ = id => document.getElementById(id);
 let pin = "", state = null, timer = null;
@@ -206,6 +248,30 @@ $("togglePhone").addEventListener("click", () => act("/api/kj-phone", { on: !sta
 $("newNight").addEventListener("click", () => $("nnConfirm").hidden = false);
 $("nnNo").addEventListener("click", () => $("nnConfirm").hidden = true);
 $("nnYes").addEventListener("click", () => { $("nnConfirm").hidden = true; act("/api/kj-newnight"); });
+/* ---------- install as an app ---------- */
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+(function(){
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  let hidden = false; try{ hidden = sessionStorage.getItem("dive_kj_install_x") === "1"; }catch(e){}
+  if(standalone) return;
+  if($("getApp")) $("getApp").hidden = !hidden;
+  if(hidden) $("installBar").hidden = true;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), iosChrome = ios && /CriOS/i.test(navigator.userAgent);
+  if(iosChrome){ $("iosGuide").classList.add("top"); $("iosShareWhere").textContent = "at the top right"; }
+  let promptEvt = null;
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEvt = e; $("installBar").hidden = false; $("installHow").textContent = "Open the queue in one tap."; $("installBtn").hidden = false; });
+  if(ios){ $("installBar").hidden = false; }
+  $("installBtn").addEventListener("click", async () => {
+    if(ios){ $("iosGuide").hidden = false; return; }
+    if(promptEvt){ promptEvt.prompt(); const r = await promptEvt.userChoice; if(r.outcome === "accepted") $("installBar").hidden = true; promptEvt = null; return; }
+    $("installHow").innerHTML = ios ? "1. Tap <b style='display:inline'>Share</b> <span aria-hidden='true'>⬆︎</span> at the bottom of Safari<br>2. Tap <b style='display:inline'>Add to Home Screen</b>" : "Tap your browser menu ⋮, then <b style='display:inline'>Install app</b>.";
+    $("installBtn").hidden = true;
+  });
+  $("iosGuideX").addEventListener("click", () => { $("iosGuide").hidden = true; });
+  $("iosGuide").addEventListener("click", e => { if(e.target.id === "iosGuide") $("iosGuide").hidden = true; });
+  $("installX").addEventListener("click", () => { $("installBar").hidden = true; try{ sessionStorage.setItem("dive_kj_install_x", "1"); }catch(e){} if($("getApp")) $("getApp").hidden = false; });
+  window.addEventListener("appinstalled", () => { $("installBar").hidden = true; });
+})();
 if(pin) start();
 
 /* ---------- stay fresh when the app comes back ---------- */
