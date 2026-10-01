@@ -8,8 +8,28 @@ const KJ_PIN = process.env.KJ_PIN || "4950";
 const BAR_LAT = parseFloat(process.env.BAR_LAT || "26.2183801"), BAR_LNG = parseFloat(process.env.BAR_LNG || "-98.2287714");
 const GEOFENCE_M = parseFloat(process.env.GEOFENCE_M || "150");
 const QR_TOKEN = process.env.QR_TOKEN || "dive495";
-const TW_SID = process.env.TWILIO_ACCOUNT_SID, TW_TOKEN = process.env.TWILIO_AUTH_TOKEN, TW_VERIFY = process.env.TWILIO_VERIFY_SID;
-const AUTH_ON = !!(TW_SID && TW_TOKEN && TW_VERIFY);
+const TW_SID = (process.env.TWILIO_ACCOUNT_SID || "").trim(), TW_TOKEN = (process.env.TWILIO_AUTH_TOKEN || "").trim();
+let TW_VERIFY = (process.env.TWILIO_VERIFY_SID || "").trim();
+if (!/^VA[0-9a-f]{32}$/i.test(TW_VERIFY)) TW_VERIFY = "";   // blank or not a real Service SID: the app finds or creates one
+let AUTH_ON = false;
+const TW_BASE = () => process.env.TWILIO_VERIFY_BASE || "https://verify.twilio.com";
+const twAuth = () => "Basic " + Buffer.from(TW_SID + ":" + TW_TOKEN).toString("base64");
+// find the "The Dive" Verify service in this Twilio account, or create it
+async function setupTwilio() {
+  if (!/^AC[0-9a-f]{32}$/i.test(TW_SID) || TW_TOKEN.length < 20) return;
+  try {
+    if (!TW_VERIFY) {
+      const list = await (await fetch(TW_BASE() + "/v2/Services?PageSize=50", { headers: { Authorization: twAuth() } })).json();
+      const found = (list.services || []).find(x => x.friendly_name === "The Dive");
+      if (found) TW_VERIFY = found.sid;
+      else {
+        const r = await fetch(TW_BASE() + "/v2/Services", { method: "POST", headers: { Authorization: twAuth(), "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ FriendlyName: "The Dive" }) });
+        const j = await r.json(); if (r.ok && j.sid) TW_VERIFY = j.sid; else console.error("Twilio: couldn't create Verify service:", j.message || r.status);
+      }
+    }
+    AUTH_ON = !!TW_VERIFY;
+  } catch (e) { console.error("Twilio setup failed:", e.message); }
+}
 let SESSION_SECRET = process.env.SESSION_SECRET || "";
 function metersAway(lat, lng) {
   const R = 6371000, r = x => x * Math.PI / 180, dLat = r(lat - BAR_LAT), dLng = r(lng - BAR_LNG);
@@ -129,9 +149,9 @@ function normPhone(p) {
   return null;
 }
 async function twilio(path, form) {
-  const r = await fetch(`${process.env.TWILIO_VERIFY_BASE || "https://verify.twilio.com"}/v2/Services/${TW_VERIFY}/${path}`, {
+  const r = await fetch(`${TW_BASE()}/v2/Services/${TW_VERIFY}/${path}`, {
     method: "POST", body: new URLSearchParams(form),
-    headers: { Authorization: "Basic " + Buffer.from(TW_SID + ":" + TW_TOKEN).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" }
+    headers: { Authorization: twAuth(), "Content-Type": "application/x-www-form-urlencoded" }
   });
   return { ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) };
 }
@@ -308,5 +328,6 @@ app.get("/healthz", (req, res) => res.send("ok"));
 
 db.init().then(async () => {
   if (!SESSION_SECRET) { SESSION_SECRET = await db.getSetting("session_secret"); if (!SESSION_SECRET) { SESSION_SECRET = crypto.randomBytes(32).toString("hex"); await db.setSetting("session_secret", SESSION_SECRET); } }
-  console.log(AUTH_ON ? "Phone sign-in: on" : "Phone sign-in: off (set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SID)");
+  await setupTwilio();
+  console.log(AUTH_ON ? "Phone sign-in: on (Verify service " + TW_VERIFY.slice(0, 6) + "…)" : "Phone sign-in: off (set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN)");
 }).then(() => app.listen(PORT, () => console.log(`Dive sign-up running on port ${PORT}`)));
