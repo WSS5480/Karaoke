@@ -6,7 +6,7 @@
 <title>Sing at The Dive</title>
 <link rel="icon" href="/logo.png">
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/logo.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Dive Karaoke">
 <meta name="theme-color" content="#0a0c0a">
@@ -93,10 +93,22 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .p-ig{background:#c13584}
 .p-tt{background:#111;border:1px solid #444!important}
 .p-fb{background:#1877f2}
+.install{display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--green);border-radius:16px;padding:12px 14px}
+.install img{width:48px;height:48px;border-radius:12px;flex:none}
+.install .tx{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.install .tx b{display:block;font-size:16px}
+.install button{font:inherit;font-weight:700;border-radius:999px;padding:10px 16px;border:0;background:var(--green);color:#041206;cursor:pointer;flex:none}
+.install .x{background:none;color:var(--ink-2);padding:6px;font-size:20px;font-weight:400}
 </style>
 </head>
 <body>
 <main>
+  <div class="install" id="installBar" hidden>
+    <img src="/icon-192.png" alt="">
+    <div class="tx"><b>Get The Dive app</b><span id="installHow">Sign up faster next time.</span></div>
+    <button id="installBtn" type="button">Add</button>
+    <button class="x" id="installX" type="button" aria-label="Hide">×</button>
+  </div>
   <img class="logo" src="/logo.png" alt="The Dive on 495, Bar + Stage, McAllen, TX">
   <h1>Sign up to sing<small>Anótate para cantar</small></h1>
 
@@ -195,8 +207,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
     <p class="ok" id="mineMsg" role="status"></p>
   </section>
 
-  <p class="hint" style="color:var(--ink-2);text-align:center;margin:0">Tip: tap Share, then Add to Home Screen, to sign up next time without scanning.</p>
-  <a class="wall" href="/wall">See the wall of fame</a>
+    <a class="wall" href="/wall">See the wall of fame</a>
 
   <section class="card">
     <h2>Up next</h2>
@@ -532,6 +543,25 @@ $("saveName").addEventListener("click", async () => {
   me.name = n; $("name").value = n; paintWho(); showAuth(null); refresh();
 });
 $("logout").addEventListener("click", async () => { await post("/api/auth/logout"); me = null; $("name").value = ""; mineSig = ""; paintWho(); loadMe(); });
+
+/* ---------- install as an app ---------- */
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+(function(){
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  let hidden = false; try{ hidden = localStorage.getItem("dive_install_x") === "1"; }catch(e){}
+  if(standalone || hidden) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let promptEvt = null;
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEvt = e; $("installBar").hidden = false; $("installHow").textContent = "Sign up faster next time."; $("installBtn").hidden = false; });
+  if(ios){ $("installBar").hidden = false; }
+  $("installBtn").addEventListener("click", async () => {
+    if(promptEvt){ promptEvt.prompt(); const r = await promptEvt.userChoice; if(r.outcome === "accepted") $("installBar").hidden = true; promptEvt = null; return; }
+    $("installHow").innerHTML = ios ? "1. Tap <b style='display:inline'>Share</b> <span aria-hidden='true'>⬆︎</span> at the bottom of Safari<br>2. Tap <b style='display:inline'>Add to Home Screen</b>" : "Tap your browser menu ⋮, then <b style='display:inline'>Install app</b>.";
+    $("installBtn").hidden = true;
+  });
+  $("installX").addEventListener("click", () => { $("installBar").hidden = true; try{ localStorage.setItem("dive_install_x", "1"); }catch(e){} });
+  window.addEventListener("appinstalled", () => { $("installBar").hidden = true; });
+})();
 async function refresh(){
   try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
   loadMine();
