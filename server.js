@@ -146,7 +146,7 @@ app.get("/qr.svg", wrap(async (req, res) => {
 }));
 app.get("/api/url", (req, res) => res.json({ url: siteUrl(req) + "/" }));
 
-const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/logo.png": "logo.png", "/songs.json": "songs.json" };
+const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/logo.png": "logo.png", "/songs.json": "songs.json" };
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(__dirname, file))));
 app.get("/healthz", (req, res) => res.send("ok"));
 

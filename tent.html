@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Table Signs · The Dive</title>
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+:root{--ink:#0a0c0a;--green:#2e9a3d;--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,sans-serif;color-scheme:light}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:#e9ece9;color:var(--ink);font-family:var(--body)}
+.bar{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:16px}
+.bar button{font:inherit;font-weight:600;font-size:16px;border-radius:999px;padding:10px 18px;border:1px solid #9aa79a;background:#fff;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--green);color:#fff;border-color:var(--green)}
+.help{text-align:center;font-size:15px;color:#3d4a3d;margin:0 16px 16px}
+.page{width:8.5in;height:11in;margin:0 auto 24px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.15);overflow:hidden}
+.panel{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:.12in;border:3px solid var(--green);border-radius:.2in}
+.panel img.logo{width:1.5in}
+.panel h1{font-family:var(--slab);font-weight:800;font-size:40px;line-height:1;margin:0}
+.panel .es{font-family:var(--slab);font-weight:600;font-size:22px;color:var(--green);margin:0}
+.panel .qr{width:2.3in;border:4px solid var(--green);border-radius:.14in;padding:.06in;background:#fff}
+.panel .qr img{display:block;width:100%}
+.panel p{margin:0;font-size:15px;line-height:1.35}
+.panel .url{font-size:12px;color:#4a554a}
+/* fold-over tent: two halves of a letter page, top half upside down */
+.tent{display:grid;grid-template-rows:1fr 1fr;height:100%;padding:.3in;gap:.6in}
+.tent .panel.flip{transform:rotate(180deg)}
+.foldline{position:relative}
+/* 4x6 cards: two side by side, cut out */
+.cards{display:flex;gap:.3in;justify-content:center;padding-top:.5in}
+.cards .panel{width:4in;height:6in}
+.cards .panel .qr{width:2.4in}
+.cut{text-align:center;font-size:12px;color:#7a857a;margin-top:.15in}
+@page{size:letter;margin:0}
+@media print{body{background:#fff}.bar,.help{display:none}.page{box-shadow:none;margin:0}}
+@media (max-width:8.6in){.page{transform-origin:top left;}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <button id="tentBtn" aria-pressed="true">Fold-over table tent</button>
+  <button id="cardBtn" aria-pressed="false">4×6 cards for sign holders</button>
+  <button onclick="window.print()">Print</button>
+</div>
+<p class="help" id="help">Print on letter paper, fold along the middle and stand it on the table. Card stock works best.</p>
+<div id="pageWrap"></div>
+
+<template id="panelTpl">
+  <div class="panel">
+    <img class="logo" src="/logo.png" alt="The Dive on 495">
+    <h1>Scan to sing</h1>
+    <p class="es">Escanea para cantar</p>
+    <div class="qr"><img src="/qr.svg" alt="QR code to the karaoke sign-up page"></div>
+    <p>Add your name and song.<br>We'll call you up.</p>
+    <p class="url"></p>
+  </div>
+</template>
+<script>
+const $ = id => document.getElementById(id);
+let url = "";
+fetch("/api/url").then(r => r.json()).then(j => { url = j.url.replace(/^https?:\/\//, "").replace(/\/$/, ""); document.querySelectorAll(".url").forEach(e => e.textContent = url); }).catch(() => {});
+function panel(flip){ const p = $("panelTpl").content.firstElementChild.cloneNode(true); if(flip) p.classList.add("flip"); p.querySelector(".url").textContent = url; return p; }
+function show(mode){
+  const w = $("pageWrap"); w.innerHTML = "";
+  const page = document.createElement("div"); page.className = "page";
+  if(mode === "tent"){ const t = document.createElement("div"); t.className = "tent"; t.append(panel(true), panel(false)); page.appendChild(t); $("help").textContent = "Print on letter paper, fold along the middle and stand it on the table. Card stock works best."; }
+  else { const c = document.createElement("div"); c.className = "cards"; c.append(panel(false), panel(false)); page.appendChild(c); const cut = document.createElement("div"); cut.className = "cut"; cut.textContent = "Cut along the green borders. Each card fits a 4×6 holder."; page.appendChild(cut); $("help").textContent = "Two 4×6 cards per page. Cut them out and slide into clear sign holders."; }
+  w.appendChild(page);
+  $("tentBtn").setAttribute("aria-pressed", mode === "tent"); $("cardBtn").setAttribute("aria-pressed", mode !== "tent");
+}
+$("tentBtn").addEventListener("click", () => show("tent"));
+$("cardBtn").addEventListener("click", () => show("cards"));
+show("tent");
+</script>
+</body>
+</html>

@@ -7,6 +7,8 @@ Live at https://dive-karaoke.onrender.com
 ## Pages
 - `/` — singer sign-up and live "up next" list (English and Spanish labels, song search from a 417-song list)
 - `/kj` — KJ queue: next singer, sing now, move up/down, remove, open or close sign-ups, start a new night
+- `/tv` — cast screen: big QR code, now singing and up next
+- `/tent` — printable fold-over table tent or 4×6 cards
 - `/poster` — printable "Scan to sing" poster with the QR code
 
 ## Run on Render

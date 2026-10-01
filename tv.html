@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Scan to Sing · TV</title>
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+:root{--wall:#0a0c0a;--panel:#131713;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--ink:#eef3ee;--ink-2:#9fae9f;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);overflow:hidden}
+.screen{height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:4vmin;padding:4vmin 5vmin;align-items:center}
+.scan{display:flex;flex-direction:column;align-items:center;gap:2.2vmin;text-align:center}
+.logo{width:22vmin;filter:drop-shadow(0 0 3vmin rgba(57,181,74,.55))}
+h1{font-family:var(--slab);font-weight:800;font-size:7.4vmin;line-height:1;margin:0}
+.es{font-family:var(--slab);font-weight:600;font-size:3.6vmin;color:var(--green-hi);margin:0}
+.qr{background:#fff;border:1vmin solid var(--green);border-radius:2.4vmin;padding:1.6vmin;width:40vmin;box-shadow:0 0 6vmin rgba(57,181,74,.45)}
+.qr img{display:block;width:100%}
+.url{font-size:2.6vmin;color:var(--ink-2)}
+.line{display:flex;flex-direction:column;gap:2.4vmin;min-width:0}
+.label{font-family:var(--slab);font-weight:800;font-size:2.6vmin;letter-spacing:.16em;text-transform:uppercase;color:var(--green-hi)}
+.now{background:var(--panel);border:.5vmin solid var(--green);border-radius:2.4vmin;padding:2.6vmin 3vmin}
+.now b{display:block;font-family:var(--slab);font-weight:800;font-size:6.4vmin;line-height:1.05;overflow-wrap:anywhere}
+.now span{display:block;font-size:3.4vmin;color:var(--ink-2);margin-top:.8vmin;overflow-wrap:anywhere}
+ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.2vmin}
+li{display:flex;gap:2vmin;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:1.2vmin;min-width:0}
+li .n{font-family:var(--slab);font-weight:800;font-size:3.6vmin;color:var(--green-hi);width:5vmin;text-align:right;font-variant-numeric:tabular-nums;flex:none}
+li .t{min-width:0}
+li .t b{display:block;font-weight:600;font-size:3.8vmin;line-height:1.15;overflow-wrap:anywhere}
+li .t span{display:block;font-size:2.8vmin;color:var(--ink-2);overflow-wrap:anywhere}
+.empty{font-size:3.6vmin;color:var(--ink-2)}
+.more{font-size:2.8vmin;color:var(--ink-2)}
+.closed{font-family:var(--slab);font-weight:800;font-size:4vmin;color:var(--ink-2)}
+.exit{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:transparent;border:1px solid #1d241d;color:#334033;font-size:20px;cursor:pointer}
+@media (orientation:portrait){.screen{grid-template-columns:minmax(0,1fr);align-content:center;gap:5vmin;overflow:auto}body{overflow:auto}.qr{width:52vmin}}
+</style>
+</head>
+<body>
+<div class="screen">
+  <section class="scan">
+    <img class="logo" src="/logo.png" alt="The Dive on 495">
+    <h1>Scan to sing</h1>
+    <p class="es">Escanea para cantar</p>
+    <div class="qr"><img src="/qr.svg" alt="QR code to the karaoke sign-up page"></div>
+    <div class="url" id="url"></div>
+    <div class="closed" id="closed" hidden>Sign-ups are closed</div>
+  </section>
+  <section class="line">
+    <div class="label">Now singing</div>
+    <div class="now" id="now"><b>Who's first?</b><span>Scan the code to grab the mic.</span></div>
+    <div class="label">Up next</div>
+    <ol id="queue"></ol>
+    <div class="more" id="more"></div>
+  </section>
+</div>
+<a class="exit" href="/kj" aria-label="Back to KJ queue" title="Back">×</a>
+<script>
+const $ = id => document.getElementById(id);
+fetch("/api/url").then(r => r.json()).then(j => $("url").textContent = j.url.replace(/^https?:\/\//, "").replace(/\/$/, "")).catch(() => {});
+function render(d){
+  $("closed").hidden = d.open;
+  const up = d.queue.find(r => r.status === "up"), wait = d.queue.filter(r => r.status === "queued");
+  const now = $("now"); now.innerHTML = "";
+  const b = document.createElement("b"), s = document.createElement("span");
+  if(up){ b.textContent = up.name; s.textContent = up.song + (up.artist ? " – " + up.artist : ""); }
+  else if(wait.length){ b.textContent = "Starting soon"; s.textContent = wait.length + " singer" + (wait.length === 1 ? "" : "s") + " on the list"; }
+  else { b.textContent = "Who's first?"; s.textContent = "Scan the code to grab the mic."; }
+  now.append(b, s);
+  const ol = $("queue"); ol.innerHTML = "";
+  if(!wait.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody waiting yet."; ol.appendChild(li); }
+  wait.slice(0, 6).forEach((r, i) => {
+    const li = document.createElement("li");
+    const n = document.createElement("span"); n.className = "n"; n.textContent = i + 1;
+    const t = document.createElement("div"); t.className = "t";
+    const nb = document.createElement("b"); nb.textContent = r.name;
+    const sp = document.createElement("span"); sp.textContent = r.song + (r.artist ? " – " + r.artist : "");
+    t.append(nb, sp); li.append(n, t); ol.appendChild(li);
+  });
+  $("more").textContent = wait.length > 6 ? "+ " + (wait.length - 6) + " more on the list" : "";
+}
+async function refresh(){ try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){} }
+refresh(); setInterval(refresh, 4000);
+let lock = null;
+async function keepAwake(){ try{ if(navigator.wakeLock) lock = await navigator.wakeLock.request("screen"); }catch(e){} }
+keepAwake();
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible"){ keepAwake(); refresh(); } });
+</script>
+</body>
+</html>
