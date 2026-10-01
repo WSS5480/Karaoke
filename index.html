@@ -199,7 +199,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
     </div>
     <p class="ok" id="shareMsg" role="status"></p>
     <div class="row" style="justify-content:space-between">
-      <button class="linkbtn" id="dl" type="button">Save the picture</button>
+      <button class="linkbtn" id="dl" type="button">TikTok? Save to Photos first</button>
       <button class="linkbtn" id="postClose" type="button">Close</button>
     </div>
   </section>
@@ -449,14 +449,21 @@ $("postBtn").addEventListener("click", () => {
   // no waiting before share: phones only open the share menu right after a tap
   if(navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
   if(navigator.canShare && navigator.canShare({ files: [postPic.file] })){
-    navigator.share({ files: [postPic.file], text })
+    navigator.share({ files: [postPic.file] })
       .then(() => { $("shareMsg").textContent = "Posted? Nice! Your caption is copied if you need it."; })
       .catch(e => { if(e.name !== "AbortError"){ savePic(postPic); $("shareMsg").textContent = "Picture saved to your phone. Open Instagram, TikTok or Facebook and pick it from your photos."; } });
   } else {
     savePic(postPic); $("shareMsg").textContent = "Picture saved. Open Instagram, TikTok or Facebook and pick it from your photos. Caption copied.";
   }
 });
-$("dl").addEventListener("click", () => { if(postPic){ savePic(postPic); $("shareMsg").textContent = "Picture saved."; } });
+// save to Photos: on phones the share menu has "Save Image", which puts it in Photos for TikTok
+$("dl").addEventListener("click", () => {
+  if(!postPic) return;
+  if(navigator.clipboard) navigator.clipboard.writeText(caption(postItem)).catch(() => {});
+  if(navigator.canShare && navigator.canShare({ files: [postPic.file] })){
+    navigator.share({ files: [postPic.file] }).then(() => { $("shareMsg").textContent = "Saved? Now open TikTok, tap +, then Upload, and pick the picture. Caption is copied, just paste it."; }).catch(() => {});
+  } else { savePic(postPic); $("shareMsg").textContent = "Picture saved."; }
+});
 $("postClose").addEventListener("click", () => { $("postCard").hidden = true; postItem = null; });
 
 /* ---------- my songs (this phone's history) ---------- */
