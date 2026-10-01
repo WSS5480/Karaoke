@@ -71,6 +71,7 @@ if (DB_OK) {
     async setCustomerName(id, n) { await pool.query(`UPDATE customers SET name=$2, last_seen=now() WHERE id=$1`, [id, n]); },
     async moveDevice(from, to) { await pool.query(`UPDATE signups SET device=$2 WHERE device=$1`, [from, to]); },
     async mineAll(d, sort) { return (await pool.query(`SELECT * FROM signups WHERE device=$1 AND done_at IS NOT NULL AND status IN ('done','archived') ORDER BY ${sort === "top" ? "rating DESC NULLS LAST, done_at DESC" : "done_at DESC"} LIMIT 200`, [d])).rows; },
+    async sungSince(t) { return (await pool.query(`SELECT name, song, artist, device, rating, public, done_at FROM signups WHERE done_at IS NOT NULL AND status IN ('done','archived') AND done_at >= $1 ORDER BY done_at`, [new Date(t)])).rows; },
     async lastSung(d) { return (await pool.query(`SELECT * FROM signups WHERE device=$1 AND status IN ('done','archived') AND done_at > now() - interval '12 hours' ORDER BY done_at DESC LIMIT 1`, [d])).rows[0]; },
     async rate(id, rating, pub) { await pool.query(`UPDATE signups SET rating=$2, public=$3 WHERE id=$1`, [id, rating, pub]); },
     async history(o) {
@@ -86,6 +87,7 @@ if (DB_OK) {
     async byDevice(d) { return (await pool.query(`SELECT * FROM signups WHERE device=$1 AND status IN ('up','queued') LIMIT 1`, [d])).rows[0]; },
     async add(r) { return (await pool.query(`INSERT INTO signups (name,song,artist,device,position) VALUES ($1,$2,$3,$4,(SELECT COALESCE(MAX(position),0)+1 FROM signups)) RETURNING *`, [r.name, r.song, r.artist, r.device])).rows[0]; },
     async setStatus(id, s) { await pool.query(`UPDATE signups SET status=$2, done_at=CASE WHEN $2='done' THEN now() ELSE done_at END WHERE id=$1`, [id, s]); },
+    async rename(id, n) { await pool.query(`UPDATE signups SET name=$2 WHERE id=$1`, [id, n]); },
     async setPos(id, p) { await pool.query(`UPDATE signups SET position=$2 WHERE id=$1`, [id, p]); },
     async get(id) { return (await pool.query(`SELECT * FROM signups WHERE id=$1`, [id])).rows[0]; },
     async newNight() { await pool.query(`UPDATE signups SET status='archived' WHERE status IN ('up','queued','done')`); },
@@ -105,6 +107,7 @@ if (DB_OK) {
     async setCustomerName(id, n) { const c = this.customers.find(x => x.id === id); if (c) c.name = n; },
     async moveDevice(from, to) { rows.forEach(r => { if (r.device === from) r.device = to; }); },
     async mineAll(d, sort) { return rows.filter(r => r.device === d && r.done_at && (r.status === "done" || r.status === "archived")).sort(sort === "top" ? (a, b) => (b.rating ?? -1) - (a.rating ?? -1) || b.done_at.localeCompare(a.done_at) : (a, b) => b.done_at.localeCompare(a.done_at)).slice(0, 200); },
+    async sungSince(t) { return rows.filter(r => r.done_at && (r.status === "done" || r.status === "archived") && Date.parse(r.done_at) >= t).sort((a, b) => a.done_at.localeCompare(b.done_at)); },
     async lastSung(d) { const cut = Date.now() - 12 * 3600e3; return rows.filter(r => r.device === d && (r.status === "done" || r.status === "archived") && r.done_at && Date.parse(r.done_at) > cut).sort((a, b) => b.done_at.localeCompare(a.done_at))[0]; },
     async rate(id, rating, pub) { const r = rows.find(x => x.id === id); if (r) { r.rating = rating; r.public = pub; } },
     async history(o) {
@@ -118,6 +121,7 @@ if (DB_OK) {
     async byDevice(d) { return rows.find(r => r.device === d && (r.status === "up" || r.status === "queued")); },
     async add(r) { const row = { ...r, id: ++seq, status: "queued", position: Math.max(0, ...rows.map(x => x.position)) + 1, created_at: now(), done_at: null, rating: null, public: false }; rows.push(row); return row; },
     async setStatus(id, s) { const r = rows.find(x => x.id === id); if (r) { r.status = s; if (s === "done") r.done_at = now(); } },
+    async rename(id, n) { const r = rows.find(x => x.id === id); if (r) r.name = n; },
     async setPos(id, p) { const r = rows.find(x => x.id === id); if (r) r.position = p; },
     async get(id) { return rows.find(x => x.id === id); },
     async newNight() { rows.forEach(r => { if (r.status !== "removed") r.status = "archived"; }); },
@@ -134,7 +138,7 @@ function device(req, res) {
   d = d && /^[a-f0-9]{32}$/.test(d[1]) ? d[1] : null;
   if (!d) {
     d = crypto.randomBytes(16).toString("hex");
-    res.append("Set-Cookie", `dive_device=${d}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly${req.secure ? "; Secure" : ""}`);
+    res.append("Set-Cookie", `dive_device=${d}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly${req.secure ? "; Secure" : ""}`);
   }
   return d;
 }
@@ -149,6 +153,9 @@ function setUserCookie(req, res, id) {
   res.append("Set-Cookie", `dive_user=${id}.${sign(id)}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly${req.secure ? "; Secure" : ""}`);
 }
 // who "owns" a sign-up: the signed-in customer, otherwise this phone's browser
+// one profile per phone: the phone's first sign-up sets its name; a phone links to at most one phone-number account
+async function getProfile(dev) { try { return JSON.parse((await db.getSetting("profile:" + dev)) || "null"); } catch (e) { return null; } }
+async function setProfile(dev, p) { await db.setSetting("profile:" + dev, JSON.stringify(p)); }
 function owner(req, res) { const u = currentUser(req); return u ? "c" + u : device(req, res); }
 function normPhone(p) {
   const raw = String(p || "").trim(), d = raw.replace(/\D/g, "");
@@ -199,7 +206,7 @@ app.get("/api/queue", wrap(async (req, res) => {
 }));
 
 app.post("/api/signup", wrap(async (req, res) => {
-  const d = owner(req, res);
+  const dev = device(req, res), uid = currentUser(req), d = uid ? "c" + uid : dev;
   if ((await db.getSetting("open")) === "no") return res.status(403).json({ error: "Sign-ups are closed for tonight." });
   { const ps = await pauseState(); if (ps.paused) return res.status(403).json({ error: ps.until ? "Sign-ups are paused until " + new Date(ps.until).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) + ". Try again then." : "Sign-ups are paused for a bit. Try again soon." }); }
   if ((await authOn()) && !currentUser(req)) return res.status(401).json({ error: "signin", message: "Sign in with your phone number first." });
@@ -210,8 +217,10 @@ app.post("/api/signup", wrap(async (req, res) => {
     const away = metersAway(lat, lng);
     if (away - acc > GEOFENCE_M) return res.status(403).json({ error: "far", miles: Math.round(away / 1609.34 * 10) / 10, message: "You need to be at The Dive to sign up." });
   }
-  const name = clean(req.body.name, 30), song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
+  const profile = await getProfile(dev), cust = uid ? await db.customer(uid) : null;
+  const name = (cust && cust.name) || (profile && profile.name) || clean(req.body.name, 30), song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!name) return res.status(400).json({ error: "Enter your name or stage name." });
+  if (!profile) await setProfile(dev, { name, customer: uid || null });
   if (!song) return res.status(400).json({ error: "Enter the song you want to sing." });
   if (await db.byDevice(d)) return res.status(409).json({ error: "You're already on the list. Cancel your song to pick a different one." });
   const row = await db.add({ name, song, artist, device: d });
@@ -247,8 +256,8 @@ app.get("/api/wall", wrap(async (req, res) => {
 
 /* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
 app.get("/api/me", wrap(async (req, res) => {
-  const u = currentUser(req), c = u ? await db.customer(u) : null;
-  res.json({ auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null });
+  const u = currentUser(req), c = u ? await db.customer(u) : null, p = await getProfile(device(req, res));
+  res.json({ auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null, profileName: (c && c.name) || (p && p.name) || null });
 }));
 const textHits = new Map();
 app.post("/api/auth/start", wrap(async (req, res) => {
@@ -268,7 +277,10 @@ app.post("/api/auth/check", wrap(async (req, res) => {
   if (!phone || code.length < 4) return res.status(400).json({ error: "Enter the code from your text." });
   const r = await twilio("VerificationCheck", { To: phone, Code: code });
   if (!r.ok || r.body.status !== "approved") return res.status(400).json({ error: "That code didn't work. Check it or send a new one." });
-  const c = await db.addCustomer(phone), dev = device(req, res);
+  const dev = device(req, res), p = await getProfile(dev), c = await db.addCustomer(phone);
+  if (p && p.customer && p.customer !== c.id) return res.status(409).json({ error: "This phone is already set up for " + (p.name || "someone else") + ". One person per phone. Ask the KJ if this is a mistake." });
+  if (!c.name && p && p.name) { await db.setCustomerName(c.id, p.name); c.name = p.name; }
+  await setProfile(dev, { name: c.name || (p && p.name) || "", customer: c.id });
   await db.moveDevice(dev, "c" + c.id);
   setUserCookie(req, res, c.id);
   res.json({ ok: true, user: { name: c.name, phone: "•••-•••-" + phone.slice(-4) }, isNew: !c.name });
@@ -276,22 +288,110 @@ app.post("/api/auth/check", wrap(async (req, res) => {
 app.post("/api/auth/name", wrap(async (req, res) => {
   const u = currentUser(req); if (!u) return res.status(401).json({ error: "Sign in first." });
   const n = clean(req.body.name, 30); if (!n) return res.status(400).json({ error: "Enter your name or stage name." });
-  await db.setCustomerName(u, n); res.json({ ok: true });
+  await db.setCustomerName(u, n);
+  const dev = device(req, res), p = await getProfile(dev); if (!p || !p.name) await setProfile(dev, { name: n, customer: u });
+  res.json({ ok: true });
 }));
 app.post("/api/auth/logout", (req, res) => { res.append("Set-Cookie", "dive_user=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly"); res.json({ ok: true }); });
 
 /* ---------- KJ API (PIN protected) ---------- */
-app.use("/api/kj", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }));
+// hosts: the owner PIN (KJ_PIN) can add hosts, each with their own name + PIN
+async function getHosts() { try { return JSON.parse((await db.getSetting("hosts")) || "[]"); } catch (e) { return []; } }
+const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+async function whoIs(pin) {
+  if (!pin) return null;
+  if (same(pin, KJ_PIN)) return { name: "Owner", admin: true };
+  const h = (await getHosts()).find(x => same(pin, x.pin));
+  return h ? { name: h.name, admin: false } : null;
+}
+const pinTries = new Map();
+async function kjAuth(req, res, next) {
+  try {
+    const t = Date.now(), l = (pinTries.get(req.ip) || []).filter(x => t - x < 600000);
+    if (l.length >= 20) return res.status(429).json({ error: "Too many wrong PINs. Wait 10 minutes." });
+    const who = await whoIs(String(req.headers["x-kj-pin"] || ""));
+    if (!who) { l.push(t); pinTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
+    req.kj = who; next();
+  } catch (e) { console.error(e); res.status(500).json({ error: "Something went wrong. Try again." }); }
+}
+app.use("/api/kj", kjAuth);
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
+  res.json({ me: req.kj, open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
 }));
 app.get("/api/kj/history", wrap(async (req, res) => {
   res.json({ items: (await db.history({ sort: req.query.sort === "top" ? "top" : "new", q: clean(req.query.q, 40), limit: 500 })).map(histRow) });
+}));
+
+// analytics for the KJ: everything is grouped by "karaoke night" (a night runs until 6 AM, McAllen time)
+const TZ = "America/Chicago";
+function nightOf(d) { return new Date(new Date(d).getTime() - 6 * 3600e3).toLocaleDateString("en-CA", { timeZone: TZ }); }
+function hourOf(d) { return parseInt(new Date(d).toLocaleString("en-US", { timeZone: TZ, hour: "numeric", hour12: false }), 10) % 24; }
+app.get("/api/kj/stats", wrap(async (req, res) => {
+  const days = { "7": 7, "30": 30, "90": 90 }[req.query.range] || 0;
+  const rows = await db.sungSince(days ? Date.now() - days * 864e5 : 0);
+  const nights = new Map(), hours = new Array(24).fill(0), stars = [0, 0, 0, 0, 0], singers = new Map(), songs = new Map(), artists = new Map();
+  let rated = 0, starSum = 0, onWall = 0;
+  for (const r of rows) {
+    const n = nightOf(r.done_at); nights.set(n, (nights.get(n) || 0) + 1);
+    hours[hourOf(r.done_at)]++;
+    if (r.rating) { rated++; starSum += r.rating; stars[r.rating - 1]++; }
+    if (r.public) onWall++;
+    const who = singers.get(r.device) || { name: r.name, songs: 0, stars: 0, rated: 0, nights: new Set(), last: r.done_at };
+    who.name = r.name; who.songs++; who.nights.add(n); who.last = r.done_at; if (r.rating) { who.stars += r.rating; who.rated++; }
+    singers.set(r.device, who);
+    const sk = r.song.toLowerCase() + "|" + (r.artist || "").toLowerCase();
+    const so = songs.get(sk) || { song: r.song, artist: r.artist, count: 0 }; so.count++; songs.set(sk, so);
+    if (r.artist) { const ak = r.artist.toLowerCase(); const ar = artists.get(ak) || { artist: r.artist, count: 0 }; ar.count++; artists.set(ak, ar); }
+  }
+  const singerList = [...singers.values()].map(x => ({ name: x.name, songs: x.songs, nights: x.nights.size, avg: x.rated ? Math.round(x.stars / x.rated * 10) / 10 : null, last: x.last }));
+  const nightList = [...nights.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-30).map(([night, count]) => ({ night, count }));
+  res.json({
+    range: days || "all",
+    totals: { songs: rows.length, singers: singers.size, nights: nights.size, repeat: singerList.filter(x => x.nights > 1).length,
+              avgRating: rated ? Math.round(starSum / rated * 10) / 10 : null, rated, onWall, perNight: nights.size ? Math.round(rows.length / nights.size * 10) / 10 : 0 },
+    nights: nightList, hours, stars,
+    topSingers: singerList.sort((a, b) => b.songs - a.songs || b.nights - a.nights).slice(0, 15),
+    topRated: singerList.filter(x => x.avg !== null && x.songs >= 2).sort((a, b) => b.avg - a.avg || b.songs - a.songs).slice(0, 10),
+    topSongs: [...songs.values()].sort((a, b) => b.count - a.count).slice(0, 15),
+    topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10)
+  });
+}));
+const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the owner can manage hosts." });
+app.get("/api/kj/hosts", ownerOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2) })) }); }));
+app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
+  const name = clean(req.body.name, 30), pin = String(req.body.pin || "").replace(/\D/g, "");
+  if (!name) return res.status(400).json({ error: "Enter the host's name." });
+  if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
+  const hosts = await getHosts();
+  if (pin === KJ_PIN || hosts.some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is already used. Pick another." });
+  if (hosts.some(h => h.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: "There's already a host with that name." });
+  hosts.push({ name, pin }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+}));
+app.post("/api/kj/my-pin", wrap(async (req, res) => {
+  if (req.kj.admin) return res.status(400).json({ error: "The owner PIN is changed in Render (KJ_PIN)." });
+  const pin = String(req.body.pin || "").replace(/\D/g, ""), hosts = await getHosts();
+  if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
+  if (pin === KJ_PIN || hosts.some(h => h.pin === pin && h.name !== req.kj.name)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
+  const me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Host not found." });
+  me.pin = pin; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+}));
+app.post("/api/kj/hosts/remove", ownerOnly, wrap(async (req, res) => {
+  const name = String(req.body.name || ""), hosts = (await getHosts()).filter(h => h.name !== name);
+  await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
 app.post("/api/kj/next", wrap(async (req, res) => {
   const list = await db.active();
   const up = list.find(r => r.status === "up"); if (up) await db.setStatus(up.id, "done");
   const nxt = list.find(r => r.status === "queued"); if (nxt) await db.setStatus(nxt.id, "up");
+  res.json({ ok: true });
+}));
+app.post("/api/kj/:id/rename", wrap(async (req, res) => {
+  const id = parseInt(req.params.id, 10), row = await db.get(id), n = clean(req.body.name, 30);
+  if (!row) return res.status(404).json({ error: "That singer isn't on the list anymore." });
+  if (!n) return res.status(400).json({ error: "Enter a name." });
+  await db.rename(id, n);
+  if (row.device.startsWith("c")) await db.setCustomerName(parseInt(row.device.slice(1), 10), n);
+  else { const p = await getProfile(row.device); await setProfile(row.device, { ...(p || {}), name: n }); }
   res.json({ ok: true });
 }));
 app.post("/api/kj/:id/:action", wrap(async (req, res) => {
@@ -310,21 +410,21 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   } else return res.status(400).json({ error: "Unknown action." });
   res.json({ ok: true });
 }));
-app.post("/api/kj-open", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
+app.post("/api/kj-open", kjAuth, wrap(async (req, res) => {
   await db.setSetting("open", req.body.open ? "yes" : "no"); res.json({ ok: true });
 }));
-app.post("/api/kj-geofence", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
+app.post("/api/kj-geofence", kjAuth, wrap(async (req, res) => {
   await db.setSetting("geofence", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
-app.post("/api/kj-phone", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
+app.post("/api/kj-phone", kjAuth, wrap(async (req, res) => {
   await db.setSetting("phone_signin", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
-app.post("/api/kj-pause", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
+app.post("/api/kj-pause", kjAuth, wrap(async (req, res) => {
   const m = Number(req.body.minutes);
   await db.setSetting("paused", m === 0 ? "off" : m > 0 ? String(Date.now() + Math.min(m, 240) * 60000) : "on");
   res.json({ ok: true });
 }));
-app.post("/api/kj-newnight", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
+app.post("/api/kj-newnight", kjAuth, wrap(async (req, res) => {
   await db.newNight(); res.json({ ok: true });
 }));
 
@@ -349,7 +449,7 @@ img{width:160px;filter:drop-shadow(0 0 20px rgba(57,181,74,.55))}h1{font-family:
 }));
 app.get("/api/url", (req, res) => res.json({ url: siteUrl(req) + "/" }));
 
-const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/logo.png": "logo.png", "/songs.json": "songs.json", "/manifest.json": "manifest.json", "/kj-manifest.json": "kj-manifest.json", "/sw.js": "sw.js", "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png", "/icon-maskable.png": "icon-maskable.png", "/apple-touch-icon.png": "apple-touch-icon.png", "/kj-icon-192.png": "kj-icon-192.png", "/kj-icon-512.png": "kj-icon-512.png", "/kj-apple-touch-icon.png": "kj-apple-touch-icon.png" };
+const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/stats": "stats.html", "/logo.png": "logo.png", "/songs.json": "songs.json", "/manifest.json": "manifest.json", "/kj-manifest.json": "kj-manifest.json", "/sw.js": "sw.js", "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png", "/icon-maskable.png": "icon-maskable.png", "/apple-touch-icon.png": "apple-touch-icon.png", "/kj-icon-192.png": "kj-icon-192.png", "/kj-icon-512.png": "kj-icon-512.png", "/kj-apple-touch-icon.png": "kj-apple-touch-icon.png" };
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(__dirname, file))));
 app.get("/healthz", (req, res) => res.send("ok"));
 

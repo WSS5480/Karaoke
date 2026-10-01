@@ -105,6 +105,8 @@ a{color:var(--green-hi)}
   </section>
 
   <div id="panel" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="row" style="justify-content:space-between;font-size:14px;color:var(--ink-2)"><span id="meLine"></span><span class="row" style="gap:6px"><button id="myPinBtn" type="button" style="padding:6px 12px;font-size:13px" hidden>Change my PIN</button><button id="signOut" type="button" style="padding:6px 12px;font-size:13px">Sign out</button></span></div>
+    <form id="myPinForm" class="row" hidden novalidate><input id="myPin" inputmode="numeric" maxlength="8" placeholder="New PIN (4–8 digits)" aria-label="New PIN" style="flex:1 1 160px;font-size:16px"><button type="submit">Save PIN</button><span class="err" id="myPinErr" role="alert"></span></form>
     <section class="card">
       <h2>Now singing</h2>
       <div class="now" id="now">Nobody yet</div>
@@ -136,6 +138,7 @@ a{color:var(--green-hi)}
         <button id="toggleOpen"></button>
         <button id="toggleGeo"></button>
         <button id="togglePhone" hidden></button>
+        <a href="/stats">Analytics</a>
         <a href="/history">Customer history</a>
         <a href="/wall" target="_blank" rel="noopener">Wall of fame</a>
         <a href="/tv" target="_blank" rel="noopener">TV screen to cast</a>
@@ -148,6 +151,17 @@ a{color:var(--green-hi)}
         <button class="danger" id="nnYes">Clear it</button>
         <button id="nnNo">Keep it</button>
       </div>
+    </section>
+
+    <section class="card" id="hostsCard" hidden>
+      <h2>Hosts <span>each host has their own PIN</span></h2>
+      <ol id="hostList"></ol>
+      <form id="hostForm" class="row" novalidate>
+        <input id="hostName" placeholder="Host name" aria-label="Host name" maxlength="30" style="flex:1 1 140px;letter-spacing:0;font-size:16px;text-align:left">
+        <input id="hostPin" placeholder="PIN" aria-label="Host PIN, 4 to 8 digits" inputmode="numeric" maxlength="8" style="flex:0 1 110px;font-size:16px">
+        <button type="submit">Add host</button>
+      </form>
+      <p class="err" id="hostErr" role="alert"></p>
     </section>
 
     <section class="card">
@@ -195,13 +209,16 @@ function item(r, i, waiting){
   if(waiting){
     const a = document.createElement("div"); a.className = "acts";
     const mk = (label, action, cls) => { const x = document.createElement("button"); x.textContent = label; if(cls) x.className = cls; x.addEventListener("click", () => act(`/api/kj/${r.id}/${action}`)); return x; };
-    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mk("Remove", "remove", "danger"));
+    const fix = document.createElement("button"); fix.textContent = "Fix name";
+    fix.addEventListener("click", () => { const n = window.prompt("Correct name for this singer (also fixes their phone):", r.name); if(n && n.trim()) act(`/api/kj/${r.id}/rename`, { name: n.trim() }); });
+    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), fix, mk("Remove", "remove", "danger"));
     a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
     li.appendChild(a);
   }
   return li;
 }
 function render(){
+  paintMe();
   const up = state.queue.find(r => r.status === "up"), waiting = state.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
   if(up){ now.textContent = up.name; const s = document.createElement("small"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); now.appendChild(s); }
@@ -272,6 +289,48 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   $("installX").addEventListener("click", () => { $("installBar").hidden = true; try{ sessionStorage.setItem("dive_kj_install_x", "1"); }catch(e){} if($("getApp")) $("getApp").hidden = false; });
   window.addEventListener("appinstalled", () => { $("installBar").hidden = true; });
 })();
+
+/* ---------- who's signed in, and the owner's host list ---------- */
+async function loadHosts(){
+  try{
+    const j = await api("/api/kj/hosts"), ol = $("hostList"); ol.innerHTML = "";
+    if(!j.hosts.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No hosts yet. Add one below."; ol.appendChild(li); }
+    j.hosts.forEach(h => {
+      const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
+      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = "PIN " + h.pin;
+      t.append(b, sp); const x = document.createElement("button"); x.className = "danger"; x.textContent = "Remove";
+      x.addEventListener("click", async () => {
+        if(x.dataset.armed !== "1"){ x.dataset.armed = "1"; x.textContent = "Tap to confirm"; setTimeout(() => { x.dataset.armed = ""; x.textContent = "Remove"; }, 4000); return; }
+        await api("/api/kj/hosts/remove", { name: h.name }).catch(() => {}); loadHosts();
+      });
+      li.append(t, x); ol.appendChild(li);
+    });
+  }catch(e){}
+}
+let hostsLoaded = false;
+function paintMe(){
+  if(!state || !state.me) return;
+  $("meLine").textContent = "Signed in as " + state.me.name;
+  $("hostsCard").hidden = !state.me.admin;
+  $("myPinBtn").hidden = state.me.admin;
+  if(state.me.admin && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
+}
+$("hostForm").addEventListener("submit", async e => {
+  e.preventDefault(); $("hostErr").textContent = "";
+  const name = $("hostName").value.trim(), pin = $("hostPin").value.trim();
+  if(!name){ $("hostErr").textContent = "Enter the host's name."; return; }
+  if(!/^\d{4,8}$/.test(pin)){ $("hostErr").textContent = "PIN must be 4 to 8 digits."; return; }
+  try{ await api("/api/kj/hosts", { name, pin }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
+  catch(err){ $("hostErr").textContent = err.message; }
+});
+$("myPinBtn").addEventListener("click", () => { $("myPinForm").hidden = !$("myPinForm").hidden; $("myPinErr").textContent = ""; });
+$("myPinForm").addEventListener("submit", async e => {
+  e.preventDefault(); const p = $("myPin").value.trim();
+  if(!/^\d{4,8}$/.test(p)){ $("myPinErr").textContent = "PIN must be 4 to 8 digits."; return; }
+  try{ await api("/api/kj/my-pin", { pin: p }); pin = p; try{ sessionStorage.setItem("kj_pin", p); }catch(er){} $("myPin").value = ""; $("myPinForm").hidden = true; $("meLine").textContent = "PIN changed. Signed in as " + state.me.name; }
+  catch(err){ $("myPinErr").textContent = err.message; }
+});
+$("signOut").addEventListener("click", () => { hostsLoaded = false; logout(""); });
 if(pin) start();
 
 /* ---------- stay fresh when the app comes back ---------- */

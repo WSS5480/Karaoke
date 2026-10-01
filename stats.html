@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Analytics · The Dive</title>
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+/* Layout: KJ analytics. Summary tiles, then nights and hours as single-series bar charts, then ranked lists. One green series on the dark Dive surface. */
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--grid:#202820;--green:#39b54a;--green-hi:#5fd36e;--ink:#eef3ee;--ink-2:#9fae9f;--gold:#ffc93c;--warn:#ff6b6b;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+main{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-top:16px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header img{width:52px}
+header h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;flex:1}
+a{color:var(--green-hi)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+h2{font-family:var(--slab);font-weight:800;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-hi);margin:0;display:flex;justify-content:space-between;gap:8px}
+h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input{flex:1 1 200px;min-width:0;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px;font:inherit;font-size:20px;letter-spacing:.3em;text-align:center}
+button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 16px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
+button[aria-pressed="true"],.go{background:var(--green);color:#041206;border-color:var(--green)}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
+.err{color:var(--warn);font-size:14px;min-height:20px;margin:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--panel-2);border-radius:12px;padding:12px 14px}
+.tile b{display:block;font-family:var(--slab);font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
+.tile span{font-size:13px;color:var(--ink-2)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.chart{position:relative;height:190px;display:flex;align-items:flex-end;gap:3px;padding:8px 0 22px;border-bottom:1px solid var(--line);background:repeating-linear-gradient(to top,var(--grid) 0 1px,transparent 1px 42px);overflow-x:auto}
+.bar{flex:1 0 10px;min-width:10px;background:var(--green);border-radius:4px 4px 0 0;position:relative;cursor:default}
+.bar:hover,.bar:focus{background:var(--green-hi);outline:none}
+.bar .lbl{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--ink-2);white-space:nowrap}
+.tip{position:fixed;z-index:9;pointer-events:none;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;color:var(--ink)}
+.empty{color:var(--ink-2);padding:10px 0}
+ol.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ol.rank li{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:center}
+ol.rank .n{font-family:var(--slab);font-weight:800;color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}
+ol.rank .t{min-width:0}
+ol.rank .t b{display:block;font-weight:500;overflow-wrap:anywhere}
+ol.rank .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
+ol.rank .meter{height:6px;border-radius:99px;background:var(--panel-2);margin-top:4px;overflow:hidden}
+ol.rank .meter i{display:block;height:100%;background:var(--green);border-radius:99px}
+ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap}
+.stars{color:var(--gold)}
+.dist{display:flex;flex-direction:column;gap:6px}
+.dist div{display:grid;grid-template-columns:70px minmax(0,1fr) 40px;gap:8px;align-items:center;font-size:14px}
+.dist .track{height:12px;background:var(--panel-2);border-radius:99px;overflow:hidden}
+.dist .track i{display:block;height:100%;background:var(--green);border-radius:99px}
+.dist .c{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/logo.png" alt="The Dive on 495">
+    <h1>Analytics</h1>
+    <a href="/kj">Back to KJ queue</a>
+  </header>
+
+  <section class="card" id="login">
+    <form id="pinForm" class="row" novalidate>
+      <input id="pin" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="Your PIN" placeholder="PIN">
+      <button class="go" type="submit">Open analytics</button>
+    </form>
+    <p class="err" id="err" role="alert"></p>
+  </section>
+
+  <div id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="row" role="group" aria-label="Time range">
+      <button data-r="7">7 days</button><button data-r="30">30 days</button><button data-r="90">90 days</button><button data-r="all" aria-pressed="true">All time</button>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="grid2">
+      <section class="card"><h2>Songs per night <span>last 30 nights</span></h2><div class="chart" id="nights" role="img" aria-label="Songs sung each karaoke night"></div></section>
+      <section class="card"><h2>Busiest hours <span>songs sung by hour</span></h2><div class="chart" id="hours" role="img" aria-label="Songs sung by hour of the night"></div></section>
+    </div>
+    <div class="grid2">
+      <section class="card"><h2>Top singers <span>by songs</span></h2><ol class="rank" id="topSingers"></ol></section>
+      <section class="card"><h2>Best rated <span>2+ songs</span></h2><ol class="rank" id="topRated"></ol></section>
+    </div>
+    <div class="grid2">
+      <section class="card"><h2>Top songs</h2><ol class="rank" id="topSongs"></ol></section>
+      <section class="card"><h2>Top artists</h2><ol class="rank" id="topArtists"></ol></section>
+    </div>
+    <section class="card"><h2>Self-ratings <span id="ratedNote"></span></h2><div class="dist" id="dist"></div></section>
+  </div>
+</main>
+<div class="tip" id="tip" hidden></div>
+<script>
+const $ = id => document.getElementById(id);
+let pin = "", range = "all";
+try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
+const fmtNight = n => new Date(n + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric" });
+const hourLbl = h => (h % 12 || 12) + (h < 12 ? "a" : "p");
+function tip(el, text){
+  el.addEventListener("mouseenter", () => { $("tip").textContent = text; $("tip").hidden = false; });
+  el.addEventListener("mousemove", e => { $("tip").style.left = (e.clientX + 12) + "px"; $("tip").style.top = (e.clientY - 34) + "px"; });
+  el.addEventListener("mouseleave", () => $("tip").hidden = true);
+  el.addEventListener("focus", () => { const r = el.getBoundingClientRect(); $("tip").textContent = text; $("tip").style.left = r.left + "px"; $("tip").style.top = (r.top - 34) + "px"; $("tip").hidden = false; });
+  el.addEventListener("blur", () => $("tip").hidden = true);
+  el.addEventListener("click", () => { const r = el.getBoundingClientRect(); $("tip").textContent = text; $("tip").style.left = r.left + "px"; $("tip").style.top = (r.top - 34) + "px"; $("tip").hidden = false; });
+}
+function bars(box, items, labelEvery){
+  box.innerHTML = "";
+  if(!items.some(x => x.v)){ const p = document.createElement("div"); p.className = "empty"; p.textContent = "No songs in this range yet."; box.appendChild(p); return; }
+  const max = Math.max(...items.map(x => x.v), 1);
+  items.forEach((x, i) => {
+    const b = document.createElement("div"); b.className = "bar"; b.tabIndex = 0;
+    b.style.height = Math.max(x.v ? 3 : 0, x.v / max * 100) + "%";
+    if(i % labelEvery === 0){ const l = document.createElement("span"); l.className = "lbl"; l.textContent = x.l; b.appendChild(l); }
+    tip(b, x.tip); box.appendChild(b);
+  });
+}
+function rank(box, items, main, sub, val, meterOf){
+  box.innerHTML = "";
+  if(!items.length){ const li = document.createElement("li"); li.className = "empty"; li.style.display = "block"; li.textContent = "Nothing yet."; box.appendChild(li); return; }
+  const max = Math.max(...items.map(meterOf), 1);
+  items.forEach((x, i) => {
+    const li = document.createElement("li");
+    const n = document.createElement("span"); n.className = "n"; n.textContent = i + 1;
+    const t = document.createElement("div"); t.className = "t";
+    const b = document.createElement("b"); b.textContent = main(x); t.appendChild(b);
+    const s = sub(x); if(s){ const sp = document.createElement("span"); sp.textContent = s; t.appendChild(sp); }
+    const m = document.createElement("div"); m.className = "meter"; const fill = document.createElement("i"); fill.style.width = (meterOf(x) / max * 100) + "%"; m.appendChild(fill); t.appendChild(m);
+    const v = document.createElement("span"); v.className = "v"; v.innerHTML = ""; v.append(val(x));
+    li.append(n, t, v); box.appendChild(li);
+  });
+}
+const starsText = a => { const s = document.createElement("span"); s.className = "stars"; s.textContent = "★ " + a.toFixed(1); return s; };
+async function load(){
+  document.querySelectorAll("[data-r]").forEach(b => b.setAttribute("aria-pressed", b.dataset.r === range));
+  const r = await fetch("/api/kj/stats?range=" + range, { headers: { "x-kj-pin": pin }, cache: "no-store" });
+  if(r.status === 401){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("err").textContent = "Wrong PIN."; return false; }
+  const d = await r.json(), T = d.totals;
+  $("tiles").innerHTML = "";
+  [[T.songs, "songs sung"], [T.singers, "singers"], [T.repeat, "came back 2+ nights"], [T.nights, "karaoke nights"], [T.perNight, "songs per night"], [T.avgRating == null ? "–" : "★ " + T.avgRating, "average self-rating"], [T.onWall, "on the Wall of Fame"]]
+    .forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("tiles").appendChild(t); });
+  bars($("nights"), d.nights.map(x => ({ v: x.count, l: fmtNight(x.night), tip: fmtNight(x.night) + ": " + x.count + " songs" })), Math.max(1, Math.ceil(d.nights.length / 6)));
+  const order = [...Array(24).keys()].map(i => (i + 12) % 24);
+  bars($("hours"), order.map(h => ({ v: d.hours[h], l: hourLbl(h), tip: hourLbl(h) + "m: " + d.hours[h] + " songs" })), 3);
+  rank($("topSingers"), d.topSingers, x => x.name, x => x.nights + (x.nights === 1 ? " night" : " nights") + (x.avg ? " · ★ " + x.avg : ""), x => x.songs + " songs", x => x.songs);
+  rank($("topRated"), d.topRated, x => x.name, x => x.songs + " songs", x => starsText(x.avg), x => x.avg);
+  rank($("topSongs"), d.topSongs, x => x.song, x => x.artist, x => x.count + "×", x => x.count);
+  rank($("topArtists"), d.topArtists, x => x.artist, () => "", x => x.count + "×", x => x.count);
+  const dist = $("dist"); dist.innerHTML = ""; const maxS = Math.max(...d.stars, 1);
+  for(let i = 4; i >= 0; i--){
+    const row = document.createElement("div"); const l = document.createElement("span"); l.className = "stars"; l.textContent = "★".repeat(i + 1);
+    const tr = document.createElement("div"); tr.className = "track"; const f = document.createElement("i"); f.style.width = (d.stars[i] / maxS * 100) + "%"; tr.appendChild(f);
+    const c = document.createElement("span"); c.className = "c"; c.textContent = d.stars[i];
+    row.append(l, tr, c); dist.appendChild(row);
+  }
+  $("ratedNote").textContent = T.rated + " of " + T.songs + " songs rated";
+  return true;
+}
+document.querySelectorAll("[data-r]").forEach(b => b.addEventListener("click", () => { range = b.dataset.r; load(); }));
+$("pinForm").addEventListener("submit", async e => {
+  e.preventDefault(); const v = $("pin").value.trim(); if(!v){ $("err").textContent = "Enter your PIN."; return; }
+  pin = v; if(await load()){ try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("err").textContent = ""; $("login").hidden = true; $("panel").hidden = false; }
+});
+$("pin").addEventListener("input", () => $("err").textContent = "");
+if(pin){ $("login").hidden = true; $("panel").hidden = false; load(); }
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && pin) load(); });
+</script>
+</body>
+</html>

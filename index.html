@@ -167,6 +167,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
         <div>
           <label for="name">Your name <span>/ Tu nombre</span></label>
           <input id="name" name="name" maxlength="30" autocomplete="given-name" placeholder="Maria" required>
+          <p class="hint" id="nameLock" hidden style="color:var(--ink-2)"></p>
         </div>
         <div class="field">
           <label for="song">Song <span>/ Canción</span></label>
@@ -708,6 +709,7 @@ async function loadMe(){
   try{
     const j = await (await fetch("/api/me", { cache: "no-store" })).json();
     authOn = j.auth; me = j.user; paintWho();
+    if(j.profileName){ $("name").value = j.profileName; $("name").readOnly = true; $("nameLock").hidden = false; $("nameLock").textContent = "This phone signs up as " + j.profileName + ". One person per phone."; }
     if(authOn && !me) showAuth("stepPhone");
     else if(me && !me.name) showAuth("stepName");
     else showAuth(null);
