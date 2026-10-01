@@ -44,7 +44,7 @@ app.use(express.json({ limit: "20kb" }));
 let db;
 const DB_URL = (process.env.DATABASE_URL || "").trim();
 const DB_OK = /^postgres(ql)?:\/\/[^\s]+@[^\s/]+\/\S+$/.test(DB_URL);
-if (DB_URL && !DB_OK) console.error("DATABASE_URL doesn't look like a Postgres link (it should start with postgresql://). Using in-memory storage until it's fixed.");
+if (DB_URL && !DB_OK) console.error(`DATABASE_URL doesn't look like a Postgres link (it should start with postgresql://). It starts with "${DB_URL.slice(0, 8)}" and is ${DB_URL.length} characters. Using in-memory storage until it's fixed.`);
 if (DB_OK) {
   const { Pool } = require("pg");
   const pool = new Pool({ connectionString: DB_URL, ssl: process.env.PGSSL === "off" ? false : { rejectUnauthorized: false } });
