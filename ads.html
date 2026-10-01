@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ads · The Dive</title>
+<link rel="icon" href="/logo.png">
+<link rel="apple-touch-icon" href="/kj-apple-touch-icon.png">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--ink:#eef3ee;--ink-2:#9fae9f;--warn:#ff6b6b;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+main{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-top:16px}
+header{display:flex;align-items:center;gap:12px}
+header img{width:52px}
+header h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;flex:1}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+h2{font-family:var(--slab);font-weight:800;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-hi);margin:0}
+label{font-size:14px;color:var(--ink-2);display:block;margin-bottom:4px}
+input,textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit;font-size:17px}
+textarea{min-height:76px;resize:vertical}
+#pin{font-size:20px;letter-spacing:.3em;text-align:center}
+button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
+.go{background:var(--green);color:#041206;border-color:var(--green);font-family:var(--slab);font-weight:800;font-size:18px;letter-spacing:.06em;text-transform:uppercase;padding:13px 20px;width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.days button{padding:8px 0;min-width:0;font-size:13px}
+.days button[aria-pressed="true"]{background:var(--green);color:#041206;border-color:var(--green)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+input[type=date]{min-width:0;font-size:15px;padding:10px 8px;-webkit-appearance:none;appearance:none}
+.hint{font-size:13px;color:var(--ink-2);margin:0}
+.err{color:var(--warn);font-size:14px;min-height:20px;margin:0}
+.ok{color:var(--green-hi);font-size:14px;margin:0;min-height:20px}
+a{color:var(--green-hi)}
+.danger{color:var(--warn)}
+/* the banner exactly as customers see it */
+.promo{display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#183a1d,#0f1a10);border:2px solid var(--green);border-radius:16px;padding:12px;min-height:72px}
+.promo img{width:76px;height:76px;object-fit:cover;border-radius:10px;flex:none}
+.promo .tx{min-width:0}
+.promo b{display:block;font-family:var(--slab);font-weight:800;font-size:19px;line-height:1.15;overflow-wrap:anywhere}
+.promo span{display:block;font-size:14px;color:#cfe0cf;overflow-wrap:anywhere;white-space:pre-line}
+.list{display:flex;flex-direction:column;gap:14px}
+.item{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:14px}
+.item:first-child{border-top:0;padding-top:0}
+.meta{font-size:13px;color:var(--ink-2)}
+.pill{font-size:12px;border-radius:999px;padding:2px 9px;border:1px solid var(--line);margin-right:6px}
+.pill.live{color:var(--green-hi);border-color:var(--green)}
+.pill.off{color:var(--warn);border-color:var(--warn)}
+.item .row button{padding:6px 12px;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  <header><img src="/logo.png" alt="The Dive on 495"><h1>Daily ads</h1><a href="/kj">← Queue</a></header>
+
+  <section class="card" id="login">
+    <h2>Host PIN</h2>
+    <form id="pinForm" novalidate>
+      <input id="pin" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="Host PIN">
+      <p class="err" id="pinErr" role="alert"></p>
+      <button class="go" type="submit">Open ads</button>
+    </form>
+  </section>
+
+  <div id="panel" hidden style="display:flex;flex-direction:column;gap:16px">
+    <section class="card">
+      <h2 id="formTitle">New ad</h2>
+      <div><label for="title">Headline</label><input id="title" maxlength="60" placeholder="$3 Tequila Shots till 11"></div>
+      <div><label for="text">Details (optional)</label><textarea id="text" maxlength="240" placeholder="Tonight only. Ask your bartender."></textarea></div>
+      <div class="row">
+        <button type="button" id="picBtn">📷 Add a picture</button>
+        <button type="button" id="picDel" class="danger" hidden>Remove picture</button>
+        <input type="file" id="picIn" accept="image/*" hidden>
+      </div>
+      <div>
+        <label>Which days? <span style="font-size:12px">(none picked = every day)</span></label>
+        <div class="row days" id="days"></div>
+      </div>
+      <div class="two">
+        <div><label for="start">Start date (optional)</label><input type="date" id="start"></div>
+        <div><label for="end">End date (optional)</label><input type="date" id="end"></div>
+      </div>
+      <p class="hint">A "day" runs 6 AM to 6 AM, so a Thursday ad stays up past midnight.</p>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:15px;margin:0"><input type="checkbox" id="on" checked style="width:auto"> Turned on</label>
+      <div><label>Preview</label><div class="promo" id="preview"></div></div>
+      <p class="err" id="err" role="alert"></p>
+      <button class="go" id="save" type="button">Save ad</button>
+      <button type="button" id="cancelEdit" hidden>Cancel editing</button>
+      <p class="ok" id="okMsg" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Your ads</h2>
+      <p class="hint" id="todayLine"></p>
+      <div class="list" id="list"></div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+let pin = "", items = [], editing = null, img = "", picked = new Set();
+try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
+
+async function api(path, body){
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST", cache: "no-store", headers: { "Content-Type": "application/json", "x-kj-pin": pin }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if(r.status === 401){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = "Wrong PIN."; throw new Error("pin"); }
+  if(!r.ok) throw new Error(j.error || "Something went wrong. Try again.");
+  return j;
+}
+
+DAYS.forEach((d, i) => {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = d; b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", () => { picked.has(i) ? picked.delete(i) : picked.add(i); paintDays(); });
+  $("days").appendChild(b);
+});
+function paintDays(){ [...$("days").children].forEach((b, i) => b.setAttribute("aria-pressed", picked.has(i))); }
+
+function banner(el, p){
+  el.innerHTML = "";
+  if(p.img){ const im = document.createElement("img"); im.src = p.img; im.alt = ""; el.appendChild(im); }
+  const tx = document.createElement("div"); tx.className = "tx";
+  const b = document.createElement("b"); b.textContent = p.title || "Your headline";
+  tx.appendChild(b);
+  if(p.text){ const s = document.createElement("span"); s.textContent = p.text; tx.appendChild(s); }
+  el.appendChild(tx);
+}
+function paintPreview(){ banner($("preview"), { title: $("title").value.trim(), text: $("text").value.trim(), img }); $("picDel").hidden = !img; $("picBtn").textContent = img ? "📷 Change picture" : "📷 Add a picture"; }
+$("title").addEventListener("input", paintPreview);
+$("text").addEventListener("input", paintPreview);
+
+// shrink the picture on the phone so it loads fast for customers
+$("picBtn").addEventListener("click", () => { $("picIn").value = ""; $("picIn").click(); });
+$("picDel").addEventListener("click", () => { img = ""; paintPreview(); });
+$("picIn").addEventListener("change", async () => {
+  const f = $("picIn").files && $("picIn").files[0]; if(!f) return;
+  try{
+    const bmp = await createImageBitmap(f);
+    const max = 720, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    img = c.toDataURL("image/jpeg", 0.8); paintPreview();
+  }catch(e){ $("err").textContent = "That picture didn't work. Try another."; }
+});
+
+function resetForm(){
+  editing = null; img = ""; picked = new Set();
+  $("title").value = ""; $("text").value = ""; $("start").value = ""; $("end").value = ""; $("on").checked = true;
+  $("formTitle").textContent = "New ad"; $("save").textContent = "Save ad"; $("cancelEdit").hidden = true; $("err").textContent = "";
+  paintDays(); paintPreview();
+}
+$("cancelEdit").addEventListener("click", resetForm);
+
+$("save").addEventListener("click", async () => {
+  $("err").textContent = ""; $("okMsg").textContent = "";
+  const body = { id: editing, title: $("title").value.trim(), text: $("text").value.trim(), img, days: [...picked], start: $("start").value, end: $("end").value, on: $("on").checked };
+  if(!body.title){ $("err").textContent = "Add a headline."; $("title").focus(); return; }
+  if(body.start && body.end && body.end < body.start){ $("err").textContent = "End date is before the start date."; return; }
+  $("save").disabled = true;
+  try{ await api("/api/kj/promos", body); const was = editing; resetForm(); $("okMsg").textContent = was ? "Ad updated." : "Ad saved. Customers see it when it's scheduled."; load(); }
+  catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
+  $("save").disabled = false;
+});
+
+function when(p){
+  const d = p.days && p.days.length ? (p.days.length === 7 ? "Every day" : p.days.map(i => DAYS[i]).join(", ")) : "Every day";
+  const fmt = s => new Date(s + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric" });
+  const r = p.start && p.end ? fmt(p.start) + " – " + fmt(p.end) : p.start ? "from " + fmt(p.start) : p.end ? "until " + fmt(p.end) : "";
+  return d + (r ? " · " + r : "");
+}
+function paintList(today){
+  const l = $("list"); l.innerHTML = "";
+  if(today) $("todayLine").textContent = "Showing to customers right now: " + items.filter(p => p.live).length + " of " + items.length + ".";
+  if(!items.length){ const p = document.createElement("p"); p.className = "hint"; p.textContent = "No ads yet. Make your first one above."; l.appendChild(p); return; }
+  items.forEach(p => {
+    const it = document.createElement("div"); it.className = "item";
+    const bn = document.createElement("div"); bn.className = "promo"; banner(bn, p);
+    const meta = document.createElement("div"); meta.className = "meta";
+    const pill = document.createElement("span"); pill.className = "pill " + (p.live ? "live" : !p.on ? "off" : "");
+    pill.textContent = p.live ? "Showing now" : !p.on ? "Turned off" : "Not today";
+    meta.append(pill, document.createTextNode(when(p)));
+    const row = document.createElement("div"); row.className = "row";
+    const ed = document.createElement("button"); ed.type = "button"; ed.textContent = "Edit";
+    ed.addEventListener("click", () => {
+      editing = p.id; img = p.img || ""; picked = new Set(p.days || []);
+      $("title").value = p.title; $("text").value = p.text || ""; $("start").value = p.start || ""; $("end").value = p.end || ""; $("on").checked = p.on;
+      $("formTitle").textContent = "Edit ad"; $("save").textContent = "Save changes"; $("cancelEdit").hidden = false;
+      paintDays(); paintPreview(); window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    const tg = document.createElement("button"); tg.type = "button"; tg.textContent = p.on ? "Turn off" : "Turn on";
+    tg.addEventListener("click", async () => { try{ await api("/api/kj/promos", { ...p, on: !p.on }); load(); }catch(e){} });
+    const del = document.createElement("button"); del.type = "button"; del.className = "danger"; del.textContent = "Delete";
+    del.addEventListener("click", async () => {
+      if(del.dataset.sure !== "1"){ del.dataset.sure = "1"; del.textContent = "Tap again to delete"; setTimeout(() => { del.dataset.sure = ""; del.textContent = "Delete"; }, 4000); return; }
+      try{ await api("/api/kj/promos/remove", { id: p.id }); if(editing === p.id) resetForm(); load(); }catch(e){}
+    });
+    row.append(ed, tg, del);
+    it.append(bn, meta, row); l.appendChild(it);
+  });
+}
+async function load(){ const j = await api("/api/kj/promos"); items = j.items; paintList(j.today); }
+
+$("pinForm").addEventListener("submit", async e => {
+  e.preventDefault(); pin = $("pin").value.trim(); if(!pin) return;
+  try{ await load(); try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("login").hidden = true; $("panel").hidden = false; $("pinErr").textContent = ""; }catch(e){}
+});
+resetForm();
+if(pin){ load().then(() => { $("login").hidden = true; $("panel").hidden = false; }).catch(() => {}); }
+</script>
+</body>
+</html>

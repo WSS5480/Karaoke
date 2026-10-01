@@ -91,6 +91,13 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .net svg{width:56px;height:56px;border-radius:16px;padding:12px;box-sizing:border-box}
 .net.fb svg{background:#1877f2}.net.ig svg{background:linear-gradient(45deg,#feda75,#fa7e1e 30%,#d62976 60%,#962fbf 85%,#4f5bd5)}.net.tt svg{background:#000;border:1px solid #333}
 .net:disabled{opacity:.4;cursor:default}
+.promo{position:relative;display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#183a1d,#0f1a10);border:2px solid var(--green);border-radius:16px;padding:12px;min-height:72px;box-shadow:0 0 24px rgba(57,181,74,.25)}
+.promo img{width:76px;height:76px;object-fit:cover;border-radius:10px;flex:none}
+.promo .tx{min-width:0}
+.promo b{display:block;font-family:var(--slab);font-weight:800;font-size:19px;line-height:1.15;overflow-wrap:anywhere}
+.promo .tx span{display:block;font-size:14px;color:#cfe0cf;overflow-wrap:anywhere;white-space:pre-line}
+.promo .dots{position:absolute;right:10px;bottom:6px;display:flex;gap:4px}
+.promo .dots i{width:6px;height:6px;border-radius:50%;background:#2b352b}.promo .dots i.on{background:var(--green-hi)}
 .linkbtn{background:none;border:0;color:var(--green-hi);font:inherit;font-size:15px;text-decoration:underline;cursor:pointer;padding:6px;align-self:center}
 #code{letter-spacing:.4em;text-align:center;font-size:24px}
 .post3{display:flex;flex-direction:column;gap:8px}
@@ -138,6 +145,8 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
   </div>
   <img class="logo" src="/logo.png" alt="The Dive on 495, Bar + Stage, McAllen, TX">
   <h1>Sign up to sing<small>Anótate para cantar</small></h1>
+
+  <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
 
   <section class="card" id="authCard" hidden>
     <div id="stepPhone" style="display:flex;flex-direction:column;gap:14px">
@@ -726,6 +735,27 @@ async function loadMine(force){
 }
 $("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
 $("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
+
+/* ---------- daily ads from the host ---------- */
+let promos = [], promoAt = 0, promoSig = "";
+function showPromo(){
+  $("promo").hidden = !promos.length; if(!promos.length) return;
+  const p = promos[promoAt % promos.length];
+  $("promoTitle").textContent = p.title; $("promoText").textContent = p.text || ""; $("promoText").hidden = !p.text;
+  $("promoImg").hidden = !p.img; if(p.img) $("promoImg").src = p.img;
+  $("promoDots").innerHTML = promos.length > 1 ? promos.map((x, i) => i === promoAt % promos.length ? "<i class=on></i>" : "<i></i>").join("") : "";
+}
+async function loadPromos(){
+  try{
+    const j = await (await fetch("/api/promos", { cache: "no-store" })).json();
+    const sig = JSON.stringify(j.items.map(x => [x.id, x.title, x.text, (x.img || "").length]));
+    if(sig === promoSig) return; promoSig = sig; promos = j.items; promoAt = 0; showPromo();
+  }catch(e){}
+}
+setInterval(() => { if(promos.length > 1 && document.visibilityState === "visible"){ promoAt++; showPromo(); } }, 6000);
+setInterval(loadPromos, 120000);
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") loadPromos(); });
+loadPromos();
 
 /* ---------- phone sign-in ---------- */
 let authOn = false, me = null, authPhone = "";
