@@ -11,7 +11,13 @@ const QR_TOKEN = process.env.QR_TOKEN || "dive495";
 const TW_SID = (process.env.TWILIO_ACCOUNT_SID || "").trim(), TW_TOKEN = (process.env.TWILIO_AUTH_TOKEN || "").trim();
 let TW_VERIFY = (process.env.TWILIO_VERIFY_SID || "").trim();
 if (!/^VA[0-9a-f]{32}$/i.test(TW_VERIFY)) TW_VERIFY = "";   // blank or not a real Service SID: the app finds or creates one
-let AUTH_ON = false;
+let TW_READY = false;
+// phone sign-in needs Twilio set up AND the switch on (KJ page, or PHONE_SIGNIN=off in Render)
+async function authOn() {
+  if (!TW_READY) return false;
+  const s = await db.getSetting("phone_signin");
+  return (s || process.env.PHONE_SIGNIN || "on") !== "off";
+}
 const TW_BASE = () => process.env.TWILIO_VERIFY_BASE || "https://verify.twilio.com";
 const twAuth = () => "Basic " + Buffer.from(TW_SID + ":" + TW_TOKEN).toString("base64");
 // find the "The Dive" Verify service in this Twilio account, or create it
@@ -27,7 +33,7 @@ async function setupTwilio() {
         const j = await r.json(); if (r.ok && j.sid) TW_VERIFY = j.sid; else console.error("Twilio: couldn't create Verify service:", j.message || r.status);
       }
     }
-    AUTH_ON = !!TW_VERIFY;
+    TW_READY = !!TW_VERIFY;
   } catch (e) { console.error("Twilio setup failed:", e.message); }
 }
 let SESSION_SECRET = process.env.SESSION_SECRET || "";
@@ -186,7 +192,7 @@ app.get("/api/queue", wrap(async (req, res) => {
 app.post("/api/signup", wrap(async (req, res) => {
   const d = owner(req, res);
   if ((await db.getSetting("open")) === "no") return res.status(403).json({ error: "Sign-ups are closed for tonight." });
-  if (AUTH_ON && !currentUser(req)) return res.status(401).json({ error: "signin", message: "Sign in with your phone number first." });
+  if ((await authOn()) && !currentUser(req)) return res.status(401).json({ error: "signin", message: "Sign in with your phone number first." });
   if (rateLimited(req.ip)) return res.status(429).json({ error: "Too many tries. Wait a minute and try again." });
   if ((await db.getSetting("geofence")) !== "off" && req.body.qr !== QR_TOKEN) {
     const lat = Number(req.body.lat), lng = Number(req.body.lng), acc = Math.min(Math.max(Number(req.body.acc) || 0, 0), 200);
@@ -232,11 +238,11 @@ app.get("/api/wall", wrap(async (req, res) => {
 /* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
 app.get("/api/me", wrap(async (req, res) => {
   const u = currentUser(req), c = u ? await db.customer(u) : null;
-  res.json({ auth: AUTH_ON, user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null });
+  res.json({ auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null });
 }));
 const textHits = new Map();
 app.post("/api/auth/start", wrap(async (req, res) => {
-  if (!AUTH_ON) return res.status(400).json({ error: "Sign-in isn't set up yet." });
+  if (!(await authOn())) return res.status(400).json({ error: "Phone sign-in is off right now." });
   const phone = normPhone(req.body.phone);
   if (!phone) return res.status(400).json({ error: "Enter a 10-digit phone number." });
   const t = Date.now(), k = phone + "|" + req.ip, l = (textHits.get(k) || []).filter(x => t - x < 600000);
@@ -247,7 +253,7 @@ app.post("/api/auth/start", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 app.post("/api/auth/check", wrap(async (req, res) => {
-  if (!AUTH_ON) return res.status(400).json({ error: "Sign-in isn't set up yet." });
+  if (!(await authOn())) return res.status(400).json({ error: "Phone sign-in is off right now." });
   const phone = normPhone(req.body.phone), code = String(req.body.code || "").replace(/\D/g, "");
   if (!phone || code.length < 4) return res.status(400).json({ error: "Enter the code from your text." });
   const r = await twilio("VerificationCheck", { To: phone, Code: code });
@@ -267,7 +273,7 @@ app.post("/api/auth/logout", (req, res) => { res.append("Set-Cookie", "dive_user
 /* ---------- KJ API (PIN protected) ---------- */
 app.use("/api/kj", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }));
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
+  res.json({ open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
 }));
 app.get("/api/kj/history", wrap(async (req, res) => {
   res.json({ items: (await db.history({ sort: req.query.sort === "top" ? "top" : "new", q: clean(req.query.q, 40), limit: 500 })).map(histRow) });
@@ -299,6 +305,9 @@ app.post("/api/kj-open", (req, res, next) => pinOk(req) ? next() : res.status(40
 }));
 app.post("/api/kj-geofence", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
   await db.setSetting("geofence", req.body.on ? "on" : "off"); res.json({ ok: true });
+}));
+app.post("/api/kj-phone", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
+  await db.setSetting("phone_signin", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
 app.post("/api/kj-newnight", (req, res, next) => pinOk(req) ? next() : res.status(401).json({ error: "Wrong PIN." }), wrap(async (req, res) => {
   await db.newNight(); res.json({ ok: true });
@@ -332,5 +341,5 @@ app.get("/healthz", (req, res) => res.send("ok"));
 db.init().then(async () => {
   if (!SESSION_SECRET) { SESSION_SECRET = await db.getSetting("session_secret"); if (!SESSION_SECRET) { SESSION_SECRET = crypto.randomBytes(32).toString("hex"); await db.setSetting("session_secret", SESSION_SECRET); } }
   await setupTwilio();
-  console.log(AUTH_ON ? "Phone sign-in: on (Verify service " + TW_VERIFY.slice(0, 6) + "…)" : "Phone sign-in: off (set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN)");
+  console.log(TW_READY ? "Twilio ready. Phone sign-in switch: " + ((await db.getSetting("phone_signin")) || process.env.PHONE_SIGNIN || "on") : "Phone sign-in: off (set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN)");
 }).then(() => app.listen(PORT, () => console.log(`Dive sign-up running on port ${PORT}`)));

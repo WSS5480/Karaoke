@@ -84,6 +84,7 @@ a{color:var(--green-hi)}
       <div class="row">
         <button id="toggleOpen"></button>
         <button id="toggleGeo"></button>
+        <button id="togglePhone" hidden></button>
         <a href="/history">Customer history</a>
         <a href="/wall" target="_blank" rel="noopener">Wall of fame</a>
         <a href="/tv" target="_blank" rel="noopener">TV screen to cast</a>
@@ -159,6 +160,8 @@ function render(){
   $("openPill").className = "pill " + (state.open ? "on" : "off");
   $("toggleOpen").textContent = state.open ? "Close sign-ups" : "Open sign-ups";
   $("toggleGeo").textContent = state.geofence ? "Location check: on" : "Location check: off";
+  $("togglePhone").hidden = !state.twilioReady;
+  $("togglePhone").textContent = state.phoneSignin ? "Phone sign-in: on" : "Phone sign-in: off";
 }
 function start(){ $("login").hidden = true; $("panel").hidden = false; load(); clearInterval(timer); timer = setInterval(load, 4000); }
 
@@ -173,6 +176,7 @@ $("pin").addEventListener("input", () => $("pinErr").textContent = "");
 $("nextBtn").addEventListener("click", () => act("/api/kj/next"));
 $("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !state.open }));
 $("toggleGeo").addEventListener("click", () => act("/api/kj-geofence", { on: !state.geofence }));
+$("togglePhone").addEventListener("click", () => act("/api/kj-phone", { on: !state.phoneSignin }));
 $("newNight").addEventListener("click", () => $("nnConfirm").hidden = false);
 $("nnNo").addEventListener("click", () => $("nnConfirm").hidden = true);
 $("nnYes").addEventListener("click", () => { $("nnConfirm").hidden = true; act("/api/kj-newnight"); });
