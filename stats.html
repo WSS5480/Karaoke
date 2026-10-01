@@ -36,6 +36,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .chart{position:relative;height:190px;display:flex;align-items:flex-end;gap:3px;padding:8px 0 22px;border-bottom:1px solid var(--line);background:repeating-linear-gradient(to top,var(--grid) 0 1px,transparent 1px 42px);overflow-x:auto}
 .bar{flex:1 0 10px;min-width:10px;background:var(--green);border-radius:4px 4px 0 0;position:relative;cursor:default}
 .bar:hover,.bar:focus{background:var(--green-hi);outline:none}
+.bar:first-child .lbl{left:0;transform:none}
 .bar .lbl{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--ink-2);white-space:nowrap}
 .tip{position:fixed;z-index:9;pointer-events:none;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;color:var(--ink)}
 .empty{color:var(--ink-2);padding:10px 0}
@@ -142,10 +143,10 @@ async function load(){
   $("tiles").innerHTML = "";
   [[T.songs, "songs sung"], [T.singers, "singers"], [T.repeat, "came back 2+ nights"], [T.nights, "karaoke nights"], [T.perNight, "songs per night"], [T.avgRating == null ? "–" : "★ " + T.avgRating, "average self-rating"], [T.onWall, "on the Wall of Fame"]]
     .forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("tiles").appendChild(t); });
-  bars($("nights"), d.nights.map(x => ({ v: x.count, l: fmtNight(x.night), tip: fmtNight(x.night) + ": " + x.count + " songs" })), Math.max(1, Math.ceil(d.nights.length / 6)));
+  bars($("nights"), d.nights.map(x => ({ v: x.count, l: fmtNight(x.night), tip: fmtNight(x.night) + ": " + x.count + (x.count === 1 ? " song" : " songs") })), Math.max(1, Math.ceil(d.nights.length / 6)));
   const order = [...Array(24).keys()].map(i => (i + 12) % 24);
-  bars($("hours"), order.map(h => ({ v: d.hours[h], l: hourLbl(h), tip: hourLbl(h) + "m: " + d.hours[h] + " songs" })), 3);
-  rank($("topSingers"), d.topSingers, x => x.name, x => x.nights + (x.nights === 1 ? " night" : " nights") + (x.avg ? " · ★ " + x.avg : ""), x => x.songs + " songs", x => x.songs);
+  bars($("hours"), order.map(h => ({ v: d.hours[h], l: hourLbl(h), tip: hourLbl(h) + "m: " + d.hours[h] + (d.hours[h] === 1 ? " song" : " songs") })), 3);
+  rank($("topSingers"), d.topSingers, x => x.name, x => x.nights + (x.nights === 1 ? " night" : " nights") + (x.avg ? " · ★ " + x.avg : ""), x => x.songs + (x.songs === 1 ? " song" : " songs"), x => x.songs);
   rank($("topRated"), d.topRated, x => x.name, x => x.songs + " songs", x => starsText(x.avg), x => x.avg);
   rank($("topSongs"), d.topSongs, x => x.song, x => x.artist, x => x.count + "×", x => x.count);
   rank($("topArtists"), d.topArtists, x => x.artist, () => "", x => x.count + "×", x => x.count);

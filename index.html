@@ -86,6 +86,18 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .seg button[aria-pressed="true"]{background:var(--green);color:#041206;border-color:var(--green)}
 .who{display:flex;justify-content:center;gap:10px;align-items:center;font-size:14px;color:var(--ink-2);flex-wrap:wrap}
 .who button{background:none;border:0;color:var(--green-hi);font:inherit;text-decoration:underline;cursor:pointer;padding:4px}
+.nets{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.net{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;color:var(--ink);font:inherit;font-size:13px;cursor:pointer;padding:4px 0}
+.net svg{width:56px;height:56px;border-radius:16px;padding:12px;box-sizing:border-box}
+.net.fb svg{background:#1877f2}.net.ig svg{background:linear-gradient(45deg,#feda75,#fa7e1e 30%,#d62976 60%,#962fbf 85%,#4f5bd5)}.net.tt svg{background:#000;border:1px solid #333}
+.net:disabled{opacity:.4;cursor:default}
+.promo{position:relative;display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#183a1d,#0f1a10);border:2px solid var(--green);border-radius:16px;padding:12px;min-height:72px;box-shadow:0 0 24px rgba(57,181,74,.25)}
+.promo img{width:76px;height:76px;object-fit:cover;border-radius:10px;flex:none}
+.promo .tx{min-width:0}
+.promo b{display:block;font-family:var(--slab);font-weight:800;font-size:19px;line-height:1.15;overflow-wrap:anywhere}
+.promo .tx span{display:block;font-size:14px;color:#cfe0cf;overflow-wrap:anywhere;white-space:pre-line}
+.promo .dots{position:absolute;right:10px;bottom:6px;display:flex;gap:4px}
+.promo .dots i{width:6px;height:6px;border-radius:50%;background:#2b352b}.promo .dots i.on{background:var(--green-hi)}
 .linkbtn{background:none;border:0;color:var(--green-hi);font:inherit;font-size:15px;text-decoration:underline;cursor:pointer;padding:6px;align-self:center}
 #code{letter-spacing:.4em;text-align:center;font-size:24px}
 .post3{display:flex;flex-direction:column;gap:8px}
@@ -133,6 +145,8 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
   </div>
   <img class="logo" src="/logo.png" alt="The Dive on 495, Bar + Stage, McAllen, TX">
   <h1>Sign up to sing<small>Anótate para cantar</small></h1>
+
+  <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
 
   <section class="card" id="authCard" hidden>
     <div id="stepPhone" style="display:flex;flex-direction:column;gap:14px">
@@ -214,9 +228,14 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
       <video id="postVidPreview" muted loop playsinline hidden></video>
       <div class="postside">
         <div class="song" id="postSong"></div>
-        <button class="go" id="postBtn" type="button" disabled>Getting it ready…</button>
+        <button class="go" id="postBtn" type="button" disabled hidden>Getting it ready…</button>
+        <div class="nets" role="group" aria-label="Post to">
+          <button class="net fb" data-net="Facebook" type="button" disabled aria-label="Post to Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M13.5 21v-7.5h2.6l.4-3h-3V8.6c0-.9.3-1.5 1.5-1.5h1.6V4.4c-.3 0-1.2-.1-2.3-.1-2.3 0-3.8 1.4-3.8 3.9v2.3H7.9v3h2.6V21z"/></svg><span>Facebook</span></button>
+          <button class="net ig" data-net="Instagram" type="button" disabled aria-label="Post to Instagram"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="3.6" fill="none" stroke="#fff" stroke-width="2"/><circle cx="16.8" cy="7.2" r="1.2" fill="#fff"/></svg><span>Instagram</span></button>
+          <button class="net tt" data-net="TikTok" type="button" disabled aria-label="Post to TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M16.6 3c.3 2.2 1.6 3.6 3.9 3.8v2.6c-1.4.1-2.6-.3-3.9-1.1v5.6c0 3.5-2.5 5.6-5.4 5.6-3 0-5.3-2.3-5.1-5.4.2-2.8 2.6-4.8 5.6-4.5v2.7c-1.4-.3-2.9.4-3 1.9-.1 1.4.9 2.5 2.4 2.5 1.6 0 2.6-1 2.6-2.8V3z"/></svg><span>TikTok</span></button>
+        </div>
+        <p class="hint" id="netStatus" style="color:var(--ink-2);margin:0">Getting it ready…</p>
         <label class="chk" for="showStars" style="justify-content:flex-start"><input type="checkbox" id="showStars" checked> Show my stars</label>
-        <p class="hint" style="color:var(--ink-2);margin:0">Your phone's share menu opens. Pick Instagram, TikTok or Facebook.</p>
         <button class="linkbtn" id="ownPhoto" type="button" style="align-self:flex-start;padding-left:0">📷 Use my own photo</button>
         <button class="linkbtn" id="divePhoto" type="button" style="align-self:flex-start;padding-left:0" hidden>Use The Dive picture</button>
         <input type="file" id="photoIn" accept="image/*" hidden>
@@ -534,6 +553,31 @@ $("postBtn").addEventListener("click", () => {
     savePic(postPic); $("shareMsg").textContent = "Picture saved. Open Instagram, TikTok or Facebook and pick it from your photos. Caption copied.";
   }
 });
+// icons: Facebook opens straight to a post when it can; Instagram/TikTok open the share menu with the picture ready
+const netBtns = [...document.querySelectorAll(".net")];
+function syncNets(){ const b = $("postBtn"); netBtns.forEach(n => n.disabled = b.disabled); $("netStatus").textContent = b.disabled ? b.textContent : "Tap where you want to post it."; }
+new MutationObserver(syncNets).observe($("postBtn"), { attributes: true, childList: true, characterData: true, subtree: true }); syncNets();
+function sharePic(net){
+  if(navigator.canShare && navigator.canShare({ files: [postPic.file] })){
+    $("shareMsg").textContent = "Pick " + net + " on the next screen.";
+    navigator.share({ files: [postPic.file] })
+      .then(() => { $("shareMsg").textContent = "✓ Sent to " + net + "! Caption is copied, paste it in. Tap another icon to post there too."; })
+      .catch(e => { if(e.name === "AbortError") $("shareMsg").textContent = "Not posted. Tap an icon to try again."; else { savePic(postPic); $("shareMsg").textContent = "Saved to your phone. Open " + net + " and pick it from your photos."; } });
+  } else { savePic(postPic); $("shareMsg").textContent = "Saved to your phone. Open " + net + " and pick it from your photos. Caption copied."; }
+}
+netBtns.forEach(btn => btn.addEventListener("click", () => {
+  if(!postPic || !postItem) return;
+  const net = btn.dataset.net;
+  if(navigator.clipboard) navigator.clipboard.writeText(caption(postItem)).catch(() => {});
+  // Facebook with The Dive picture: open Facebook's post box with the song card, they just tap Post
+  if(net === "Facebook" && postMode === "dive" && postItem.public && postItem.id && ($("showStars").checked || !postItem.rating)){
+    const u = location.origin + "/s/" + postItem.id;
+    window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(u), "_blank");
+    $("shareMsg").textContent = "✓ Facebook opened. Tap Post to finish.";
+    return;
+  }
+  sharePic(net);
+}));
 // save to Photos: on phones the share menu has "Save Image", which puts it in Photos for TikTok
 $("dl").addEventListener("click", () => {
   if(!postPic) return;
@@ -692,6 +736,27 @@ async function loadMine(force){
 }
 $("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
 $("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
+
+/* ---------- daily ads from the host ---------- */
+let promos = [], promoAt = 0, promoSig = "";
+function showPromo(){
+  $("promo").hidden = !promos.length; if(!promos.length) return;
+  const p = promos[promoAt % promos.length];
+  $("promoTitle").textContent = p.title; $("promoText").textContent = p.text || ""; $("promoText").hidden = !p.text;
+  $("promoImg").hidden = !p.img; if(p.img) $("promoImg").src = p.img;
+  $("promoDots").innerHTML = promos.length > 1 ? promos.map((x, i) => i === promoAt % promos.length ? "<i class=on></i>" : "<i></i>").join("") : "";
+}
+async function loadPromos(){
+  try{
+    const j = await (await fetch("/api/promos", { cache: "no-store" })).json();
+    const sig = JSON.stringify(j.items.map(x => [x.id, x.title, x.text, (x.img || "").length]));
+    if(sig === promoSig) return; promoSig = sig; promos = j.items; promoAt = 0; showPromo();
+  }catch(e){}
+}
+setInterval(() => { if(promos.length > 1 && document.visibilityState === "visible"){ promoAt++; showPromo(); } }, 6000);
+setInterval(loadPromos, 120000);
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") loadPromos(); });
+loadPromos();
 
 /* ---------- phone sign-in ---------- */
 let authOn = false, me = null, authPhone = "";

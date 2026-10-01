@@ -44,6 +44,7 @@ function metersAway(lat, lng) {
 }
 const app = express();
 app.set("trust proxy", true);
+app.use("/api/kj/promos", express.json({ limit: "1mb" })); // ad pictures
 app.use(express.json({ limit: "20kb" }));
 
 /* ---------- storage: Postgres on Render, memory when run locally ---------- */
@@ -315,6 +316,37 @@ async function kjAuth(req, res, next) {
   } catch (e) { console.error(e); res.status(500).json({ error: "Something went wrong. Try again." }); }
 }
 app.use("/api/kj", kjAuth);
+/* ---------- daily ads / promos ---------- */
+async function getPromos() { try { return JSON.parse((await db.getSetting("promos")) || "[]"); } catch (e) { return []; } }
+// the bar's "day" runs 6 AM to 6 AM, McAllen time
+function barDay() {
+  const t = new Date(Date.now() - 6 * 3600 * 1000);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).formatToParts(t).map(x => [x.type, x.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, dow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday) };
+}
+const promoLive = (p, d) => p.on && (!p.days || !p.days.length || p.days.includes(d.dow)) && (!p.start || p.start <= d.date) && (!p.end || p.end >= d.date);
+app.get("/api/promos", wrap(async (req, res) => {
+  const d = barDay();
+  res.json({ items: (await getPromos()).filter(p => promoLive(p, d)).map(({ id, title, text, img }) => ({ id, title, text, img })) });
+}));
+app.get("/api/kj/promos", wrap(async (req, res) => { const d = barDay(); res.json({ items: (await getPromos()).map(p => ({ ...p, live: promoLive(p, d) })), today: d }); }));
+app.post("/api/kj/promos", wrap(async (req, res) => {
+  const b = req.body || {}, clean = v => String(v || "").trim();
+  const title = clean(b.title).slice(0, 60), text = clean(b.text).slice(0, 240);
+  if (!title) return res.status(400).json({ error: "Add a headline." });
+  let img = clean(b.img); if (img && (!/^data:image\/(jpeg|png|webp);base64,/.test(img) || img.length > 700000)) return res.status(400).json({ error: "That picture didn't work. Try another." });
+  const day = v => /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : "";
+  const days = Array.isArray(b.days) ? [...new Set(b.days.map(Number).filter(n => n >= 0 && n <= 6))].sort() : [];
+  const list = await getPromos();
+  const item = { id: b.id && list.some(p => p.id === b.id) ? b.id : crypto.randomBytes(6).toString("hex"), title, text, img, days, start: day(b.start), end: day(b.end), on: b.on !== false };
+  const i = list.findIndex(p => p.id === item.id);
+  if (i >= 0) list[i] = item; else { if (list.length >= 30) return res.status(400).json({ error: "You have 30 ads. Delete an old one first." }); list.unshift(item); }
+  await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true, item });
+}));
+app.post("/api/kj/promos/remove", wrap(async (req, res) => {
+  const list = (await getPromos()).filter(p => p.id !== String((req.body || {}).id));
+  await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true });
+}));
 app.get("/api/kj/state", wrap(async (req, res) => {
   res.json({ me: req.kj, open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
 }));
@@ -449,7 +481,7 @@ img{width:160px;filter:drop-shadow(0 0 20px rgba(57,181,74,.55))}h1{font-family:
 }));
 app.get("/api/url", (req, res) => res.json({ url: siteUrl(req) + "/" }));
 
-const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/stats": "stats.html", "/logo.png": "logo.png", "/songs.json": "songs.json", "/manifest.json": "manifest.json", "/kj-manifest.json": "kj-manifest.json", "/sw.js": "sw.js", "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png", "/icon-maskable.png": "icon-maskable.png", "/apple-touch-icon.png": "apple-touch-icon.png", "/kj-icon-192.png": "kj-icon-192.png", "/kj-icon-512.png": "kj-icon-512.png", "/kj-apple-touch-icon.png": "kj-apple-touch-icon.png" };
+const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/stats": "stats.html", "/ads": "ads.html", "/logo.png": "logo.png", "/songs.json": "songs.json", "/manifest.json": "manifest.json", "/kj-manifest.json": "kj-manifest.json", "/sw.js": "sw.js", "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png", "/icon-maskable.png": "icon-maskable.png", "/apple-touch-icon.png": "apple-touch-icon.png", "/kj-icon-192.png": "kj-icon-192.png", "/kj-icon-512.png": "kj-icon-512.png", "/kj-apple-touch-icon.png": "kj-apple-touch-icon.png" };
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(__dirname, file))));
 app.get("/healthz", (req, res) => res.send("ok"));
 
