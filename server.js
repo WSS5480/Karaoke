@@ -209,7 +209,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
   const geofence = (await db.getSetting("geofence")) !== "off", ps = await pauseState();
-  res.json({ open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: list.map(publicRow), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
+  res.json({ multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: list.map(publicRow), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
     last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null });
 }));
 
@@ -231,9 +231,26 @@ app.post("/api/signup", wrap(async (req, res) => {
   if (!name) return res.status(400).json({ error: "Enter your name or stage name." });
   if (!profile) await setProfile(dev, { name, customer: uid || null });
   if (!song) return res.status(400).json({ error: "Enter the song you want to sing." });
-  if (await db.byDevice(d)) return res.status(409).json({ error: "You're already on the list. Cancel your song to pick a different one." });
+  // one song in line per person unless the host turned on multiple sign-ups
+  const multi = (await db.getSetting("multi")) === "on";
+  if (!multi && await db.byDevice(d)) return res.status(409).json({ error: "already", message: "You're already on the list. Cancel your song to pick a different one." });
+  if (multi && (await db.active()).some(r => r.device === d && r.song.toLowerCase() === song.toLowerCase())) return res.status(409).json({ error: "already", message: "That song is already on the list for you." });
   const row = await db.add({ name, song, artist, device: d });
   res.json({ ok: true, id: row.id });
+}));
+
+/* ---------- favorites + practice list (per person, saved on the server) ---------- */
+async function getLists(o) { try { const v = JSON.parse((await db.getSetting("lists:" + o)) || "{}"); return { fav: v.fav || [], practice: v.practice || [] }; } catch (e) { return { fav: [], practice: [] }; } }
+app.get("/api/lists", wrap(async (req, res) => res.json(await getLists(owner(req, res)))));
+app.post("/api/lists", wrap(async (req, res) => {
+  const o = owner(req, res), b = req.body || {}, list = b.list === "practice" ? "practice" : b.list === "fav" ? "fav" : null;
+  if (!list) return res.status(400).json({ error: "Pick a list." });
+  const song = clean(b.song, 80), artist = clean(b.artist, 60);
+  if (!song) return res.status(400).json({ error: "Enter a song." });
+  const L = await getLists(o), key = x => (x.song + "|" + (x.artist || "")).toLowerCase(), k = key({ song, artist });
+  L[list] = L[list].filter(x => key(x) !== k);
+  if (b.op !== "remove") { if (L[list].length >= 200) return res.status(400).json({ error: "That list is full (200 songs). Remove one first." }); L[list].unshift({ song, artist, at: new Date().toISOString() }); }
+  await db.setSetting("lists:" + o, JSON.stringify(L)); res.json(L);
 }));
 
 app.post("/api/cancel", wrap(async (req, res) => {
@@ -373,7 +390,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
   await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true });
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ me: req.kj, open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(kjRow), done: (await db.done(50)).map(kjRow) });
+  res.json({ me: req.kj, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(kjRow), done: (await db.done(50)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.get("/api/kj/singer/:id", wrap(async (req, res) => {
@@ -487,6 +504,9 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
 }));
 app.post("/api/kj-open", kjAuth, wrap(async (req, res) => {
   await db.setSetting("open", req.body.open ? "yes" : "no"); res.json({ ok: true });
+}));
+app.post("/api/kj-multi", kjAuth, wrap(async (req, res) => {
+  await db.setSetting("multi", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
 app.post("/api/kj-geofence", kjAuth, wrap(async (req, res) => {
   await db.setSetting("geofence", req.body.on ? "on" : "off"); res.json({ ok: true });

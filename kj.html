@@ -52,6 +52,8 @@ button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9
 button:hover{border-color:var(--green)}
 button:focus-visible,input:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
 .next{background:var(--green);color:#041206;border-color:var(--green);font-family:var(--slab);font-weight:800;font-size:20px;letter-spacing:.06em;text-transform:uppercase;padding:14px 22px}
+.multi{display:flex;gap:8px;align-items:center;font-size:15px;border:1px solid var(--line);border-radius:999px;padding:8px 14px;background:var(--panel-2);cursor:pointer;width:100%}
+.multi input{width:20px;height:20px;accent-color:var(--green)}
 .danger{color:var(--warn)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 ol{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
@@ -159,6 +161,7 @@ a{color:var(--green-hi)}
       <div class="row">
         <button id="toggleOpen"></button>
         <button id="toggleGeo"></button>
+        <label class="multi" for="multiChk"><input type="checkbox" id="multiChk"> Allow more than one song per person</label>
         <button id="togglePhone" hidden></button>
         <a href="/stats">Analytics</a>
         <a href="/history">Customer history</a>
@@ -318,6 +321,7 @@ function render(){
   $("pOff").hidden = !p.paused;
   $("toggleOpen").textContent = state.open ? "Close sign-ups" : "Open sign-ups";
   $("toggleGeo").textContent = state.geofence ? "Location check: on" : "Location check: off";
+  $("multiChk").checked = !!state.multi;
   $("togglePhone").hidden = !state.twilioReady;
   $("togglePhone").textContent = state.phoneSignin ? "Phone sign-in: on" : "Phone sign-in: off";
 }
@@ -340,6 +344,7 @@ $("refreshBtn").addEventListener("click", async () => {
 });
 $("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !state.open }));
 $("toggleGeo").addEventListener("click", () => act("/api/kj-geofence", { on: !state.geofence }));
+$("multiChk").addEventListener("change", () => act("/api/kj-multi", { on: $("multiChk").checked }));
 $("togglePhone").addEventListener("click", () => act("/api/kj-phone", { on: !state.phoneSignin }));
 $("newNight").addEventListener("click", () => $("nnConfirm").hidden = false);
 $("nnNo").addEventListener("click", () => $("nnConfirm").hidden = true);

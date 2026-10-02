@@ -91,6 +91,19 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .mini button{background:none;border:0;font-size:28px;line-height:1;color:var(--line);cursor:pointer;padding:0 2px}
 .mini button.on{color:#ffc93c}
 .mrow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.tabs button{font:inherit;font-weight:600;font-size:14px;border-radius:12px;padding:9px 4px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--green);color:#041206;border-color:var(--green)}
+.tabs span{font-weight:400;opacity:.8}
+.empty2{font-size:14px;color:var(--ink-2);margin:4px 0 0}
+.prow{display:flex;gap:8px;margin:8px 0}
+.prow input{flex:1;min-width:0}
+.heart{background:none;border:0;font-size:26px;line-height:1;color:var(--ink-2);cursor:pointer;padding:0 4px}
+.heart.on{color:#ff4d6d}
+.sing{font:inherit;font-weight:800;font-size:14px;border-radius:999px;padding:8px 14px;border:0;background:var(--green);color:#041206;cursor:pointer;white-space:nowrap}
+.sing:disabled{opacity:.5}
+.mrow .acts2{display:flex;gap:8px;align-items:center;margin-left:auto}
+.x2{background:none;border:0;color:var(--ink-2);font-size:20px;cursor:pointer;padding:0 4px}
 .sm{font:inherit;font-weight:600;font-size:14px;border-radius:999px;padding:7px 14px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
 .seg{display:flex;gap:8px}
 .seg button[aria-pressed="true"]{background:var(--green);color:#041206;border-color:var(--green)}
@@ -272,13 +285,35 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
     <p id="closedMsg">Sign-ups are closed right now. Ask the KJ.</p>
   </section>
 
-  <section class="card" id="mySongs" hidden>
+  <section class="card" id="mySongs">
     <h2>My songs <span style="text-transform:none;letter-spacing:0">/ Mis canciones</span></h2>
-    <div class="seg">
-      <button class="sm" id="mTop" type="button" aria-pressed="true">Top rated</button>
-      <button class="sm" id="mNew" type="button" aria-pressed="false">Newest</button>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabAll" aria-selected="true">Ever sang <span id="cAll"></span></button>
+      <button type="button" role="tab" id="tabFav" aria-selected="false">♥ Favorites <span id="cFav"></span></button>
+      <button type="button" role="tab" id="tabPrac" aria-selected="false">Practice <span id="cPrac"></span></button>
     </div>
-    <ol class="mine-list" id="mineList"></ol>
+    <div id="paneAll">
+      <div class="seg">
+        <button class="sm" id="mTop" type="button" aria-pressed="false">Top rated</button>
+        <button class="sm" id="mNew" type="button" aria-pressed="true">Newest</button>
+      </div>
+      <ol class="mine-list" id="mineList"></ol>
+      <p class="empty2" id="allEmpty" hidden>Every song you sing shows up here with the date and time. Tap ♥ to save it to Favorites.</p>
+    </div>
+    <div id="paneFav" hidden>
+      <ol class="mine-list" id="favList"></ol>
+      <p class="empty2" id="favEmpty">No favorites yet. Tap the ♥ on any song to add it here.</p>
+    </div>
+    <div id="panePrac" hidden>
+      <div class="field">
+        <label for="pSong">Add a song to practice <span>/ Para practicar</span></label>
+        <input id="pSong" maxlength="80" autocomplete="off" placeholder="Song or artist">
+        <div class="sugg" id="pSugg" hidden></div>
+      </div>
+      <div class="prow"><input id="pArtist" maxlength="60" autocomplete="off" placeholder="Artist (optional)" aria-label="Artist"><button class="sm" id="pAdd" type="button">Add</button></div>
+      <ol class="mine-list" id="pracList"></ol>
+      <p class="empty2" id="pracEmpty">Build your list of songs to work on. When you're ready, tap Sign me up.</p>
+    </div>
     <p class="ok" id="mineMsg" role="status"></p>
   </section>
 
@@ -389,6 +424,24 @@ $("artist").addEventListener("input", () => { $("err").textContent = ""; $("arti
 $("name").addEventListener("input", () => { $("err").textContent = ""; });
 document.addEventListener("click", e => { if(!e.target.closest(".field")){ $("sugg").hidden = true; $("asugg").hidden = true; } });
 
+async function doSignup(name, song, artist, errEl){
+  try{
+    let spot = {};
+    if(geofenceOn && !qrToken){ try{ spot = await getSpot(); }catch(ge){ spot = {}; } }
+    const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, ...spot }) });
+    const j = await r.json();
+    if(!r.ok){
+      if(j.error === "far") errEl.textContent = "You need to be at The Dive to sign up. You're about " + j.miles + " miles away.";
+      else if(j.error === "signin"){ errEl.textContent = j.message; loadMe(); }
+      else if(j.error === "terms"){ termsAccepted = false; openTerms(); }
+      else if(j.error === "location") errEl.textContent = "Allow location so we can see you're at The Dive, or scan the QR code at the bar. iPhone: Settings → Privacy → Location Services → Safari → While Using.";
+      else errEl.textContent = j.message || j.error || "Couldn't add you. Try again.";
+      return false;
+    }
+    try{ localStorage.setItem("dive_name", name); }catch(e){}
+    refresh(); return true;
+  }catch(e){ errEl.textContent = "No connection. Check your signal and try again."; return false; }
+}
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("name").value.trim(), song = $("song").value.trim(), artist = $("artist").value.trim();
@@ -396,25 +449,9 @@ $("form").addEventListener("submit", async e => {
   if(!song){ $("err").textContent = "Enter the song you want to sing."; $("song").focus(); return; }
   if(!$("artistPick").hidden && !$("artistPick").value){ $("err").textContent = "Pick which artist's version you're singing."; $("artistPick").focus(); return; }
   if(!termsAccepted){ openTerms(); return; }
-  $("submit").disabled = true; $("submit").textContent = "Adding you…";
-  try{
-    let spot = {};
-    if(geofenceOn && !qrToken){
-      $("submit").textContent = "Checking you're at The Dive…";
-      try{ spot = await getSpot(); }
-      catch(ge){ spot = {}; }
-    }
-    const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, ...spot }) });
-    const j = await r.json();
-    if(!r.ok){
-      if(j.error === "far") $("err").textContent = "You need to be at The Dive to sign up. You're about " + j.miles + " miles away.";
-      else if(j.error === "signin"){ $("err").textContent = j.message; loadMe(); }
-      else if(j.error === "terms"){ termsAccepted = false; openTerms(); }
-      else if(j.error === "location") $("err").textContent = "Allow location so we can see you're at The Dive, or scan the QR code at the bar. iPhone: Settings → Privacy → Location Services → Safari → While Using.";
-      else $("err").textContent = j.error || "Couldn't add you. Try again.";
-    }
-    else { try{ localStorage.setItem("dive_name", name); }catch(e){} }
-  }catch(e){ $("err").textContent = "No connection. Check your signal and try again."; }
+  $("submit").disabled = true; $("submit").textContent = geofenceOn && !qrToken ? "Checking you're at The Dive…" : "Adding you…";
+  const ok = await doSignup(name, song, artist, $("err"));
+  if(ok){ $("song").value = ""; $("artist").value = ""; }
   $("submit").disabled = false; $("submit").textContent = "Put me on the list";
   refresh();
 });
@@ -426,13 +463,13 @@ $("cancel").addEventListener("click", async () => {
 });
 
 function render(data){
-  mine = data.mine;
+  mine = data.mine; multiOn = !!data.multi;
   geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn || !!qrToken;
   renderRate(data.last);
   const blocked = !data.open || data.paused;
   $("closedCard").hidden = !blocked || !!mine;
   $("closedMsg").textContent = !data.open ? "Sign-ups are closed right now. Ask the KJ." : data.pausedUntil ? "Sign-ups are paused. Back at " + new Date(data.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + "." : "Sign-ups are paused for a bit. Check back soon.";
-  $("formCard").hidden = !!mine || !data.open || data.paused || (authOn && (!me || !me.name));
+  $("formCard").hidden = (!!mine && !multiOn) || !data.open || data.paused || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
   if(mine){
     const ahead = mine.spot;
@@ -728,24 +765,68 @@ $("showStars").addEventListener("change", async () => {
 });
 $("postClose").addEventListener("click", () => { $("postCard").hidden = true; postItem = null; });
 
-/* ---------- my songs (this phone's history) ---------- */
-let mSort = "top", mineSig = "";
+/* ---------- my songs: ever sang (with date+time), favorites (♥), practice list ---------- */
+let mSort = "new", mineSig = "", lists = { fav: [], practice: [] }, mineItems = [], multiOn = false, tab = "All";
+const sKey = (song, artist) => (song + "|" + (artist || "")).toLowerCase();
+const isFav = (song, artist) => lists.fav.some(x => sKey(x.song, x.artist) === sKey(song, artist));
+const when = t => new Date(t).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+function showTab(t){
+  tab = t; ["All", "Fav", "Prac"].forEach(k => { $("tab" + k).setAttribute("aria-selected", k === t); $("pane" + k).hidden = k !== t; });
+  try{ localStorage.setItem("dive_tab", t); }catch(e){}
+}
+["All", "Fav", "Prac"].forEach(k => $("tab" + k).addEventListener("click", () => showTab(k)));
+async function listOp(list, op, song, artist){
+  try{
+    const r = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ list, op, song, artist }) });
+    const j = await r.json(); if(!r.ok){ $("mineMsg").textContent = j.error || "Couldn't save. Try again."; return false; }
+    lists = j; paintLists(); mineSig = ""; loadMine(true); return true;
+  }catch(e){ $("mineMsg").textContent = "No connection. Try again."; return false; }
+}
+function heartBtn(song, artist){
+  const h = document.createElement("button"); h.type = "button"; const on = isFav(song, artist);
+  h.className = "heart" + (on ? " on" : ""); h.textContent = on ? "♥" : "♡";
+  h.setAttribute("aria-label", (on ? "Remove from" : "Add to") + " favorites"); h.setAttribute("aria-pressed", on);
+  h.addEventListener("click", async () => { const ok = await listOp("fav", on ? "remove" : "add", song, artist); if(ok) $("mineMsg").textContent = on ? "Removed from Favorites." : "♥ Added to Favorites."; });
+  return h;
+}
+function singBtn(song, artist){
+  const b = document.createElement("button"); b.type = "button"; b.className = "sing"; b.textContent = "Sign me up";
+  b.addEventListener("click", () => quickSignup(song, artist, b));
+  return b;
+}
+function songRow(x, opts){
+  const li = document.createElement("li");
+  const top = document.createElement("div"); top.className = "top";
+  const b = document.createElement("b"); b.textContent = x.song; top.appendChild(b);
+  if(opts.date){ const d = document.createElement("span"); d.className = "d"; d.textContent = when(opts.date); top.appendChild(d); }
+  li.appendChild(top);
+  if(x.artist){ const a = document.createElement("span"); a.className = "a"; a.textContent = x.artist; li.appendChild(a); }
+  const row = document.createElement("div"); row.className = "mrow";
+  if(opts.left) row.appendChild(opts.left);
+  const acts = document.createElement("div"); acts.className = "acts2";
+  (opts.extra || []).forEach(e => acts.appendChild(e));
+  acts.append(heartBtn(x.song, x.artist), singBtn(x.song, x.artist));
+  if(opts.remove){ const r = document.createElement("button"); r.type = "button"; r.className = "x2"; r.textContent = "×"; r.setAttribute("aria-label", "Remove " + x.song); r.addEventListener("click", opts.remove); acts.appendChild(r); }
+  row.appendChild(acts); li.appendChild(row);
+  return li;
+}
+function paintLists(){
+  $("cFav").textContent = lists.fav.length ? "(" + lists.fav.length + ")" : ""; $("cPrac").textContent = lists.practice.length ? "(" + lists.practice.length + ")" : "";
+  const f = $("favList"); f.innerHTML = ""; $("favEmpty").hidden = !!lists.fav.length;
+  lists.fav.forEach(x => f.appendChild(songRow(x, {})));
+  const p = $("pracList"); p.innerHTML = ""; $("pracEmpty").hidden = !!lists.practice.length;
+  lists.practice.forEach(x => p.appendChild(songRow(x, { remove: () => listOp("practice", "remove", x.song, x.artist) })));
+}
+async function loadLists(){ try{ lists = await (await fetch("/api/lists", { cache: "no-store" })).json(); paintLists(); }catch(e){} }
 async function loadMine(force){
   try{
     const j = await (await fetch("/api/mine?sort=" + mSort, { cache: "no-store" })).json();
-    const sig = mSort + JSON.stringify(j.items.map(x => [x.id, x.rating]));
-    if(!force && sig === mineSig) return; mineSig = sig;
-    $("mySongs").hidden = !j.items.length;
+    const sig = mSort + JSON.stringify(j.items.map(x => [x.id, x.rating, (x.posted || []).length])) + JSON.stringify(lists.fav.map(x => sKey(x.song, x.artist)));
+    if(!force && sig === mineSig) return; mineSig = sig; mineItems = j.items;
+    $("cAll").textContent = j.items.length ? "(" + j.items.length + ")" : ""; $("allEmpty").hidden = !!j.items.length;
     $("mTop").setAttribute("aria-pressed", mSort === "top"); $("mNew").setAttribute("aria-pressed", mSort === "new");
     const ol = $("mineList"); ol.innerHTML = "";
     j.items.forEach(x => {
-      const li = document.createElement("li");
-      const top = document.createElement("div"); top.className = "top";
-      const b = document.createElement("b"); b.textContent = x.song;
-      const d = document.createElement("span"); d.className = "d"; d.textContent = new Date(x.at).toLocaleDateString([], { month: "short", day: "numeric" });
-      top.append(b, d); li.appendChild(top);
-      if(x.artist){ const a = document.createElement("span"); a.className = "a"; a.textContent = x.artist; li.appendChild(a); }
-      const row = document.createElement("div"); row.className = "mrow";
       const st = document.createElement("div"); st.className = "mini"; st.setAttribute("role", "radiogroup"); st.setAttribute("aria-label", "Rate " + x.song);
       for(let i = 1; i <= 5; i++){
         const s = document.createElement("button"); s.type = "button"; s.textContent = "★"; s.className = i <= (x.rating || 0) ? "on" : "";
@@ -762,12 +843,41 @@ async function loadMine(force){
         openPost({ id: x.id, name: x.name, song: x.song, artist: x.artist, rating: x.rating, public: x.public });
         $("postCard").scrollIntoView({ behavior: "smooth", block: "center" });
       });
-      row.append(st, sh); li.appendChild(row); ol.appendChild(li);
+      ol.appendChild(songRow(x, { date: x.at, left: st, extra: [sh] }));
     });
   }catch(e){}
 }
 $("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
 $("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
+/* practice list: pick from the song library or type any song */
+function pSuggest(){
+  const q = norm($("pSong").value), box = $("pSugg"); box.innerHTML = "";
+  if(!songs.length || q.length < 2){ box.hidden = true; return; }
+  const hits = songs.filter(x => x.t.toLowerCase().includes(q) || x.a.toLowerCase().includes(q)).slice(0, 8);
+  hits.forEach(x => sugBtn(box, x.t, x.a, async () => { box.hidden = true; $("pSong").value = ""; $("pArtist").value = ""; if(await listOp("practice", "add", x.t, x.a)) $("mineMsg").textContent = "Added to your practice list."; }));
+  box.hidden = !hits.length;
+}
+$("pSong").addEventListener("input", pSuggest);
+$("pAdd").addEventListener("click", async () => {
+  const song = $("pSong").value.trim(), artist = $("pArtist").value.trim();
+  if(!song){ $("mineMsg").textContent = "Type a song first."; $("pSong").focus(); return; }
+  $("pSugg").hidden = true;
+  if(await listOp("practice", "add", song, artist)){ $("pSong").value = ""; $("pArtist").value = ""; $("mineMsg").textContent = "Added to your practice list."; }
+});
+/* one-touch sign-up from any list: same rules as the form (location, one song in line unless the host allows more) */
+async function quickSignup(song, artist, btn){
+  const name = $("name").value.trim();
+  if(!name){ $("mineMsg").textContent = "Type your name in the sign-up form first, then tap Sign me up."; $("name").focus(); return; }
+  if(mine && !multiOn){ $("mineMsg").textContent = "You're already on the list. One song at a time."; return; }
+  if(!termsAccepted){ pendingQuick = { song, artist }; openTerms(); return; }
+  btn.disabled = true; const old = btn.textContent; btn.textContent = "Adding…";
+  const r = await doSignup(name, song, artist, $("mineMsg"));
+  btn.disabled = false; btn.textContent = old;
+  if(r) { $("mineMsg").textContent = "✓ You're on the list for " + song + "!"; window.scrollTo({ top: 0, behavior: "smooth" }); }
+}
+let pendingQuick = null;
+try{ const t = localStorage.getItem("dive_tab"); if(t === "Fav" || t === "Prac") showTab(t); }catch(e){}
+loadLists();
 
 /* ---------- daily ads from the host ---------- */
 let promos = [], promoAt = 0, promoSig = "";
@@ -826,7 +936,8 @@ $("termsGo").addEventListener("click", async () => {
     const r = await fetch("/api/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ v: termsV, agree: true }) });
     if(!r.ok) throw new Error();
     termsAccepted = true; $("termsHint").hidden = false; closeTerms();
-    $("form").requestSubmit ? $("form").requestSubmit() : $("submit").click();
+    if(pendingQuick){ const q = pendingQuick; pendingQuick = null; const b = document.createElement("button"); quickSignup(q.song, q.artist, b); }
+    else $("form").requestSubmit ? $("form").requestSubmit() : $("submit").click();
   }catch(e){ $("termsErr").textContent = "Couldn't save. Check your signal and try again."; $("termsGo").disabled = false; }
   $("termsGo").textContent = "Agree & sign up";
 });
@@ -835,6 +946,7 @@ async function loadMe(){
     const j = await (await fetch("/api/me", { cache: "no-store" })).json();
     authOn = j.auth; me = j.user; paintWho();
     termsV = j.terms || ""; termsAccepted = !!j.termsOk; $("termsHint").hidden = !termsAccepted;
+    loadLists();
     if(j.profileName){ $("name").value = j.profileName; $("name").readOnly = true; $("nameLock").hidden = false; $("nameLock").textContent = "This phone signs up as " + j.profileName + ". One person per phone."; }
     if(authOn && !me) showAuth("stepPhone");
     else if(me && !me.name) showAuth("stepName");
