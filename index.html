@@ -91,7 +91,8 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .mini button{background:none;border:0;font-size:28px;line-height:1;color:var(--line);cursor:pointer;padding:0 2px}
 .mini button.on{color:#ffc93c}
 .mrow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.why{font-size:12px;color:var(--green-hi);font-weight:600}
 .tabs button{font:inherit;font-weight:600;font-size:14px;border-radius:12px;padding:9px 4px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
 .tabs button[aria-selected="true"]{background:var(--green);color:#041206;border-color:var(--green)}
 .tabs span{font-weight:400;opacity:.8}
@@ -289,11 +290,17 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
   <section class="card" id="mySongs">
     <h2>My songs <span style="text-transform:none;letter-spacing:0">/ Mis canciones</span></h2>
     <div class="tabs" role="tablist">
-      <button type="button" role="tab" id="tabAll" aria-selected="true">Ever sang <span id="cAll"></span></button>
-      <button type="button" role="tab" id="tabFav" aria-selected="false">♥ Favorites <span id="cFav"></span></button>
+      <button type="button" role="tab" id="tabFor" aria-selected="true">✨ For you</button>
+      <button type="button" role="tab" id="tabAll" aria-selected="false">Sang <span id="cAll"></span></button>
+      <button type="button" role="tab" id="tabFav" aria-selected="false">♥ Faves <span id="cFav"></span></button>
       <button type="button" role="tab" id="tabPrac" aria-selected="false">Practice <span id="cPrac"></span></button>
     </div>
-    <div id="paneAll">
+    <div id="paneFor">
+      <p class="empty2" id="forLead" style="margin:0 0 8px">Songs picked for you from what you've sung and saved.</p>
+      <ol class="mine-list" id="forList"></ol>
+      <div class="seg" style="margin-top:8px"><button class="sm" id="forMore" type="button">🔀 Show me more</button></div>
+    </div>
+    <div id="paneAll" hidden>
       <div class="seg">
         <button class="sm" id="mTop" type="button" aria-pressed="false">Top rated</button>
         <button class="sm" id="mNew" type="button" aria-pressed="true">Newest</button>
@@ -359,7 +366,7 @@ function getSpot(){
   });
 }
 let songs = [], mine = null, buzzed = false;
-fetch("/songs.json").then(r => r.json()).then(s => songs = s).catch(() => {});
+fetch("/songs.json").then(r => r.json()).then(s => { songs = s; if(typeof paintFor === "function") paintFor(); }).catch(() => {});
 
 const norm = s => s.trim().toLowerCase();
 function sugBtn(box, title, sub, onPick){
@@ -773,15 +780,15 @@ const sKey = (song, artist) => (song + "|" + (artist || "")).toLowerCase();
 const isFav = (song, artist) => lists.fav.some(x => sKey(x.song, x.artist) === sKey(song, artist));
 const when = t => new Date(t).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 function showTab(t){
-  tab = t; ["All", "Fav", "Prac"].forEach(k => { $("tab" + k).setAttribute("aria-selected", k === t); $("pane" + k).hidden = k !== t; });
+  tab = t; ["For", "All", "Fav", "Prac"].forEach(k => { $("tab" + k).setAttribute("aria-selected", k === t); $("pane" + k).hidden = k !== t; });
   try{ localStorage.setItem("dive_tab", t); }catch(e){}
 }
-["All", "Fav", "Prac"].forEach(k => $("tab" + k).addEventListener("click", () => showTab(k)));
+["For", "All", "Fav", "Prac"].forEach(k => $("tab" + k).addEventListener("click", () => { showTab(k); if(k === "For") paintFor(); }));
 async function listOp(list, op, song, artist){
   try{
     const r = await fetch("/api/lists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ list, op, song, artist }) });
     const j = await r.json(); if(!r.ok){ $("mineMsg").textContent = j.error || "Couldn't save. Try again."; return false; }
-    lists = j; paintLists(); mineSig = ""; loadMine(true); return true;
+    lists = j; paintLists(); mineSig = ""; loadMine(true); paintFor(); return true;
   }catch(e){ $("mineMsg").textContent = "No connection. Try again."; return false; }
 }
 function heartBtn(song, artist){
@@ -819,12 +826,12 @@ function paintLists(){
   const p = $("pracList"); p.innerHTML = ""; $("pracEmpty").hidden = !!lists.practice.length;
   lists.practice.forEach(x => p.appendChild(songRow(x, { remove: () => listOp("practice", "remove", x.song, x.artist) })));
 }
-async function loadLists(){ try{ lists = await (await fetch("/api/lists", { cache: "no-store" })).json(); paintLists(); }catch(e){} }
+async function loadLists(){ try{ lists = await (await fetch("/api/lists", { cache: "no-store" })).json(); paintLists(); paintFor(); }catch(e){} }
 async function loadMine(force){
   try{
     const j = await (await fetch("/api/mine?sort=" + mSort, { cache: "no-store" })).json();
     const sig = mSort + JSON.stringify(j.items.map(x => [x.id, x.rating, (x.posted || []).length])) + JSON.stringify(lists.fav.map(x => sKey(x.song, x.artist)));
-    if(!force && sig === mineSig) return; mineSig = sig; mineItems = j.items;
+    if(!force && sig === mineSig) return; mineSig = sig; mineItems = j.items; paintFor();
     $("cAll").textContent = j.items.length ? "(" + j.items.length + ")" : ""; $("allEmpty").hidden = !!j.items.length;
     $("mTop").setAttribute("aria-pressed", mSort === "top"); $("mNew").setAttribute("aria-pressed", mSort === "new");
     const ol = $("mineList"); ol.innerHTML = "";
@@ -851,6 +858,49 @@ async function loadMine(force){
 }
 $("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
 $("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
+/* "For you": suggestions from the song library based on what they've sung, hearted and saved to practice.
+   Same artist scores highest, then same style (genre) and language, plus a boost for songs popular at the bar. */
+let popular = [], forSeed = 0;
+fetch("/api/popular", { cache: "no-store" }).then(r => r.json()).then(j => { popular = j.items || []; paintFor(); }).catch(() => {});
+function libFind(song, artist){ const t = norm(song), a = norm(artist || ""); return songs.find(s => norm(s.t) === t && (!a || norm(s.a) === a)) || songs.find(s => norm(s.t) === t); }
+function rand(seed){ let x = Math.sin(seed) * 10000; return x - Math.floor(x); }
+function paintFor(){
+  if(!songs.length) return;
+  const mineSongs = [...mineItems.map(x => ({ song: x.song, artist: x.artist, w: 1 + (x.rating >= 4 ? 1 : 0) })), ...lists.fav.map(x => ({ ...x, w: 2 })), ...lists.practice.map(x => ({ ...x, w: 1 }))];
+  const known = new Set(mineSongs.map(x => sKey(x.song, x.artist)));
+  const artistW = {}, genreW = {}, langW = {};
+  mineSongs.forEach(x => {
+    const L = libFind(x.song, x.artist), a = norm(x.artist || (L && L.a) || "");
+    if(a) artistW[a] = (artistW[a] || 0) + x.w;
+    if(L){ genreW[L.g] = (genreW[L.g] || 0) + x.w; langW[L.l] = (langW[L.l] || 0) + x.w; }
+  });
+  const popW = {}; popular.forEach((p, i) => { popW[sKey(p.song, p.artist)] = Math.max(1, 6 - i / 5); });
+  const fresh = !mineSongs.length, spanish = (navigator.language || "").toLowerCase().startsWith("es");
+  const scored = songs.filter(s => !known.has(sKey(s.t, s.a))).map((s, i) => {
+    let sc = 0, why = "";
+    const aw = artistW[norm(s.a)] || 0, gw = genreW[s.g] || 0, lw = langW[s.l] || 0, pw = popW[sKey(s.t, s.a)] || 0;
+    if(aw){ sc += 6 + aw * 2; why = "You like " + s.a; }
+    if(gw){ sc += 2 + gw; if(!why) why = "More " + s.g; }
+    if(lw) sc += 1 + lw * 0.5;
+    if(pw){ sc += pw; if(!why) why = "Popular here"; }
+    if(fresh && spanish && s.l === "Spanish") sc += 2;
+    sc += rand(i * 7.3 + forSeed) * 3;            // a little variety so "Show me more" changes the list
+    return { s, sc, why: why || (fresh ? "Crowd favorite" : "Try something new") };
+  }).sort((a, b) => b.sc - a.sc);
+  // no more than 2 songs by the same artist, so the list stays varied
+  const per = {}, out = [];
+  for(const x of scored){ const a = norm(x.s.a); if((per[a] || 0) >= 2) continue; per[a] = (per[a] || 0) + 1; out.push(x); if(out.length >= 10) break; }
+  $("forLead").textContent = fresh ? "Not sure what to sing? Here are crowd favorites. Sing a few and these get picked just for you." : "Picked for you from what you've sung and saved.";
+  const ol = $("forList"); ol.innerHTML = "";
+  out.forEach(x => {
+    const tag = document.createElement("span"); tag.className = "why"; tag.textContent = x.why;
+    const pr = document.createElement("button"); pr.type = "button"; pr.className = "sm"; pr.textContent = "+ Practice";
+    pr.addEventListener("click", async () => { if(await listOp("practice", "add", x.s.t, x.s.a)) $("mineMsg").textContent = "Added to your practice list."; });
+    ol.appendChild(songRow({ song: x.s.t, artist: x.s.a }, { left: tag, extra: [pr] }));
+  });
+}
+$("forMore").addEventListener("click", () => { forSeed += 101; paintFor(); });
+
 /* practice list: pick from the song library or type any song */
 function pSuggest(){
   const q = norm($("pSong").value), box = $("pSugg"); box.innerHTML = "";
@@ -878,7 +928,7 @@ async function quickSignup(song, artist, btn){
   if(r) { $("mineMsg").textContent = "✓ You're on the list for " + song + "!"; window.scrollTo({ top: 0, behavior: "smooth" }); }
 }
 let pendingQuick = null;
-try{ const t = localStorage.getItem("dive_tab"); if(t === "Fav" || t === "Prac") showTab(t); }catch(e){}
+try{ const t = localStorage.getItem("dive_tab"); if(t === "All" || t === "Fav" || t === "Prac") showTab(t); }catch(e){}
 loadLists();
 
 /* ---------- daily ads from the host ---------- */
