@@ -236,6 +236,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
         </div>
         <p class="hint" id="netStatus" style="color:var(--ink-2);margin:0">Getting it ready…</p>
         <label class="chk" for="showStars" style="justify-content:flex-start"><input type="checkbox" id="showStars" checked> Show my stars</label>
+        <label class="chk" for="tagDive" style="justify-content:flex-start"><input type="checkbox" id="tagDive" checked> Tag The Dive</label>
         <button class="linkbtn" id="ownPhoto" type="button" style="align-self:flex-start;padding-left:0">📷 Use my own photo</button>
         <button class="linkbtn" id="divePhoto" type="button" style="align-self:flex-start;padding-left:0" hidden>Use The Dive picture</button>
         <input type="file" id="photoIn" accept="image/*" hidden>
@@ -538,7 +539,12 @@ async function openPost(item){
   postPic = pic; $("postPreview").src = pic.url; $("postPreview").hidden = false;
   $("postBtn").disabled = false; $("postBtn").textContent = "Post my song";
 }
-const caption = item => "I just sang " + item.song + " at The Dive on 495! #TheDiveOn495 #Karaoke #McAllen";
+// The Dive's accounts, added to the caption unless they uncheck "Tag The Dive"
+const DIVE_TAGS = { Facebook: "@The Dive on 495", Instagram: "", TikTok: "" };
+const caption = (item, net) => {
+  const tag = $("tagDive").checked ? (DIVE_TAGS[net] || DIVE_TAGS.Facebook) : "";
+  return "I just sang " + item.song + " at The Dive on 495!" + (tag ? " " + tag : "") + " #TheDiveOn495 #Karaoke #McAllen";
+};
 function savePic(pic){ const a = document.createElement("a"); a.href = pic.url; a.download = pic.file ? pic.file.name : "the-dive-karaoke.png"; document.body.appendChild(a); a.click(); a.remove(); }
 $("postBtn").addEventListener("click", () => {
   if(!postPic) return;
@@ -569,7 +575,7 @@ function sharePic(net){
 netBtns.forEach(btn => btn.addEventListener("click", () => {
   if(!postPic || !postItem) return;
   const net = btn.dataset.net;
-  if(navigator.clipboard) navigator.clipboard.writeText(caption(postItem)).catch(() => {});
+  if(navigator.clipboard) navigator.clipboard.writeText(caption(postItem, net)).catch(() => {});
   // Facebook with The Dive picture: open Facebook's post box with the song card, they just tap Post
   if(net === "Facebook" && postMode === "dive" && postItem.public && postItem.id && ($("showStars").checked || !postItem.rating)){
     const u = location.origin + "/s/" + postItem.id;
@@ -582,7 +588,7 @@ netBtns.forEach(btn => btn.addEventListener("click", () => {
 // save to Photos: on phones the share menu has "Save Image", which puts it in Photos for TikTok
 $("dl").addEventListener("click", () => {
   if(!postPic) return;
-  if(navigator.clipboard) navigator.clipboard.writeText(caption(postItem)).catch(() => {});
+  if(navigator.clipboard) navigator.clipboard.writeText(caption(postItem, "TikTok")).catch(() => {});
   if(navigator.canShare && navigator.canShare({ files: [postPic.file] })){
     navigator.share({ files: [postPic.file] }).then(() => { $("shareMsg").textContent = "Saved? Now open TikTok, tap +, then Upload, and pick it. Caption is copied, just paste it."; }).catch(() => {});
   } else { savePic(postPic); $("shareMsg").textContent = "Picture saved."; }
