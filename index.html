@@ -63,6 +63,16 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 .stars button{background:none;border:0;font-size:44px;line-height:1;color:var(--line);cursor:pointer;padding:2px}
 .stars button.on{color:#ffc93c}
 .rate .song{font-size:17px;font-weight:500}
+.tmodal{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px))}
+.tbox{background:var(--panel);border:2px solid var(--green);border-radius:18px;padding:16px;width:100%;max-width:560px;max-height:100%;display:flex;flex-direction:column;gap:10px}
+.tbox h2{margin:0}
+.tlead{margin:0;font-size:14px;color:var(--ink-2)}
+.tscroll{flex:1;min-height:160px;overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;padding:4px 12px;background:var(--wall)}
+.tchk{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.35;color:var(--ink);text-transform:none;letter-spacing:0;margin:0;cursor:pointer}
+.tchk input{width:22px;height:22px;flex:none;margin-top:1px;accent-color:var(--green)}
+.tchk i{display:block;color:var(--ink-2);font-size:13px;font-style:normal;margin-top:2px}
+.go:disabled{opacity:.45;cursor:default}
+.legal{display:block;text-align:center;font-size:13px;color:var(--ink-2);margin-top:4px}
 .chk{display:flex;gap:10px;align-items:center;justify-content:center;font-size:15px;color:var(--ink);text-transform:none;letter-spacing:0;margin:0}
 .chk input{width:20px;height:20px;accent-color:var(--green)}
 .shares{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -197,6 +207,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
         </div>
         <p class="err" id="err" role="alert"></p>
         <button class="go" id="submit" type="submit">Put me on the list</button>
+        <p class="hint" id="termsHint" style="color:var(--ink-2);text-align:center;margin:0" hidden>By signing up you agree to our <a href="/terms" style="color:var(--green-hi)">Terms &amp; Privacy</a>.</p>
         <p class="hint" id="locHint" style="color:var(--ink-2);text-align:center">Sign up from anywhere inside The Dive. Your phone will ask to use your location.</p>
       </div>
     </form>
@@ -273,12 +284,24 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 
     <button class="linkbtn" id="getApp" type="button" hidden>Get The Dive app on your phone</button>
   <a class="wall" href="/wall">See the wall of fame</a>
+  <a class="legal" href="/terms">Terms of Use &amp; Privacy</a>
 
   <section class="card">
     <h2>Up next</h2>
     <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
   </section>
 </main>
+<div class="tmodal" id="termsModal" hidden role="dialog" aria-modal="true" aria-labelledby="termsTitle">
+  <div class="tbox">
+    <h2 id="termsTitle">Before you sing <span>/ Antes de cantar</span></h2>
+    <p class="tlead">Please read The Dive's Terms of Use and Privacy Notice.</p>
+    <div class="tscroll" id="termsText" tabindex="0">Loading…</div>
+    <label class="tchk" for="termsAgree"><input type="checkbox" id="termsAgree"> <span>I'm 18 or older, and I have read and agree to the Terms of Use and Privacy Notice. <i>Tengo 18 años o más y acepto los términos.</i></span></label>
+    <p class="err" id="termsErr" role="alert"></p>
+    <button class="go" id="termsGo" type="button" disabled>Agree &amp; sign up</button>
+    <button class="linkbtn" id="termsNo" type="button">Not now</button>
+  </div>
+</div>
 <div class="iosguide" id="iosGuide" hidden role="dialog" aria-label="Add The Dive app">
   <div class="box">
     <div class="step"><span class="n">1</span><span>Tap the <span class="shareic" aria-hidden="true">⬆︎</span> <b>Share</b> button <span id="iosShareWhere">below</span></span></div>
@@ -372,6 +395,7 @@ $("form").addEventListener("submit", async e => {
   if(!name){ $("err").textContent = "Enter your name or stage name."; $("name").focus(); return; }
   if(!song){ $("err").textContent = "Enter the song you want to sing."; $("song").focus(); return; }
   if(!$("artistPick").hidden && !$("artistPick").value){ $("err").textContent = "Pick which artist's version you're singing."; $("artistPick").focus(); return; }
+  if(!termsAccepted){ openTerms(); return; }
   $("submit").disabled = true; $("submit").textContent = "Adding you…";
   try{
     let spot = {};
@@ -385,6 +409,7 @@ $("form").addEventListener("submit", async e => {
     if(!r.ok){
       if(j.error === "far") $("err").textContent = "You need to be at The Dive to sign up. You're about " + j.miles + " miles away.";
       else if(j.error === "signin"){ $("err").textContent = j.message; loadMe(); }
+      else if(j.error === "terms"){ termsAccepted = false; openTerms(); }
       else if(j.error === "location") $("err").textContent = "Allow location so we can see you're at The Dive, or scan the QR code at the bar. iPhone: Settings → Privacy → Location Services → Safari → While Using.";
       else $("err").textContent = j.error || "Couldn't add you. Try again.";
     }
@@ -777,10 +802,39 @@ function paintWho(){
   $("who").hidden = !me;
   if(me){ $("whoText").textContent = "Signed in as " + (me.name || "you") + " (" + me.phone + ")"; if(me.name && !$("name").value) $("name").value = me.name; }
 }
+/* ---------- user agreement: pops up the first time, must check the box ---------- */
+let termsAccepted = false, termsV = "", termsLoaded = false;
+async function openTerms(){
+  $("termsModal").hidden = false; $("termsAgree").checked = false; $("termsGo").disabled = true; $("termsErr").textContent = "";
+  document.body.style.overflow = "hidden";
+  if(!termsLoaded){
+    try{
+      const html = await (await fetch("/terms", { cache: "no-store" })).text();
+      const doc = new DOMParser().parseFromString(html, "text/html"), art = doc.getElementById("terms");
+      $("termsText").innerHTML = ""; $("termsText").appendChild(document.importNode(art, true)); termsLoaded = true;
+    }catch(e){ $("termsText").innerHTML = 'Couldn\'t load the terms. <a href="/terms" style="color:var(--green-hi)">Open them here</a>.'; }
+  }
+  $("termsText").scrollTop = 0;
+}
+function closeTerms(){ $("termsModal").hidden = true; document.body.style.overflow = ""; }
+$("termsAgree").addEventListener("change", () => { $("termsGo").disabled = !$("termsAgree").checked; $("termsErr").textContent = ""; });
+$("termsNo").addEventListener("click", () => { closeTerms(); $("err").textContent = "You need to agree to the Terms to sign up. You can also ask the host to add you."; });
+$("termsGo").addEventListener("click", async () => {
+  if(!$("termsAgree").checked) return;
+  $("termsGo").disabled = true; $("termsGo").textContent = "Saving…";
+  try{
+    const r = await fetch("/api/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ v: termsV, agree: true }) });
+    if(!r.ok) throw new Error();
+    termsAccepted = true; $("termsHint").hidden = false; closeTerms();
+    $("form").requestSubmit ? $("form").requestSubmit() : $("submit").click();
+  }catch(e){ $("termsErr").textContent = "Couldn't save. Check your signal and try again."; $("termsGo").disabled = false; }
+  $("termsGo").textContent = "Agree & sign up";
+});
 async function loadMe(){
   try{
     const j = await (await fetch("/api/me", { cache: "no-store" })).json();
     authOn = j.auth; me = j.user; paintWho();
+    termsV = j.terms || ""; termsAccepted = !!j.termsOk; $("termsHint").hidden = !termsAccepted;
     if(j.profileName){ $("name").value = j.profileName; $("name").readOnly = true; $("nameLock").hidden = false; $("nameLock").textContent = "This phone signs up as " + j.profileName + ". One person per phone."; }
     if(authOn && !me) showAuth("stepPhone");
     else if(me && !me.name) showAuth("stepName");

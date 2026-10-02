@@ -219,6 +219,7 @@ app.post("/api/signup", wrap(async (req, res) => {
   { const ps = await pauseState(); if (ps.paused) return res.status(403).json({ error: ps.until ? "Sign-ups are paused until " + new Date(ps.until).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) + ". Try again then." : "Sign-ups are paused for a bit. Try again soon." }); }
   if ((await authOn()) && !currentUser(req)) return res.status(401).json({ error: "signin", message: "Sign in with your phone number first." });
   if (rateLimited(req.ip)) return res.status(429).json({ error: "Too many tries. Wait a minute and try again." });
+  if (!(await termsOk(dev))) return res.status(428).json({ error: "terms", message: "Please read and agree to the Terms to sign up." });
   if ((await db.getSetting("geofence")) !== "off" && req.body.qr !== QR_TOKEN) {
     const lat = Number(req.body.lat), lng = Number(req.body.lng), acc = Math.min(Math.max(Number(req.body.acc) || 0, 0), 200);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(403).json({ error: "location", message: "Turn on location so we can see you're at The Dive, or scan the QR code at the bar." });
@@ -271,9 +272,18 @@ app.get("/api/wall", wrap(async (req, res) => {
 }));
 
 /* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
+// user agreement: which version this phone agreed to, and when (kept as a record)
+const TERMS_V = "2026-10-01";
+async function termsOk(dev) { try { return JSON.parse((await db.getSetting("terms:" + dev)) || "{}").v === TERMS_V; } catch (e) { return false; } }
+async function recordTerms(req, dev) { const u = currentUser(req); await db.setSetting("terms:" + dev, JSON.stringify({ v: TERMS_V, at: new Date().toISOString(), ip: req.ip, customer: u || null, ua: String(req.headers["user-agent"] || "").slice(0, 200) })); }
+app.post("/api/terms", wrap(async (req, res) => {
+  if (req.body.v !== TERMS_V || req.body.agree !== true) return res.status(400).json({ error: "Check the box to agree." });
+  await recordTerms(req, device(req, res)); res.json({ ok: true, v: TERMS_V });
+}));
 app.get("/api/me", wrap(async (req, res) => {
   const u = currentUser(req), c = u ? await db.customer(u) : null, p = await getProfile(device(req, res));
-  res.json({ auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null, profileName: (c && c.name) || (p && p.name) || null });
+  const dv = device(req, res);
+  res.json({ terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null, profileName: (c && c.name) || (p && p.name) || null });
 }));
 const textHits = new Map();
 app.post("/api/auth/start", wrap(async (req, res) => {
@@ -514,7 +524,7 @@ img{width:160px;filter:drop-shadow(0 0 20px rgba(57,181,74,.55))}h1{font-family:
 }));
 app.get("/api/url", (req, res) => res.json({ url: siteUrl(req) + "/" }));
 
-const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/stats": "stats.html", "/ads": "ads.html", "/staff": "staff.html", "/wheel": "wheel.html", "/staff-manifest.json": "staff-manifest.json", "/staff-icon-192.png": "staff-icon-192.png", "/staff-icon-512.png": "staff-icon-512.png", "/staff-apple-touch-icon.png": "staff-apple-touch-icon.png", "/logo.png": "logo.png", "/songs.json": "songs.json", "/manifest.json": "manifest.json", "/kj-manifest.json": "kj-manifest.json", "/sw.js": "sw.js", "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png", "/icon-maskable.png": "icon-maskable.png", "/apple-touch-icon.png": "apple-touch-icon.png", "/kj-icon-192.png": "kj-icon-192.png", "/kj-icon-512.png": "kj-icon-512.png", "/kj-apple-touch-icon.png": "kj-apple-touch-icon.png" };
+const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/stats": "stats.html", "/ads": "ads.html", "/terms": "terms.html", "/staff": "staff.html", "/wheel": "wheel.html", "/staff-manifest.json": "staff-manifest.json", "/staff-icon-192.png": "staff-icon-192.png", "/staff-icon-512.png": "staff-icon-512.png", "/staff-apple-touch-icon.png": "staff-apple-touch-icon.png", "/logo.png": "logo.png", "/songs.json": "songs.json", "/manifest.json": "manifest.json", "/kj-manifest.json": "kj-manifest.json", "/sw.js": "sw.js", "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png", "/icon-maskable.png": "icon-maskable.png", "/apple-touch-icon.png": "apple-touch-icon.png", "/kj-icon-192.png": "kj-icon-192.png", "/kj-icon-512.png": "kj-icon-512.png", "/kj-apple-touch-icon.png": "kj-apple-touch-icon.png" };
 // extra pages that each install as their own app (own name + icon)
 const APPS = {
   "/stats": { file: "stats.html", key: "stats", name: "The Dive Analytics", short: "Dive Stats" },
