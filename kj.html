@@ -54,6 +54,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--green-hi);outli
 .next{background:var(--green);color:#041206;border-color:var(--green);font-family:var(--slab);font-weight:800;font-size:20px;letter-spacing:.06em;text-transform:uppercase;padding:14px 22px}
 .multi{display:flex;gap:8px;align-items:center;font-size:15px;border:1px solid var(--line);border-radius:999px;padding:8px 14px;background:var(--panel-2);cursor:pointer;width:100%}
 .multi input{width:20px;height:20px;accent-color:var(--green)}
+.bizcard{border-color:var(--green)}
+.hint2{font-size:14px;color:var(--ink-2)}
 .danger{color:var(--warn)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 ol{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
@@ -130,6 +132,19 @@ a{color:var(--green-hi)}
   <div id="panel" hidden style="display:flex;flex-direction:column;gap:16px">
     <div class="row" style="justify-content:space-between;font-size:14px;color:var(--ink-2)"><span id="meLine"></span><span class="row" style="gap:6px"><button id="myPinBtn" type="button" style="padding:6px 12px;font-size:13px" hidden>Change my PIN</button><button id="signOut" type="button" style="padding:6px 12px;font-size:13px">Sign out</button></span></div>
     <form id="myPinForm" class="row" hidden novalidate><input id="myPin" inputmode="numeric" maxlength="8" placeholder="New PIN (4–8 digits)" aria-label="New PIN" style="flex:1 1 160px;font-size:16px"><button type="submit">Save PIN</button><span class="err" id="myPinErr" role="alert"></span></form>
+    <section class="card bizcard" id="bizCard" hidden>
+      <div class="row" style="justify-content:space-between"><b id="planLine"></b><a href="/setup" id="setupLink">Setup &amp; billing →</a></div>
+      <div id="venueBox" class="row">
+        <span id="venueLine" class="hint2"></span>
+        <button type="button" id="venueBtn">📍 I'm at a new venue tonight</button>
+      </div>
+      <div id="venueForm" class="row" hidden>
+        <input id="venueName" maxlength="60" placeholder="Tonight's venue name" style="flex:1;min-width:160px;font-size:16px;letter-spacing:0;text-align:left">
+        <button type="button" id="venueSave" class="next" style="font-size:15px;padding:10px 16px">Use my location</button>
+      </div>
+      <p class="err" id="venueErr" role="alert"></p>
+    </section>
+
     <section class="card">
       <h2>Now singing</h2>
       <div class="now" id="now">Nobody yet</div>
@@ -297,7 +312,7 @@ function item(r, i, waiting){
   return li;
 }
 function render(){
-  paintMe();
+  paintMe(); paintBiz();
   const up = state.queue.find(r => r.status === "up"), waiting = state.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
   if(up){ now.textContent = up.name; const s = document.createElement("small"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); now.appendChild(s); }
@@ -392,6 +407,26 @@ async function loadHosts(){
   }catch(e){}
 }
 let hostsLoaded = false;
+/* ---------- other bars and DJs: plan, venue, setup ---------- */
+function paintBiz(){
+  const t = state.tenant || {}, p = state.plan || {};
+  $("bizCard").hidden = !!t.house || !t.slug;
+  if(t.house || !t.slug) return;
+  $("planLine").textContent = p.label || ""; $("planLine").style.color = p.active ? (p.days_left != null && p.days_left <= 3 ? "#ffc93c" : "var(--green-hi)") : "var(--warn)";
+  $("setupLink").hidden = !(state.me && state.me.admin);
+  $("venueLine").textContent = t.venue ? "Tonight: " + t.venue : state.hasSpot ? "Location check is set." : "Location check isn't set yet.";
+}
+$("venueBtn").addEventListener("click", () => { $("venueForm").hidden = false; $("venueName").value = (state.tenant || {}).venue || ""; $("venueName").focus(); });
+$("venueSave").addEventListener("click", () => {
+  $("venueErr").textContent = "";
+  if(!navigator.geolocation){ $("venueErr").textContent = "This phone can't share location."; return; }
+  $("venueSave").textContent = "Finding you…";
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try{ await api("/api/kj/venue", { venue: $("venueName").value.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude }); $("venueForm").hidden = true; load(); }
+    catch(e){ if(e.message !== "pin") $("venueErr").textContent = e.message; }
+    $("venueSave").textContent = "Use my location";
+  }, () => { $("venueErr").textContent = "Couldn't get your location. Allow location for this site."; $("venueSave").textContent = "Use my location"; }, { enableHighAccuracy: true, timeout: 15000 });
+});
 function paintMe(){
   if(!state || !state.me) return;
   $("meLine").textContent = "Signed in as " + state.me.name;

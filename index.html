@@ -168,6 +168,7 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
   </div>
   <img class="logo" src="/logo.png" alt="The Dive on 495, Bar + Stage, McAllen, TX">
   <h1>Sign up to sing<small>Anótate para cantar</small></h1>
+  <p id="venueLine" hidden style="margin:-6px 0 0;text-align:center;color:var(--green-hi);font-weight:600"></p>
 
   <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
 
@@ -464,6 +465,7 @@ $("cancel").addEventListener("click", async () => {
 
 function render(data){
   mine = data.mine; multiOn = !!data.multi;
+  $("venueLine").hidden = !data.venue; $("venueLine").textContent = data.venue ? "Tonight at " + data.venue : "";
   geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn || !!qrToken;
   renderRate(data.last);
   const blocked = !data.open || data.paused;

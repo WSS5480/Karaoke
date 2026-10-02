@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Setup · The Dive</title>
+<link rel="icon" href="/logo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--ink:#eef3ee;--ink-2:#9fae9f;--warn:#ff6b6b;--gold:#ffc93c;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(32px + env(safe-area-inset-bottom,0px))}
+main{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-top:16px}
+header{display:flex;align-items:center;gap:12px}
+header img{width:56px;height:56px;object-fit:contain;border-radius:12px}
+h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;flex:1}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+h2{font-family:var(--slab);font-weight:800;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-hi);margin:0}
+label{display:block;font-size:13px;color:var(--ink-2);margin-bottom:4px}
+input{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit;font-size:17px}
+#pin{font-size:20px;letter-spacing:.3em;text-align:center}
+input:focus-visible,button:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+@media (max-width:480px){.two{grid-template-columns:minmax(0,1fr)}}
+button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
+.go{background:var(--green);color:#041206;border-color:var(--green);font-family:var(--slab);font-weight:800;font-size:17px;letter-spacing:.06em;text-transform:uppercase;padding:13px 20px;width:100%}
+.go:disabled{opacity:.5}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hint{font-size:13px;color:var(--ink-2);margin:0}
+.ok{color:var(--green-hi);font-size:14px;margin:0;min-height:20px}.err{color:var(--warn);font-size:14px;margin:0;min-height:20px}
+.plan{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.plan b{font-family:var(--slab);font-size:20px}
+.pill{font-size:13px;border-radius:999px;padding:3px 10px;border:1px solid var(--line)}
+.pill.on{color:var(--green-hi);border-color:var(--green)}.pill.off{color:var(--warn);border-color:var(--warn)}
+.logo{display:flex;gap:12px;align-items:center}
+.logo img{width:88px;height:88px;border-radius:14px;object-fit:contain;background:#000;border:1px solid var(--line)}
+.links{display:flex;flex-direction:column;gap:8px}
+.links a{display:flex;justify-content:space-between;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--ink);text-decoration:none}
+.links a span{color:var(--green-hi);font-size:13px;overflow-wrap:anywhere;text-align:right}
+a{color:var(--green-hi)}
+</style>
+</head>
+<body>
+<main>
+  <header><img src="/logo.png" alt="" id="hdrLogo"><h1>Setup</h1><a href="/kj">Host page →</a></header>
+
+  <section class="card" id="login">
+    <h2>Owner PIN</h2>
+    <form id="pinForm" novalidate>
+      <input id="pin" inputmode="numeric" maxlength="8" autocomplete="off" aria-label="Owner PIN">
+      <p class="err" id="pinErr" role="alert"></p>
+      <button class="go" type="submit">Open setup</button>
+    </form>
+  </section>
+
+  <div id="panel" hidden style="display:flex;flex-direction:column;gap:16px">
+    <p class="ok" id="paidMsg" hidden>✓ Payment received. Thank you! It can take a minute to show here.</p>
+    <section class="card">
+      <h2>Your plan</h2>
+      <div class="plan"><b id="planLabel"></b><span class="pill" id="planPill"></span></div>
+      <p class="hint" id="planHint"></p>
+      <button class="go" id="payBtn" type="button">Subscribe · <span id="price"></span></button>
+      <button id="portalBtn" type="button" hidden>Manage card or cancel</button>
+      <div class="row" style="align-items:flex-end">
+        <div style="flex:1;min-width:180px"><label for="code">Have a code?</label><input id="code" maxlength="40" autocapitalize="characters" placeholder="KAR-30D-XXXXXX-XXXXXX"></div>
+        <button id="codeBtn" type="button">Apply code</button>
+      </div>
+      <p class="err" id="planErr" role="alert"></p><p class="ok" id="planOk" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Name &amp; logo</h2>
+      <div class="two">
+        <div><label for="name">Full name</label><input id="name" maxlength="50"></div>
+        <div><label for="short">Short name (on buttons and screens)</label><input id="short" maxlength="24"></div>
+      </div>
+      <div class="logo"><img id="logoPrev" alt="Your logo"><div class="row"><button type="button" id="logoBtn">Change logo</button><button type="button" id="logoDel">Remove</button></div></div>
+      <input type="file" id="logoIn" accept="image/*" hidden>
+      <div class="two">
+        <div><label for="city">City</label><input id="city" maxlength="40"></div>
+        <div><label for="email">Owner email</label><input id="email" type="email" maxlength="120"></div>
+      </div>
+      <div id="addrBox"><label for="address">Street address (shows in your guest terms)</label><input id="address" maxlength="100"></div>
+    </section>
+
+    <section class="card">
+      <h2>Social media tags</h2>
+      <p class="hint">Guests' posts tag these accounts when "Tag us" is checked.</p>
+      <div><label for="fb">Facebook page name</label><input id="fb" maxlength="60" placeholder="@Joe’s Pub"></div>
+      <div class="two">
+        <div><label for="ig">Instagram</label><input id="ig" maxlength="60" placeholder="@joespub"></div>
+        <div><label for="tt">TikTok</label><input id="tt" maxlength="60" placeholder="@joespub"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Location check</h2>
+      <p class="hint" id="locState"></p>
+      <div class="row"><button type="button" id="locBtn">📍 Set to where I am now</button><button type="button" id="locClear">Clear</button></div>
+      <div><label for="radius">How close guests must be (meters)</label><input id="radius" type="number" min="50" max="1000" step="10"></div>
+      <p class="hint">150 meters covers most bars and their patio. DJs can also set this each night from the host page.</p>
+    </section>
+
+    <section class="card">
+      <h2>Owner PIN</h2>
+      <div class="two">
+        <div><label for="newPin">New owner PIN (optional)</label><input id="newPin" inputmode="numeric" maxlength="8" autocomplete="new-password"></div>
+        <div><label for="newPin2">Type it again</label><input id="newPin2" inputmode="numeric" maxlength="8" autocomplete="new-password"></div>
+      </div>
+      <p class="hint">Hosts (up to <span id="hostLimit">2</span>) are added on the host page.</p>
+    </section>
+
+    <p class="err" id="err" role="alert"></p><p class="ok" id="ok" role="status"></p>
+    <button class="go" id="save" type="button">Save changes</button>
+
+    <section class="card">
+      <h2>Your links</h2>
+      <div class="links" id="links"></div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let pin = "", me = null, logo = null, spot;
+try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
+async function api(path, body){
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "x-kj-pin": pin }, body: JSON.stringify(body || {}) });
+  const j = await r.json().catch(() => ({}));
+  if(r.status === 401){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = j.error || "Wrong PIN."; throw new Error("pin"); }
+  if(!r.ok) throw new Error(j.error || "Something went wrong. Try again.");
+  return j;
+}
+function paint(j){
+  me = j; logo = null; spot = undefined;
+  $("name").value = j.name; $("short").value = j.short; $("city").value = j.city; $("email").value = j.email; $("address").value = j.address;
+  $("addrBox").hidden = j.type === "dj";
+  $("fb").value = j.tags.Facebook || ""; $("ig").value = j.tags.Instagram || ""; $("tt").value = j.tags.TikTok || "";
+  $("radius").value = j.radius; $("hostLimit").textContent = j.hostLimit;
+  $("logoPrev").src = j.logo || "/logo.png?" + Date.now(); $("hdrLogo").src = $("logoPrev").src;
+  $("locState").textContent = j.lat != null ? "On. Guests must be near the spot you saved" + (j.venue ? " (" + j.venue + ")" : "") + "." : "Not set yet. Until you set it, anyone with the link can sign up. The QR code always works.";
+  const p = j.plan;
+  $("planLabel").textContent = p.label; $("planPill").textContent = p.active ? "Active" : "Not active"; $("planPill").className = "pill " + (p.active ? "on" : "off");
+  $("planHint").textContent = p.paid ? "Paid by card. Thank you!" : p.active ? (p.expires_on ? "Runs through " + new Date(p.expires_on + "T12:00:00").toLocaleDateString([], { month: "long", day: "numeric" }) + ". Subscribe to keep it running." : "") : "Subscribe or enter a code to turn sign-ups back on.";
+  $("price").textContent = j.price; $("payBtn").hidden = p.paid || !j.cardReady; $("portalBtn").hidden = !j.paid;
+  if(!j.cardReady && !p.paid) $("planHint").textContent += " Card payments aren't turned on yet. Ask Stemo Enterprises for a code.";
+  const L = $("links"); L.innerHTML = "";
+  [["Customer sign-up", j.links.app], ["Host page", j.links.kj], ["TV screen", j.links.tv], ["QR poster", j.links.poster], ["Staff list", j.links.staff]].forEach(([label, url]) => {
+    const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener";
+    const b = document.createElement("b"); b.textContent = label; const s = document.createElement("span"); s.textContent = url.replace(/^https?:\/\//, "");
+    a.append(b, s); L.appendChild(a);
+  });
+}
+async function open(){ paint(await api("/api/setup/me")); $("login").hidden = true; $("panel").hidden = false; }
+$("pinForm").addEventListener("submit", async e => { e.preventDefault(); pin = $("pin").value.trim(); try{ await open(); try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} }catch(e){ if(e.message !== "pin") $("pinErr").textContent = e.message; } });
+if(pin) open().catch(() => {});
+if(/paid=1/.test(location.search)) $("paidMsg").hidden = false;
+$("logoBtn").addEventListener("click", () => { $("logoIn").value = ""; $("logoIn").click(); });
+$("logoDel").addEventListener("click", () => { logo = ""; $("logoPrev").src = "/default-logo.png"; });
+$("logoIn").addEventListener("change", async () => {
+  const f = $("logoIn").files && $("logoIn").files[0]; if(!f) return;
+  try{
+    const bmp = await createImageBitmap(f), k = Math.min(1, 512 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    logo = c.toDataURL("image/png"); if(logo.length > 550000) logo = c.toDataURL("image/jpeg", 0.85);
+    $("logoPrev").src = logo;
+  }catch(e){ $("err").textContent = "That picture didn't work. Try a PNG or JPG."; }
+});
+$("locBtn").addEventListener("click", () => {
+  if(!navigator.geolocation){ $("locState").textContent = "This phone can't share location."; return; }
+  $("locState").textContent = "Finding you…";
+  navigator.geolocation.getCurrentPosition(p => { spot = { lat: p.coords.latitude, lng: p.coords.longitude }; $("locState").textContent = "✓ Got it. Tap Save changes."; },
+    () => { $("locState").textContent = "Couldn't get your location. Allow location for this site and try again."; }, { enableHighAccuracy: true, timeout: 15000 });
+});
+$("locClear").addEventListener("click", () => { spot = { lat: "", lng: "" }; $("locState").textContent = "Location check will be off. Tap Save changes."; });
+$("save").addEventListener("click", async () => {
+  $("err").textContent = ""; $("ok").textContent = "";
+  const np = $("newPin").value.replace(/\D/g, "");
+  if(np && np !== $("newPin2").value.replace(/\D/g, "")){ $("err").textContent = "The new PINs don't match."; return; }
+  const body = { name: $("name").value, short: $("short").value, city: $("city").value, email: $("email").value, address: $("address").value, radius: $("radius").value,
+    tags: { Facebook: $("fb").value, Instagram: $("ig").value, TikTok: $("tt").value }, ...(spot || {}) };
+  if(logo !== null) body.logo = logo;
+  if(np) body.newPin = np;
+  $("save").disabled = true;
+  try{ const j = await api("/api/setup/save", body); if(np){ pin = np; try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("newPin").value = $("newPin2").value = ""; } paint(j); $("ok").textContent = "Saved."; }
+  catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
+  $("save").disabled = false;
+});
+$("codeBtn").addEventListener("click", async () => {
+  $("planErr").textContent = ""; $("planOk").textContent = "";
+  try{ const j = await api("/api/setup/code", { code: $("code").value }); paint(j); $("planOk").textContent = j.message; $("code").value = ""; }
+  catch(e){ if(e.message !== "pin") $("planErr").textContent = e.message; }
+});
+$("payBtn").addEventListener("click", async () => { $("planErr").textContent = ""; try{ const j = await api("/api/billing/checkout"); location.href = j.url; }catch(e){ if(e.message !== "pin") $("planErr").textContent = e.message; } });
+$("portalBtn").addEventListener("click", async () => { try{ const j = await api("/api/billing/portal"); location.href = j.url; }catch(e){ if(e.message !== "pin") $("planErr").textContent = e.message; } });
+</script>
+</body>
+</html>
