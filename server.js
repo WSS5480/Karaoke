@@ -456,15 +456,16 @@ app.post("/api/signup", wrap(async (req, res) => {
 /* ---------- favorites + practice list (per person, saved on the server) ---------- */
 async function getLists(o) { try { const v = JSON.parse((await db.getSetting("lists:" + o)) || "{}"); return { fav: v.fav || [], practice: v.practice || [] }; } catch (e) { return { fav: [], practice: [] }; } }
 // most-sung songs at this bar (last 90 days), for "For you" suggestions
-let popCache = { at: 0, items: [] };
+const popCaches = new Map();   // per bar
 app.get("/api/popular", wrap(async (req, res) => {
+  let popCache = popCaches.get(T()) || { at: 0, items: [] };
   if (Date.now() - popCache.at > 10 * 60000) {
     const counts = new Map();
     for (const r of await db.sungSince(Date.now() - 90 * 864e5)) {
       const k = (r.song + "|" + (r.artist || "")).toLowerCase(), c = counts.get(k) || { song: r.song, artist: r.artist || "", count: 0 };
       c.count++; counts.set(k, c);
     }
-    popCache = { at: Date.now(), items: [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 40) };
+    popCache = { at: Date.now(), items: [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 40) }; popCaches.set(T(), popCache);
   }
   res.json({ items: popCache.items });
 }));
