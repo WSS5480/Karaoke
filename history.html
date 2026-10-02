@@ -25,6 +25,9 @@ input{flex:1 1 200px;min-width:0;background:var(--wall);color:var(--ink);border:
 button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 16px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
 button[aria-pressed="true"],.go{background:var(--green);color:#041206;border-color:var(--green)}
 button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
+.chips{display:inline-flex;gap:4px;vertical-align:middle;margin-left:6px}
+.chip{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;font-size:10px;font-weight:800;color:#fff;line-height:1}
+.chip.fb{background:#1877f2}.chip.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#4f5bd5)}.chip.tt{background:#000;border:1px solid #444}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
 .stat{background:var(--panel-2);border-radius:10px;padding:10px 12px}
 .stat b{display:block;font-family:var(--slab);font-size:24px;font-variant-numeric:tabular-nums}
@@ -89,7 +92,8 @@ async function load(){
   items.forEach(x => {
     const tr = document.createElement("tr");
     const c = (txt, cls) => { const td = document.createElement("td"); if(cls) td.className = cls; td.textContent = txt; tr.appendChild(td); return td; };
-    c(x.name); c(x.song + (x.artist ? " – " + x.artist : ""));
+    c(x.name); const sg = c(x.song + (x.artist ? " – " + x.artist : ""));
+    if(x.posted && x.posted.length){ const w = document.createElement("span"); w.className = "chips"; x.posted.forEach(n => { const k = { Facebook: ["fb", "f"], Instagram: ["ig", "IG"], TikTok: ["tt", "TT"] }[n]; const ch = document.createElement("span"); ch.className = "chip " + k[0]; ch.textContent = k[1]; ch.title = "Posted to " + n; w.appendChild(ch); }); sg.appendChild(w); }
     const st = c(x.rating ? "★".repeat(x.rating) + "☆".repeat(5 - x.rating) : "Not rated", x.rating ? "st" : "muted");
     c(fmt(x.at), "n");
     const w = c(""); if(x.public){ const p = document.createElement("span"); p.className = "pill"; p.textContent = "Yes"; w.appendChild(p); } else { w.className = "muted"; w.textContent = "No"; }

@@ -557,11 +557,12 @@ $("postBtn").addEventListener("click", () => {
 const netBtns = [...document.querySelectorAll(".net")];
 function syncNets(){ const b = $("postBtn"); netBtns.forEach(n => n.disabled = b.disabled); $("netStatus").textContent = b.disabled ? b.textContent : "Tap where you want to post it."; }
 new MutationObserver(syncNets).observe($("postBtn"), { attributes: true, childList: true, characterData: true, subtree: true }); syncNets();
+function markPosted(net){ if(postItem && postItem.id) fetch("/api/posted", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: postItem.id, net }) }).then(() => { mineSig = ""; loadMine(true); }).catch(() => {}); }
 function sharePic(net){
   if(navigator.canShare && navigator.canShare({ files: [postPic.file] })){
     $("shareMsg").textContent = "Pick " + net + " on the next screen.";
     navigator.share({ files: [postPic.file] })
-      .then(() => { $("shareMsg").textContent = "✓ Sent to " + net + "! Caption is copied, paste it in. Tap another icon to post there too."; })
+      .then(() => { markPosted(net); $("shareMsg").textContent = "✓ Sent to " + net + "! Caption is copied, paste it in. Tap another icon to post there too."; })
       .catch(e => { if(e.name === "AbortError") $("shareMsg").textContent = "Not posted. Tap an icon to try again."; else { savePic(postPic); $("shareMsg").textContent = "Saved to your phone. Open " + net + " and pick it from your photos."; } });
   } else { savePic(postPic); $("shareMsg").textContent = "Saved to your phone. Open " + net + " and pick it from your photos. Caption copied."; }
 }
@@ -573,7 +574,7 @@ netBtns.forEach(btn => btn.addEventListener("click", () => {
   if(net === "Facebook" && postMode === "dive" && postItem.public && postItem.id && ($("showStars").checked || !postItem.rating)){
     const u = location.origin + "/s/" + postItem.id;
     window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(u), "_blank");
-    $("shareMsg").textContent = "✓ Facebook opened. Tap Post to finish.";
+    markPosted(net); $("shareMsg").textContent = "✓ Facebook opened. Tap Post to finish.";
     return;
   }
   sharePic(net);

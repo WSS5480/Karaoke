@@ -26,6 +26,27 @@ header h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;flex:1
 h2{font-family:var(--slab);font-weight:800;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-hi);margin:0;display:flex;justify-content:space-between;gap:8px}
 h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-2)}
 .now{font-family:var(--slab);font-weight:800;font-size:30px;line-height:1.15;overflow-wrap:anywhere}
+.singer{border:1px solid var(--green);background:var(--panel-2);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.singer .hd{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--ink-2)}
+.singer .hd b{color:var(--green-hi);font-family:var(--slab);letter-spacing:.1em;text-transform:uppercase;font-size:12px}
+.singer .hd button{padding:4px 10px;font-size:13px}
+.sgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.sgrid div{background:var(--wall);border-radius:10px;padding:8px;text-align:center}
+.sgrid b{display:block;font-family:var(--slab);font-size:20px;font-variant-numeric:tabular-nums}
+.sgrid span{font-size:11px;color:var(--ink-2);line-height:1.2;display:block}
+.singer .note{font-size:14px;margin:0}
+.singer .new{color:var(--green-hi);font-weight:600}
+.singer ol{border:0}
+.singer li{padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+.singer li:first-child{border-top:0}
+.chips{display:inline-flex;gap:4px;align-items:center;vertical-align:middle;margin-left:6px}
+.chip{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;font-size:10px;font-weight:800;color:#fff;line-height:1}
+.chip.fb{background:#1877f2}.chip.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#4f5bd5)}.chip.tt{background:#000;border:1px solid #444}
+.stars{color:#f5c518;font-size:13px;margin-left:6px;letter-spacing:1px}
+li .t span.chips{display:inline-flex;color:inherit}
+li .t span.chip{display:inline-grid;color:#fff;font-size:10px}
+li .t span.stars{display:inline;color:#f5c518;font-size:13px}
+@media (max-width:420px){.sgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .now small{display:block;font-family:var(--body);font-weight:400;font-size:17px;color:var(--ink-2)}
 button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
 button:hover{border-color:var(--green)}
@@ -110,6 +131,7 @@ a{color:var(--green-hi)}
     <section class="card">
       <h2>Now singing</h2>
       <div class="now" id="now">Nobody yet</div>
+      <div class="singer" id="singer" hidden aria-live="polite"></div>
       <div class="row">
         <button class="next" id="nextBtn">Next singer</button>
       </div>
@@ -200,19 +222,70 @@ async function act(path, body){
   try{ await api(path, body || {}); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
   load();
 }
+/* ---------- singer card: pops up with their past data when they're up ---------- */
+const CHIP = { Facebook: ["fb", "f"], Instagram: ["ig", "IG"], TikTok: ["tt", "TT"] };
+function chips(list){
+  const w = document.createElement("span"); w.className = "chips";
+  (list || []).forEach(n => { const c = document.createElement("span"); c.className = "chip " + CHIP[n][0]; c.textContent = CHIP[n][1]; c.title = "Posted to " + n; c.setAttribute("aria-label", "Posted to " + n); w.appendChild(c); });
+  return w;
+}
+const starStr = n => n ? "★".repeat(n) : "";
+let singerFor = null, singerPinned = false, lastUp = null;
+function ago(t){
+  const d = Math.round((Date.now() - Date.parse(t)) / 864e5);
+  return d <= 0 ? "today" : d === 1 ? "yesterday" : d < 14 ? d + " days ago" : d < 60 ? Math.round(d / 7) + " weeks ago" : new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+async function showSinger(r, pinned){
+  singerFor = r.id; singerPinned = !!pinned;
+  const box = $("singer"); box.hidden = false;
+  box.innerHTML = '<div class="hd"><b>Loading ' + r.name.replace(/[<>&]/g, "") + '…</b></div>';
+  let j; try{ j = await api("/api/kj/singer/" + r.id); }catch(e){ box.hidden = true; return; }
+  if(singerFor !== r.id) return;
+  box.innerHTML = "";
+  const hd = document.createElement("div"); hd.className = "hd";
+  const t = document.createElement("b"); t.textContent = (pinned ? "About " + r.name : "Singer history");
+  const x = document.createElement("button"); x.type = "button"; x.textContent = "Hide"; x.addEventListener("click", () => { box.hidden = true; singerPinned = false; });
+  hd.append(t, x); box.appendChild(hd);
+  if(!j.songs){
+    const p = document.createElement("p"); p.className = "note new"; p.textContent = "★ First time singing here! Give them a shout-out."; box.appendChild(p); return;
+  }
+  const g = document.createElement("div"); g.className = "sgrid";
+  [[j.songs, "songs sung"], [j.nights, j.nights === 1 ? "night" : "nights"], [j.avg ? "★ " + j.avg : "–", "self-rating"], [j.posts, "songs posted"]].forEach(([v, l]) => {
+    const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; d.append(b, s); g.appendChild(d);
+  });
+  box.appendChild(g);
+  const note = document.createElement("p"); note.className = "note";
+  note.textContent = (j.lastVisit ? "Last here " + ago(j.lastVisit) + "." : "Only tonight so far.") + (j.tonight ? " " + j.tonight + " song" + (j.tonight === 1 ? "" : "s") + " tonight." : "") + (j.firstVisit && j.lastVisit ? " Coming since " + new Date(j.firstVisit).toLocaleDateString([], { month: "short", day: "numeric" }) + "." : "") + (j.onWall ? " On the Wall of Fame " + j.onWall + "×." : "");
+  box.appendChild(note);
+  if(j.fav.length){ const f = document.createElement("p"); f.className = "note"; f.textContent = "Favorite: " + j.fav.map(x => x.song + " (" + x.times + "×)").join(", "); box.appendChild(f); }
+  const ol = document.createElement("ol");
+  j.recent.forEach(x => {
+    const li = document.createElement("li"); const tt = document.createElement("div"); tt.className = "t";
+    const b = document.createElement("b"); b.textContent = x.song + (x.artist ? " – " + x.artist : "");
+    if(x.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(x.rating); b.appendChild(st); }
+    if(x.posted && x.posted.length) b.appendChild(chips(x.posted));
+    const s = document.createElement("span"); s.textContent = ago(x.at);
+    tt.append(b, s); li.appendChild(tt); ol.appendChild(li);
+  });
+  box.appendChild(ol);
+}
 function item(r, i, waiting){
   const li = document.createElement("li");
   const n = document.createElement("span"); n.className = "n"; n.textContent = waiting ? i + 1 : "✓";
   const t = document.createElement("div"); t.className = "t";
   const b = document.createElement("b"); b.textContent = r.name;
   const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
+  if(r.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(r.rating); b.appendChild(st); }
+  if(r.posted && r.posted.length) b.appendChild(chips(r.posted));
   t.append(b, s); li.append(n, t);
+  const info = document.createElement("button"); info.textContent = "History"; info.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); });
+  if(!waiting){ const a = document.createElement("div"); a.className = "acts"; a.appendChild(info); li.appendChild(a); }
   if(waiting){
     const a = document.createElement("div"); a.className = "acts";
     const mk = (label, action, cls) => { const x = document.createElement("button"); x.textContent = label; if(cls) x.className = cls; x.addEventListener("click", () => act(`/api/kj/${r.id}/${action}`)); return x; };
     const fix = document.createElement("button"); fix.textContent = "Fix name";
     fix.addEventListener("click", () => { const n = window.prompt("Correct name for this singer (also fixes their phone):", r.name); if(n && n.trim()) act(`/api/kj/${r.id}/rename`, { name: n.trim() }); });
-    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), fix, mk("Remove", "remove", "danger"));
+    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), fix, info, mk("Remove", "remove", "danger"));
     a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
     li.appendChild(a);
   }
@@ -224,6 +297,9 @@ function render(){
   const now = $("now"); now.innerHTML = "";
   if(up){ now.textContent = up.name; const s = document.createElement("small"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); now.appendChild(s); }
   else now.textContent = waiting.length ? "Tap Next singer to start" : "Nobody yet";
+  // new singer up: pop their history open automatically
+  if(up && up.id !== lastUp){ lastUp = up.id; showSinger(up, false); }
+  if(!up){ lastUp = null; if(!singerPinned){ $("singer").hidden = true; singerFor = null; } }
   $("nextBtn").textContent = up ? "Done, next singer" : "Start first singer";
   $("waitCount").textContent = waiting.length + " waiting";
   const q = $("queue"); q.innerHTML = "";

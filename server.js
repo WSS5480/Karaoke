@@ -64,6 +64,7 @@ if (DB_OK) {
       await pool.query(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
       await pool.query(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS rating INT`);
       await pool.query(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS public BOOLEAN NOT NULL DEFAULT false`);
+      await pool.query(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS posted_to TEXT NOT NULL DEFAULT ''`);
       await pool.query(`CREATE TABLE IF NOT EXISTS customers (id SERIAL PRIMARY KEY, phone TEXT UNIQUE NOT NULL, name TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT now(), last_seen TIMESTAMPTZ)`);
     },
     async customerByPhone(p) { return (await pool.query(`SELECT * FROM customers WHERE phone=$1`, [p])).rows[0]; },
@@ -75,6 +76,7 @@ if (DB_OK) {
     async sungSince(t) { return (await pool.query(`SELECT name, song, artist, device, rating, public, done_at FROM signups WHERE done_at IS NOT NULL AND status IN ('done','archived') AND done_at >= $1 ORDER BY done_at`, [new Date(t)])).rows; },
     async lastSung(d) { return (await pool.query(`SELECT * FROM signups WHERE device=$1 AND status IN ('done','archived') AND done_at > now() - interval '12 hours' ORDER BY done_at DESC LIMIT 1`, [d])).rows[0]; },
     async rate(id, rating, pub) { await pool.query(`UPDATE signups SET rating=$2, public=$3 WHERE id=$1`, [id, rating, pub]); },
+    async setPosted(id, v) { await pool.query(`UPDATE signups SET posted_to=$2 WHERE id=$1`, [id, v]); },
     async history(o) {
       const where = [`done_at IS NOT NULL`], args = [];
       if (o.onlyPublic) where.push(`public`);
@@ -111,6 +113,7 @@ if (DB_OK) {
     async sungSince(t) { return rows.filter(r => r.done_at && (r.status === "done" || r.status === "archived") && Date.parse(r.done_at) >= t).sort((a, b) => a.done_at.localeCompare(b.done_at)); },
     async lastSung(d) { const cut = Date.now() - 12 * 3600e3; return rows.filter(r => r.device === d && (r.status === "done" || r.status === "archived") && r.done_at && Date.parse(r.done_at) > cut).sort((a, b) => b.done_at.localeCompare(a.done_at))[0]; },
     async rate(id, rating, pub) { const r = rows.find(x => x.id === id); if (r) { r.rating = rating; r.public = pub; } },
+    async setPosted(id, v) { const r = rows.find(x => x.id === id); if (r) r.posted_to = v; },
     async history(o) {
       let l = rows.filter(r => r.done_at && (!o.onlyPublic || r.public));
       if (o.q) { const q = o.q.toLowerCase(); l = l.filter(r => (r.name + " " + r.song + " " + r.artist).toLowerCase().includes(q)); }
@@ -134,6 +137,9 @@ if (DB_OK) {
 /* ---------- helpers ---------- */
 const clean = (s, max) => String(s || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 const publicRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, status: r.status });
+const NETS = ["Facebook", "Instagram", "TikTok"];
+const postedList = r => String((r && r.posted_to) || "").split(",").filter(x => NETS.includes(x));
+const kjRow = r => ({ ...publicRow(r), rating: r.rating || null, posted: postedList(r) });
 function device(req, res) {
   let d = (req.headers.cookie || "").split(/;\s*/).map(c => c.split("=")).find(([k]) => k === "dive_device");
   d = d && /^[a-f0-9]{32}$/.test(d[1]) ? d[1] : null;
@@ -246,7 +252,15 @@ app.post("/api/rate", wrap(async (req, res) => {
   await db.rate(last.id, rating, !!req.body.public);
   res.json({ ok: true, id: last.id });
 }));
-const histRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, rating: r.rating, public: !!r.public, at: r.done_at });
+const histRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, rating: r.rating, public: !!r.public, at: r.done_at, posted: postedList(r) });
+// customer tells us they shared a song (tapped an icon and the share went through)
+app.post("/api/posted", wrap(async (req, res) => {
+  const d = owner(req, res), r = await db.get(parseInt(req.body.id, 10));
+  if (!r || r.device !== d) return res.status(404).json({ error: "Song not found." });
+  const net = NETS.includes(req.body.net) ? req.body.net : null; if (!net) return res.status(400).json({ error: "Pick an app." });
+  const list = postedList(r); if (!list.includes(net)) { list.push(net); await db.setPosted(r.id, list.join(",")); }
+  res.json({ ok: true, posted: list });
+}));
 app.get("/api/mine", wrap(async (req, res) => {
   const d = owner(req, res);
   res.json({ items: (await db.mineAll(d, req.query.sort === "top" ? "top" : "new")).map(histRow) });
@@ -348,7 +362,25 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
   await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true });
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ me: req.kj, open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(publicRow), done: (await db.done(50)).map(publicRow) });
+  res.json({ me: req.kj, open: (await db.getSetting("open")) !== "no", geofence: (await db.getSetting("geofence")) !== "off", pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(kjRow), done: (await db.done(50)).map(kjRow) });
+}));
+// everything we know about the singer on this row: past songs, nights, ratings, posts
+app.get("/api/kj/singer/:id", wrap(async (req, res) => {
+  const r = await db.get(parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: "Not found." });
+  const past = (await db.mineAll(r.device, "new")).filter(x => x.id !== r.id);
+  const nightOf = t => new Date(new Date(t).getTime() - 6 * 3600e3).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const tonight = nightOf(Date.now());
+  const nights = new Set(past.map(x => nightOf(x.done_at))), before = past.filter(x => nightOf(x.done_at) !== tonight);
+  const rated = past.filter(x => x.rating), counts = {};
+  past.forEach(x => { const k = x.song + "|" + (x.artist || ""); counts[k] = (counts[k] || 0) + 1; });
+  const fav = Object.entries(counts).sort((a, b) => b[1] - a[1]).filter(e => e[1] > 1).slice(0, 3).map(([k, n]) => { const i = k.lastIndexOf("|"); return { song: k.slice(0, i), artist: k.slice(i + 1), times: n }; });
+  res.json({
+    name: r.name, songs: past.length, nights: nights.size, tonight: past.length - before.length,
+    firstVisit: past.length ? past[past.length - 1].done_at : null, lastVisit: before.length ? before[0].done_at : null,
+    avg: rated.length ? Math.round(rated.reduce((a, x) => a + x.rating, 0) / rated.length * 10) / 10 : null,
+    posts: past.filter(x => postedList(x).length).length, onWall: past.filter(x => x.public).length,
+    fav, recent: past.slice(0, 8).map(histRow)
+  });
 }));
 app.get("/api/kj/history", wrap(async (req, res) => {
   res.json({ items: (await db.history({ sort: req.query.sort === "top" ? "top" : "new", q: clean(req.query.q, 40), limit: 500 })).map(histRow) });
