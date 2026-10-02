@@ -15,9 +15,11 @@
   css.textContent =
     "#diveA2hs{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:9998;display:flex;gap:10px;align-items:center;background:#131713;border:1px solid #39b54a;border-radius:16px;padding:10px 12px;color:#eef3ee;font:14px/1.35 Outfit,system-ui,-apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.6);max-width:520px;margin:0 auto}" +
     "#diveA2hs img{width:42px;height:42px;border-radius:10px;flex:none}" +
-    "#diveA2hs .tx{flex:1;min-width:0}#diveA2hs .tx b{display:block;font-size:15px}" +
-    "#diveA2hs button{font:inherit;font-weight:700;border-radius:999px;padding:9px 15px;border:0;background:#39b54a;color:#041206;cursor:pointer;flex:none}" +
-    "#diveA2hs .x{background:none;color:#9fae9f;padding:4px 6px;font-size:20px;font-weight:400}" +
+    "#diveA2hs .dva-tx{flex:1 1 auto;min-width:0}#diveA2hs .dva-tx b{display:block;font-size:15px}#diveA2hs .dva-tx span{display:block}" +
+    /* page styles (like a full-width .go button) must not leak into this bar */
+    "#diveA2hs button.dva-add{all:unset;box-sizing:border-box;font:700 15px/1 Outfit,system-ui,-apple-system,sans-serif;border-radius:999px;padding:10px 18px;background:#39b54a;color:#041206;cursor:pointer;flex:0 0 auto;width:auto;text-transform:none;letter-spacing:0}" +
+    "#diveA2hs button.dva-x{all:unset;box-sizing:border-box;color:#9fae9f;padding:4px 8px;font:400 22px/1 system-ui,sans-serif;cursor:pointer;flex:0 0 auto;width:auto}" +
+    "#diveA2hs img{flex:0 0 auto}" +
     "#diveGuide{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.82);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:24px 20px calc(70px + env(safe-area-inset-bottom,0px));color:#fff;font:17px/1.3 Outfit,system-ui,-apple-system,sans-serif}" +
     "#diveGuide.top{justify-content:flex-start;padding-top:calc(24px + env(safe-area-inset-top,0px))}" +
     "#diveGuide .box{background:#131713;border:2px solid #39b54a;border-radius:18px;padding:18px;max-width:340px;display:flex;flex-direction:column;gap:12px}" +
@@ -29,7 +31,7 @@
   document.head.appendChild(css);
 
   var bar = document.createElement("div"); bar.id = "diveA2hs"; bar.hidden = true;
-  bar.innerHTML = '<img alt=""><div class="tx"><b></b><span>Add it to your home screen.</span></div><button type="button" class="go">Add</button><button type="button" class="x" aria-label="Hide">×</button>';
+  bar.innerHTML = '<img alt=""><div class="dva-tx"><b></b><span>Add it to your home screen.</span></div><button type="button" class="dva-add">Add</button><button type="button" class="dva-x" aria-label="Hide">×</button>';
   bar.querySelector("img").src = icon; bar.querySelector("b").textContent = "Get the " + name + " app";
   var guide = document.createElement("div"); guide.id = "diveGuide"; guide.hidden = true; guide.setAttribute("role", "dialog");
   guide.innerHTML = '<div class="box"><div class="st"><span class="n">1</span><span>Tap the <b>Share</b> button ⬆︎ ' + (iosChrome ? "at the top right" : "below") + '</span></div><div class="st"><span class="n">2</span><span>Scroll down, tap <b>Add to Home Screen</b></span></div><div class="st"><span class="n">3</span><span>Tap <b>Add</b>. Done!</span></div><button type="button" class="cl">Close</button></div><div class="ar" aria-hidden="true">' + (iosChrome ? "⬆" : "⬇") + "</div>";
@@ -39,11 +41,11 @@
 
   var evt = null;
   window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); evt = e; bar.hidden = false; });
-  bar.querySelector(".go").addEventListener("click", function () {
+  bar.querySelector(".dva-add").addEventListener("click", function () {
     if (ios) { guide.hidden = false; return; }
     if (evt) { evt.prompt(); evt.userChoice.then(function () { bar.hidden = true; }); evt = null; }
   });
-  bar.querySelector(".x").addEventListener("click", function () { bar.hidden = true; try { sessionStorage.setItem(KEY, "1"); } catch (e) {} });
+  bar.querySelector(".dva-x").addEventListener("click", function () { bar.hidden = true; try { sessionStorage.setItem(KEY, "1"); } catch (e) {} });
   guide.addEventListener("click", function (e) { if (e.target === guide || e.target.className === "cl") guide.hidden = true; });
   window.addEventListener("appinstalled", function () { bar.hidden = true; });
   // the TV and wheel go full-screen for casting: keep the bar off the big screen
