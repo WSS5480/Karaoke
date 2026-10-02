@@ -572,6 +572,7 @@ Object.entries(APPS).forEach(([route, a]) => {
     res.type("html").send(appHtml[route]);
   });
 });
+app.get("/zoom.js", (req, res) => res.type("application/javascript").sendFile(path.join(__dirname, "zoom.js")));
 app.get("/install.js", (req, res) => res.sendFile(path.join(__dirname, "install.js")));
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(__dirname, file))));
 app.get("/healthz", (req, res) => res.send("ok"));
