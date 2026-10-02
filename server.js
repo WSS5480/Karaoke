@@ -1,5 +1,6 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
 
@@ -514,6 +515,34 @@ img{width:160px;filter:drop-shadow(0 0 20px rgba(57,181,74,.55))}h1{font-family:
 app.get("/api/url", (req, res) => res.json({ url: siteUrl(req) + "/" }));
 
 const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tv": "tv.html", "/tent": "tent.html", "/wall": "wall.html", "/history": "history.html", "/stats": "stats.html", "/ads": "ads.html", "/staff": "staff.html", "/wheel": "wheel.html", "/staff-manifest.json": "staff-manifest.json", "/staff-icon-192.png": "staff-icon-192.png", "/staff-icon-512.png": "staff-icon-512.png", "/staff-apple-touch-icon.png": "staff-apple-touch-icon.png", "/logo.png": "logo.png", "/songs.json": "songs.json", "/manifest.json": "manifest.json", "/kj-manifest.json": "kj-manifest.json", "/sw.js": "sw.js", "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png", "/icon-maskable.png": "icon-maskable.png", "/apple-touch-icon.png": "apple-touch-icon.png", "/kj-icon-192.png": "kj-icon-192.png", "/kj-icon-512.png": "kj-icon-512.png", "/kj-apple-touch-icon.png": "kj-apple-touch-icon.png" };
+// extra pages that each install as their own app (own name + icon)
+const APPS = {
+  "/stats": { file: "stats.html", key: "stats", name: "The Dive Analytics", short: "Dive Stats" },
+  "/ads": { file: "ads.html", key: "ads", name: "The Dive Ads", short: "Dive Ads" },
+  "/wheel": { file: "wheel.html", key: "wheel", name: "The Dive Spin Wheel", short: "Dive Wheel" },
+  "/tv": { file: "tv.html", key: "tv", name: "The Dive TV Screen", short: "Dive TV" },
+  "/history": { file: "history.html", key: "history", name: "The Dive Customer History", short: "Dive History" },
+  "/wall": { file: "wall.html", key: "wall", name: "The Dive Wall of Fame", short: "Dive Fame" }
+};
+const appHtml = {};
+Object.entries(APPS).forEach(([route, a]) => {
+  app.get("/m/" + a.key + ".json", (req, res) => res.type("application/manifest+json").json({
+    id: route, name: a.name, short_name: a.short, start_url: route, scope: route, display: "standalone",
+    background_color: "#0a0c0a", theme_color: "#0a0c0a",
+    icons: [{ src: "/" + a.key + "-icon-192.png", sizes: "192x192", type: "image/png" }, { src: "/" + a.key + "-icon-512.png", sizes: "512x512", type: "image/png" }]
+  }));
+  ["-icon-192.png", "-icon-512.png", "-apple-touch-icon.png"].forEach(sfx => app.get("/" + a.key + sfx, (req, res) => res.sendFile(path.join(__dirname, a.key + sfx))));
+  app.get(route, (req, res) => {
+    if (!appHtml[route]) {
+      let html = fs.readFileSync(path.join(__dirname, a.file), "utf8");
+      html = html.replace(/<link rel="(manifest|apple-touch-icon)"[^>]*>\s*/g, "").replace(/<meta name="apple-mobile-web-app-(title|capable)"[^>]*>\s*/g, "");
+      const tags = `<link rel="manifest" href="/m/${a.key}.json">\n<link rel="apple-touch-icon" href="/${a.key}-apple-touch-icon.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="${a.short}">\n<script src="/install.js" defer></script>\n`;
+      appHtml[route] = html.replace("</head>", tags + "</head>");
+    }
+    res.type("html").send(appHtml[route]);
+  });
+});
+app.get("/install.js", (req, res) => res.sendFile(path.join(__dirname, "install.js")));
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => res.sendFile(path.join(__dirname, file))));
 app.get("/healthz", (req, res) => res.send("ok"));
 
