@@ -540,7 +540,7 @@ async function openPost(item){
   $("postBtn").disabled = false; $("postBtn").textContent = "Post my song";
 }
 // The Dive's accounts, added to the caption unless they uncheck "Tag The Dive"
-const DIVE_TAGS = { Facebook: "@The Dive on 495", Instagram: "", TikTok: "" };
+const DIVE_TAGS = { Facebook: "@The Dive on 495", Instagram: "@thediveon4954", TikTok: "" };
 const caption = (item, net) => {
   const tag = $("tagDive").checked ? (DIVE_TAGS[net] || DIVE_TAGS.Facebook) : "";
   return "I just sang " + item.song + " at The Dive on 495!" + (tag ? " " + tag : "") + " #TheDiveOn495 #Karaoke #McAllen";
