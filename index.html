@@ -213,6 +213,8 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 .nowopt{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);margin:-6px 0 0;cursor:pointer;text-transform:none;letter-spacing:0}
 .nowopt input{width:18px;height:18px;accent-color:var(--green);margin:0}
 .lyrwhere{margin:-2px 0 0;cursor:default}
+/* host turned lyrics off: hide every lyrics button and option */
+.nolyr a[data-lq],.nolyr #lyrWhere,.nolyr #nowOpt{display:none!important}
 .lyrwhere b{color:var(--ink)}
 #lyrModal{z-index:75}
 .lyrapps{display:flex;flex-direction:column;gap:8px}
@@ -636,7 +638,7 @@ const LYR_APPS = {
   amazon:  { name: "Amazon Music",  url: q => "https://music.amazon.com/search/" + encodeURIComponent(q) },
   google:  { name: "Web search",    url: q => "https://www.google.com/search?q=" + encodeURIComponent(q + " lyrics") }
 };
-let lyrApp = ""; try{ lyrApp = localStorage.getItem("dive_lyrics_app") || ""; }catch(e){}
+let lyricsOn = true, lyrApp = ""; try{ lyrApp = localStorage.getItem("dive_lyrics_app") || ""; }catch(e){}
 if(!LYR_APPS[lyrApp]) lyrApp = "";
 const lyrQ = r => r.song + (r.artist ? " " + r.artist : "");
 const lyricsUrl = r => LYR_APPS[lyrApp || "google"].url(lyrQ(r));
@@ -653,6 +655,8 @@ document.addEventListener("click", e => {
 }, true);
 function render(data){
   mine = data.mine; multiOn = !!data.multi;
+  lyricsOn = data.lyrics !== false; document.body.classList.toggle("nolyr", !lyricsOn);
+  if(!lyricsOn){ $("lyrModal").hidden = true; $("singModal").hidden = true; }
   $("venueLine").hidden = !data.venue; $("venueLine").textContent = data.venue ? "Tonight at " + data.venue : "";
   geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn || !!qrToken;
   renderRate(data.last);
@@ -1456,7 +1460,7 @@ function paintNow(up){
   if(up.id !== lastNowId){
     const first = lastNowId === null; lastNowId = up.id;
     // pop-up only for songs that start while the page is open, never for your own (you get "You're up!")
-    if(popOn && !first && !isMe){
+    if(popOn && lyricsOn && !first && !isMe){
       $("singSong").textContent = up.song + (up.artist ? " – " + up.artist : "");
       $("singWho").textContent = up.name + " is singing";
       setLyr($("singLyr"), up); $("singModal").hidden = false;

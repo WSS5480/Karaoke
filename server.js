@@ -449,7 +449,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await withPhotos(list.map(publicRow), list), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
+  res.json({ venue: TEN().venue || "", lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await withPhotos(list.map(publicRow), list), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
     last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null });
 }));
 
@@ -698,7 +698,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ me: req.kj, djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
+  res.json({ me: req.kj, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -993,6 +993,9 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
 }));
 app.post("/api/kj-open", kjAuth, wrap(async (req, res) => {
   await db.setSetting("open", req.body.open ? "yes" : "no"); res.json({ ok: true });
+}));
+app.post("/api/kj-lyrics", kjAuth, wrap(async (req, res) => {
+  await db.setSetting("lyrics", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
 app.post("/api/kj-multi", kjAuth, wrap(async (req, res) => {
   await db.setSetting("multi", req.body.on ? "on" : "off"); res.json({ ok: true });
