@@ -204,6 +204,14 @@ li.up .av{border-color:var(--green)}
 textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px;resize:vertical}
 .lyr{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--green-hi);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 10px;flex:none}
 .spot .lyr{font-size:15px;padding:8px 16px;align-self:center}
+.nowbar{position:sticky;top:0;z-index:20;margin:0 -16px;padding:10px 16px;background:rgba(10,12,10,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.nowbar .t{flex:1;min-width:0}
+.nowbar .t small{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--green-hi)}
+.nowbar .t b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nowbar .t span{display:block;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nowbar .lyr{font-size:14px;padding:8px 12px;background:var(--green);color:#041206;border:0}
+.nowopt{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);margin:-6px 0 0;cursor:pointer;text-transform:none;letter-spacing:0}
+.nowopt input{width:18px;height:18px;accent-color:var(--green);margin:0}
 </style>
 </head>
 <body>
@@ -218,6 +226,11 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
   <h1>Sign up to sing<small>Anótate para cantar</small></h1>
   <p id="venueLine" hidden style="margin:-6px 0 0;text-align:center;color:var(--green-hi);font-weight:600"></p>
 
+  <div class="nowbar" id="nowBar" hidden aria-live="polite">
+    <div class="t"><small>🎤 Now singing</small><b id="nowSong"></b><span id="nowWho"></span></div>
+    <a class="lyr" id="nowLyr" target="_blank" rel="noopener">🔎 Sing along</a>
+  </div>
+  <label class="nowopt" id="nowOpt" hidden for="nowPop"><input type="checkbox" id="nowPop"> Pop up lyrics for every new song / Letra en cada canción</label>
   <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
 
   <section class="card" id="authCard" hidden>
@@ -405,6 +418,15 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
   </section>
 </main>
+<div class="tmodal" id="singModal" hidden role="dialog" aria-modal="true" aria-labelledby="singTitle">
+  <div class="tbox" style="text-align:center;gap:12px">
+    <h2 id="singTitle">🎶 Sing along <span style="font-weight:400;color:var(--ink-2)">/ Canta</span></h2>
+    <p id="singSong" style="margin:0;font-size:18px"></p>
+    <p id="singWho" style="margin:0;color:var(--ink-2)"></p>
+    <a class="go" id="singLyr" target="_blank" rel="noopener" style="text-decoration:none;display:block">🔎 Lyrics / Letra</a>
+    <button class="linkbtn" id="singClose" type="button">Not this one</button>
+  </div>
+</div>
 <div class="tmodal" id="upModal" hidden role="dialog" aria-modal="true" aria-labelledby="upTitle">
   <div class="tbox" style="text-align:center;gap:14px">
     <div style="font-size:54px;line-height:1">🎤</div>
@@ -610,6 +632,7 @@ function render(data){
       }
     }
   }
+  paintNow((data.queue || []).find(r => r.status === "up"));
   const ol = $("queue"); ol.innerHTML = "";
   if(!data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
   data.queue.slice(0, 25).forEach((r, i) => {
@@ -1372,6 +1395,31 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
 })();
 $("upClose").addEventListener("click", () => $("upModal").hidden = true);
 $("upLyr").addEventListener("click", () => setTimeout(() => $("upModal").hidden = true, 300));
+/* ---------- now singing + sing along, for everyone in the bar ---------- */
+let popOn = false, lastNowId = null;
+try{ popOn = localStorage.getItem("dive_singalong") === "1"; }catch(e){}
+$("nowPop").checked = popOn;
+$("nowPop").addEventListener("change", () => { popOn = $("nowPop").checked; try{ localStorage.setItem("dive_singalong", popOn ? "1" : "0"); }catch(e){} });
+function paintNow(up){
+  $("nowBar").hidden = !up; $("nowOpt").hidden = !up;
+  if(!up){ lastNowId = null; return; }
+  $("nowSong").textContent = up.song + (up.artist ? " – " + up.artist : "");
+  $("nowWho").textContent = up.name;
+  $("nowLyr").href = lyricsUrl(up);
+  const isMe = mine && mine.id === up.id;
+  if(up.id !== lastNowId){
+    const first = lastNowId === null; lastNowId = up.id;
+    // pop-up only for songs that start while the page is open, never for your own (you get "You're up!")
+    if(popOn && !first && !isMe){
+      $("singSong").textContent = up.song + (up.artist ? " – " + up.artist : "");
+      $("singWho").textContent = up.name + " is singing";
+      $("singLyr").href = lyricsUrl(up); $("singModal").hidden = false;
+    }
+  }
+}
+$("singClose").addEventListener("click", () => $("singModal").hidden = true);
+$("singLyr").addEventListener("click", () => setTimeout(() => $("singModal").hidden = true, 300));
+$("singModal").addEventListener("click", e => { if(e.target.id === "singModal") $("singModal").hidden = true; });
 async function refresh(){
   try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
   loadMine();
