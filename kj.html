@@ -38,7 +38,10 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .forcepin{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.9);display:grid;place-items:center;padding:16px}
 .fpbox{width:100%;max-width:360px;background:var(--panel);border:2px solid var(--green);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:10px}
 .fpbox h2{margin:0}.fpbox p{margin:0;color:var(--ink-2);font-size:14px}
-.fpbox input{font:inherit;font-size:20px;letter-spacing:.25em;text-align:center}
+.fpbox input:not([type=checkbox]){font:inherit;font-size:20px;letter-spacing:.25em;text-align:center}
+.fpterms{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--ink);text-transform:none;letter-spacing:0;line-height:1.4}
+.fpterms input{width:20px;height:20px;flex:none;margin-top:2px;accent-color:var(--green)}
+.fpterms a{color:var(--green-hi)}
 .singer .phrow{display:flex;gap:12px;align-items:center}
 .singer .phrow img{width:84px;height:84px;border-radius:50%;object-fit:cover;border:3px solid var(--green);background:#fff;flex:none}
 .singer .phrow span{font-size:13px;color:var(--ink-2);flex:1}
@@ -277,10 +280,13 @@ a{color:var(--green-hi)}
 <div class="forcepin" id="forcePin" hidden role="dialog" aria-modal="true" aria-labelledby="fpTitle">
   <form class="fpbox" id="fpForm" novalidate>
     <h2 id="fpTitle">Make your own PIN</h2>
-    <p>The owner gave you a starting PIN. Pick a new one only you know (4 to 8 digits). You'll use it from now on.</p>
-    <input id="fpPin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" placeholder="New PIN" aria-label="New PIN">
-    <input id="fpPin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" placeholder="Type it again" aria-label="Type the new PIN again">
-    <button type="submit" class="next">Save my PIN</button>
+    <div id="fpPinPart" style="display:flex;flex-direction:column;gap:10px">
+      <p>The owner gave you a starting PIN. Pick a new one only you know (4 to 8 digits). You'll use it from now on.</p>
+      <input id="fpPin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" placeholder="New PIN" aria-label="New PIN">
+      <input id="fpPin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" placeholder="Type it again" aria-label="Type the new PIN again">
+    </div>
+    <label id="fpTermsPart" class="fpterms" for="fpAgree"><input type="checkbox" id="fpAgree"> <span>I have read and agree to the <a href="/terms#hostterms" target="_blank" rel="noopener">Host, DJ &amp; Staff Terms</a>, including that I'm not an employee unless I have a separate written agreement, that tips and taxes on them are my responsibility, and the release in Section 5.</span></label>
+    <button type="submit" class="next" id="fpGo">Save my PIN</button>
     <p class="err" id="fpErr" role="alert"></p>
     <button type="button" id="fpOut" style="background:none;border:0;color:var(--ink-2);text-decoration:underline;font:inherit;font-size:14px">Sign out</button>
   </form>
@@ -447,9 +453,18 @@ function item(r, i, waiting){
   return li;
 }
 /* ---------- first sign-in: DJs and staff replace the owner's starting PIN with their own ---------- */
-function showForcePin(){ if(!$("forcePin").hidden) return; $("forcePin").hidden = false; $("fpErr").textContent = ""; $("fpPin").value = ""; $("fpPin2").value = ""; setTimeout(() => $("fpPin").focus(), 50); }
+function fpNeeds(){ const m = (state && state.me) || {}; return { pin: !m.admin && !m.own, terms: !m.admin && !m.agreed }; }
+function showForcePin(){
+  const n = fpNeeds();
+  $("fpPinPart").hidden = !n.pin; $("fpTermsPart").hidden = !n.terms;
+  $("fpTitle").textContent = n.pin ? "Make your own PIN" : "Host, DJ & Staff Terms";
+  $("fpGo").textContent = n.pin && n.terms ? "Agree & save my PIN" : n.pin ? "Save my PIN" : "I agree";
+  if(!$("forcePin").hidden) return;
+  $("forcePin").hidden = false; $("fpErr").textContent = ""; $("fpPin").value = ""; $("fpPin2").value = ""; $("fpAgree").checked = false;
+  setTimeout(() => (n.pin ? $("fpPin") : $("fpAgree")).focus(), 50);
+}
 function render(){
-  if(state && state.me && !state.me.admin && !state.me.own) showForcePin();
+  if(state && state.me && !state.me.admin && (!state.me.own || !state.me.agreed)) showForcePin();
   paintMe(); paintBiz();
   const up = state.queue.find(r => r.status === "up"), waiting = state.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
@@ -614,12 +629,18 @@ $("hostForm").addEventListener("submit", async e => {
   catch(err){ $("hostErr").textContent = err.message; }
 });
 $("fpForm").addEventListener("submit", async e => {
-  e.preventDefault(); const a = $("fpPin").value.trim(), b = $("fpPin2").value.trim();
-  if(!/^\d{4,8}$/.test(a)){ $("fpErr").textContent = "PIN must be 4 to 8 digits."; return; }
-  if(a !== b){ $("fpErr").textContent = "The two PINs don't match."; return; }
-  if(a === pin){ $("fpErr").textContent = "Pick a PIN that's different from the starting one."; return; }
-  try{ await api("/api/kj/my-pin", { pin: a }); pin = a; try{ sessionStorage.setItem("kj_pin", a); }catch(er){} $("forcePin").hidden = true; load(); loadTips(); hostsLoaded = false; }
-  catch(err){ if(err.message !== "pin") $("fpErr").textContent = err.message; }
+  e.preventDefault(); const n = fpNeeds(), a = $("fpPin").value.trim(), b = $("fpPin2").value.trim();
+  if(n.pin){
+    if(!/^\d{4,8}$/.test(a)){ $("fpErr").textContent = "PIN must be 4 to 8 digits."; return; }
+    if(a !== b){ $("fpErr").textContent = "The two PINs don't match."; return; }
+    if(a === pin){ $("fpErr").textContent = "Pick a PIN that's different from the starting one."; return; }
+  }
+  if(n.terms && !$("fpAgree").checked){ $("fpErr").textContent = "Check the box to agree to the terms."; return; }
+  try{
+    if(n.terms) await api("/api/kj/host-terms", { agree: true, v: state.hostTermsV });
+    if(n.pin){ await api("/api/kj/my-pin", { pin: a }); pin = a; try{ sessionStorage.setItem("kj_pin", a); }catch(er){} }
+    $("forcePin").hidden = true; load(); loadTips(); hostsLoaded = false;
+  }catch(err){ if(err.message !== "pin") $("fpErr").textContent = err.message; }
 });
 $("fpOut").addEventListener("click", async () => { $("forcePin").hidden = true; try{ await api("/api/kj/logout", {}); }catch(e){} logout(""); });
 $("myPinBtn").addEventListener("click", () => { $("myPinForm").hidden = !$("myPinForm").hidden; $("myPinErr").textContent = ""; });

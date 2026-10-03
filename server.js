@@ -532,7 +532,8 @@ app.get("/api/wall", wrap(async (req, res) => {
 
 /* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
 // user agreement: which version this phone agreed to, and when (kept as a record)
-const TERMS_V = "2026-10-02.2";
+const TERMS_V = "2026-10-03";
+const HOST_TERMS_V = "2026-10-03";   // Host, DJ & Staff Terms (terms page, #hostterms)
 async function termsOk(dev) { try { return JSON.parse((await db.getSetting("terms:" + dev)) || "{}").v === TERMS_V; } catch (e) { return false; } }
 async function recordTerms(req, dev) { const u = currentUser(req); await db.setSetting("terms:" + dev, JSON.stringify({ v: TERMS_V, at: new Date().toISOString(), ip: req.ip, customer: u || null, ua: String(req.headers["user-agent"] || "").slice(0, 200) })); }
 app.post("/api/terms", wrap(async (req, res) => {
@@ -618,7 +619,7 @@ async function whoIs(pin) {
   if (!pin) return null;
   if (T() === "dive" ? same(pin, KJ_PIN) : pinMatches(pin, TEN().pinHash)) return { name: "Owner", admin: true, role: "house" };
   const h = (await getHosts()).find(x => same(pin, x.pin));
-  return h ? { name: h.name, admin: false, own: h.own === true, role: h.role === "staff" ? "staff" : "dj" } : null;
+  return h ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: h.role === "staff" ? "staff" : "dj" } : null;
 }
 const pinTries = new Map();
 async function kjAuth(req, res, next) {
@@ -629,8 +630,9 @@ async function kjAuth(req, res, next) {
     if (!who) { l.push(t); pinTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
     if (who.role === "dj") { const bad = await djGate(req, who); if (bad) return res.status(bad.status).json(bad.body); }
     // DJ and staff logins start with a PIN the owner made; they must set their own before doing anything else
-    if (!who.admin && !who.own && !/\/api\/kj\/(state|my-pin|logout)(\?|$)/.test(req.originalUrl))
-      return res.status(403).json({ error: "Set your own PIN first.", needNewPin: true });
+    // ...and agree to the Host, DJ & Staff Terms
+    if (!who.admin && (!who.own || !who.agreed) && !/\/api\/kj\/(state|my-pin|logout|host-terms)(\?|$)/.test(req.originalUrl))
+      return res.status(403).json({ error: !who.own ? "Set your own PIN first." : "Agree to the Host, DJ & Staff Terms first.", needNewPin: true });
     req.kj = who; next();
   } catch (e) { console.error(e); res.status(500).json({ error: "Something went wrong. Try again." }); }
 }
@@ -703,7 +705,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ me: req.kj, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
+  res.json({ me: req.kj, hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -803,6 +805,13 @@ app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   if (T() !== "dive" && req.body.role !== "staff" && hosts.filter(h => h.role !== "staff").length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " DJ logins. Remove one to add another." });
   if (hosts.some(h => h.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: "There's already a host with that name." });
   hosts.push({ name, pin, own: false, role: req.body.role === "staff" ? "staff" : "dj" }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+}));
+app.post("/api/kj/host-terms", wrap(async (req, res) => {
+  if (req.kj.admin) return res.json({ ok: true });
+  if (req.body.agree !== true || req.body.v !== HOST_TERMS_V) return res.status(400).json({ error: "Check the box to agree." });
+  const hosts = await getHosts(), me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Login not found." });
+  me.agreed = HOST_TERMS_V; me.agreedAt = new Date().toISOString(); me.agreedIp = req.ip; await db.setSetting("hosts", JSON.stringify(hosts));
+  res.json({ ok: true });
 }));
 app.post("/api/kj/my-pin", wrap(async (req, res) => {
   if (req.kj.admin) return res.status(400).json({ error: T() === "dive" ? "The owner PIN is changed in Render (KJ_PIN)." : "Change the owner PIN on the Setup page." });

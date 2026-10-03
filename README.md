@@ -43,6 +43,7 @@ Guests scan a QR code (or open the link), sign up for a song, and watch their pl
 - Start a new night: clears the line and keeps all history.
 - **Separate host logins:** the owner adds hosts, each with their own PIN, and hosts can change their own PIN.
 - **Starting PINs:** the owner gives each DJ and staff login a starting PIN. On first sign-in they must make their own PIN before anything else works. A PIN reset puts them back to that step.
+- **Host, DJ & Staff Terms:** on first sign-in (and whenever `HOST_TERMS_V` changes) DJs and staff must check a box agreeing to the host terms (terms page, `#hostterms`). Acceptance (version, time, IP) is saved on their login.
 - **Tip money:** the house PIN sees every DJ's tips and a per-DJ total (Tips card and Analytics). Each DJ sees only their own. Staff see none.
 - **Staff list (`/staff`) is owner-only:** opens with the list PIN (`STAFF_LIST_PIN` in Render; other bars use their owner PIN). Each group (Customers, DJs, House staff) has its own copy button.
 
