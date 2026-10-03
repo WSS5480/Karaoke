@@ -859,9 +859,9 @@ async function loadMine(force){
 $("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
 $("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
 /* "For you": suggestions from the song library based on what they've sung, hearted and saved to practice.
-   Same artist scores highest, then same style (genre) and language, plus a boost for songs popular at the bar. */
+   Same artist scores highest, then same style (genre) and language. Only this singer's own songs are used. */
 let popular = [], forSeed = 0;
-fetch("/api/popular", { cache: "no-store" }).then(r => r.json()).then(j => { popular = j.items || []; paintFor(); }).catch(() => {});
+// privacy: suggestions use only this singer's own songs plus the song library — never other people's songs
 function libFind(song, artist){ const t = norm(song), a = norm(artist || ""); return songs.find(s => norm(s.t) === t && (!a || norm(s.a) === a)) || songs.find(s => norm(s.t) === t); }
 function rand(seed){ let x = Math.sin(seed) * 10000; return x - Math.floor(x); }
 function paintFor(){
@@ -882,15 +882,14 @@ function paintFor(){
     if(aw){ sc += 6 + aw * 2; why = "You like " + s.a; }
     if(gw){ sc += 2 + gw; if(!why) why = "More " + s.g; }
     if(lw) sc += 1 + lw * 0.5;
-    if(pw){ sc += pw; if(!why) why = "Popular here"; }
     if(fresh && spanish && s.l === "Spanish") sc += 2;
     sc += rand(i * 7.3 + forSeed) * 3;            // a little variety so "Show me more" changes the list
-    return { s, sc, why: why || (fresh ? "Crowd favorite" : "Try something new") };
+    return { s, sc, why: why || (fresh ? "Karaoke classic" : "Try something new") };
   }).sort((a, b) => b.sc - a.sc);
   // no more than 2 songs by the same artist, so the list stays varied
   const per = {}, out = [];
   for(const x of scored){ const a = norm(x.s.a); if((per[a] || 0) >= 2) continue; per[a] = (per[a] || 0) + 1; out.push(x); if(out.length >= 10) break; }
-  $("forLead").textContent = fresh ? "Not sure what to sing? Here are crowd favorites. Sing a few and these get picked just for you." : "Picked for you from what you've sung and saved.";
+  $("forLead").textContent = fresh ? "Not sure what to sing? Here are some karaoke classics. Sing a few and these get picked just for you." : "Picked for you from what you've sung and saved.";
   const ol = $("forList"); ol.innerHTML = "";
   out.forEach(x => {
     const tag = document.createElement("span"); tag.className = "why"; tag.textContent = x.why;
