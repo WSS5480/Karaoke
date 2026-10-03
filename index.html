@@ -68,6 +68,16 @@ li.up .av{border-color:var(--green)}
 .pic .pbtns{display:flex;gap:6px;flex-wrap:wrap}
 .pic .pbtns .sm{padding:7px 12px}
 .pic .ring:not(.none) i{display:none}
+.ringwrap{position:relative;flex:none}
+.pinfo{position:absolute;right:-2px;bottom:-2px;width:26px;height:26px;border-radius:50%;border:2px solid var(--wall);background:var(--green);color:#041206;display:grid;place-items:center;padding:0;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+/* saved: just the photo, centered, with the little i for changes */
+#picCard.saved{background:none;border:0;padding:4px 0 0;align-items:center}
+#picCard.saved .pic{justify-content:center}
+#picCard.saved .ring{width:96px;height:96px}
+#picCard.saved:not(.open) .ptx{display:none}
+#picCard.saved.open{background:var(--panel);border:1px solid var(--line);padding:14px 18px;align-items:stretch}
+#picCard.saved.open .pic{justify-content:flex-start}
+#picCard.saved.open .ring{width:72px;height:72px}
 .cropbox{max-width:400px;align-items:stretch;overflow-y:auto;padding-bottom:0}
 .csave{position:sticky;bottom:0;background:var(--panel);padding:10px 0 12px;display:flex;flex-direction:column;gap:4px;margin-top:2px}
 .picok{color:var(--green-hi);font-weight:600;font-size:14px}
@@ -226,11 +236,14 @@ li.up .av{border-color:var(--green)}
 
   <section class="card" id="picCard" style="gap:8px">
     <div class="pic">
-      <button type="button" class="ring none" id="picRing" aria-label="Add your profile photo"><img id="picImg" src="/logo.png" alt=""><i aria-hidden="true">+</i></button>
+      <div class="ringwrap">
+        <button type="button" class="ring none" id="picRing" aria-label="Add your profile photo"><img id="picImg" src="/logo.png" alt=""><i aria-hidden="true">+</i></button>
+        <button type="button" class="pinfo" id="picInfo" aria-label="Photo settings" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
+      </div>
       <div class="ptx">
         <b id="picTitle">Add your photo <span style="font-weight:400;color:var(--ink-2)">/ Tu foto</span></b>
         <small>Shows on the TV when you're up. Tap your photo to resize it. No photo? We show The Dive logo.</small>
-        <div class="pbtns"><button type="button" class="sm" id="picAdd">Add photo</button><button type="button" class="sm" id="picDel" hidden>Remove</button></div>
+        <div class="pbtns"><button type="button" class="sm" id="picEdit" hidden>Resize</button><button type="button" class="sm" id="picAdd">Add photo</button><button type="button" class="sm" id="picDel" hidden>Remove</button></div>
       </div>
       <input type="file" id="picFile" accept="image/*" hidden>
     </div>
@@ -1053,6 +1066,8 @@ function paintPhoto(v){
   img.src = has ? "/api/photo/me?v=" + v : "/logo.png";
   $("picAdd").textContent = has ? "Change photo" : "Add photo"; $("picDel").hidden = !has;
   $("picTitle").firstChild.textContent = has ? "Your photo " : "Add your photo ";
+  $("picCard").classList.toggle("saved", has); $("picCard").classList.remove("open");
+  $("picInfo").hidden = !has; $("picInfo").setAttribute("aria-expanded", "false"); $("picEdit").hidden = !has;
   $("picRing").setAttribute("aria-label", has ? "Change your profile photo" : "Add your profile photo");
 }
 /* crop editor: drag to move, pinch / slider / mouse wheel to zoom; the circle is what shows on the TV */
@@ -1140,6 +1155,8 @@ const pickPhoto = () => { $("picFile").value = ""; $("picFile").click(); };
 // tapping your current photo re-sizes it; the button picks a new one
 $("picRing").addEventListener("click", () => { if($("picRing").classList.contains("none")) pickPhoto(); else choosePhoto($("picImg").src); });
 $("picAdd").addEventListener("click", pickPhoto);
+$("picEdit").addEventListener("click", () => choosePhoto($("picImg").src));
+$("picInfo").addEventListener("click", () => { const o = $("picCard").classList.toggle("open"); $("picInfo").setAttribute("aria-expanded", String(o)); });
 $("picFile").addEventListener("change", () => {
   const f = $("picFile").files[0]; if(!f) return;
   if(!termsAccepted){ pendingPhoto = f; openTerms(); return; }
