@@ -202,6 +202,8 @@ li.up .av{border-color:var(--green)}
 .tcopy{background:var(--wall);border:1px dashed var(--line);border-radius:12px;padding:12px;text-align:center}
 .tcopy b{display:block;font-size:19px;overflow-wrap:anywhere;margin:4px 0}
 textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px;resize:vertical}
+.lyr{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--green-hi);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 10px;flex:none}
+.spot .lyr{font-size:15px;padding:8px 16px;align-self:center}
 </style>
 </head>
 <body>
@@ -294,6 +296,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <div class="num" id="mineNum"></div>
     <p id="mineLine"></p>
     <div class="song" id="mineSong"></div>
+    <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics / Letra</a>
     <p>Keep this page open. It updates on its own.</p>
     <button class="ghost" id="cancel" type="button">Cancel my song</button>
   </section>
@@ -570,6 +573,7 @@ $("cancel").addEventListener("click", async () => {
   $("cancel").dataset.armed = ""; $("cancel").textContent = "Cancel my song"; refresh();
 });
 
+const lyricsUrl = r => "https://www.google.com/search?q=" + encodeURIComponent(r.song + (r.artist ? " " + r.artist : "") + " lyrics");
 function render(data){
   mine = data.mine; multiOn = !!data.multi;
   $("venueLine").hidden = !data.venue; $("venueLine").textContent = data.venue ? "Tonight at " + data.venue : "";
@@ -586,6 +590,7 @@ function render(data){
     $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + (ahead + 1);
     $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
     $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
+    $("mineLyr").href = lyricsUrl(mine);
     if(mine.status === "up" && !buzzed && navigator.vibrate){ navigator.vibrate([200, 100, 200]); buzzed = true; }
   }
   const ol = $("queue"); ol.innerHTML = "";
@@ -598,7 +603,9 @@ function render(data){
     const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
     const av = document.createElement("img"); av.className = "av"; av.alt = ""; av.loading = "lazy";
     av.src = r.photo ? "/api/photo/" + r.id + "?v=" + r.photo : "/logo.png"; av.onerror = () => { av.onerror = null; av.src = "/logo.png"; };
-    t.append(b, s); li.append(n, av, t); ol.appendChild(li);
+    t.append(b, s); li.append(n, av, t);
+    if(r.status === "up" || (mine && r.id === mine.id)){ const lk = document.createElement("a"); lk.className = "lyr"; lk.href = lyricsUrl(r); lk.target = "_blank"; lk.rel = "noopener"; lk.textContent = "🔎 Lyrics"; lk.setAttribute("aria-label", "Search lyrics for " + r.song); li.appendChild(lk); }
+    ol.appendChild(li);
   });
 }
 
