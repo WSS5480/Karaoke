@@ -68,8 +68,10 @@ li.up .av{border-color:var(--green)}
 .pic .pbtns{display:flex;gap:6px;flex-wrap:wrap}
 .pic .pbtns .sm{padding:7px 12px}
 .pic .ring:not(.none) i{display:none}
-.cropbox{max-width:400px;align-items:stretch}
-.cstage{position:relative;width:min(100%,300px);aspect-ratio:1;margin:4px auto;overflow:hidden;border-radius:14px;background:#fff;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.cropbox{max-width:400px;align-items:stretch;overflow-y:auto;padding-bottom:0}
+.csave{position:sticky;bottom:0;background:var(--panel);padding:10px 0 12px;display:flex;flex-direction:column;gap:4px;margin-top:2px}
+.picok{color:var(--green-hi);font-weight:600;font-size:14px}
+.cstage{position:relative;width:min(100%,300px,38vh);flex:none;aspect-ratio:1;margin:4px auto;overflow:hidden;border-radius:14px;background:#fff;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 .cstage:active{cursor:grabbing}
 .cstage img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;pointer-events:none;-webkit-user-drag:none}
 .cstage .cmask{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.62);border:3px solid var(--green);pointer-events:none}
@@ -376,8 +378,8 @@ li.up .av{border-color:var(--green)}
     <div class="czoom"><button type="button" class="sm" id="cOut" aria-label="Zoom out">−</button><input type="range" id="cRange" min="0.4" max="5" step="0.01" value="1" aria-label="Zoom"><button type="button" class="sm" id="cIn" aria-label="Zoom in">+</button></div>
     <div class="czoom cmove" aria-label="Move photo"><button type="button" class="sm" data-mv="-1,0" aria-label="Move left">←</button><button type="button" class="sm" data-mv="0,-1" aria-label="Move up">↑</button><button type="button" class="sm" id="cReset" style="width:auto;padding:0 14px;font-size:14px">Center</button><button type="button" class="sm" data-mv="0,1" aria-label="Move down">↓</button><button type="button" class="sm" data-mv="1,0" aria-label="Move right">→</button></div>
     <p class="hint" style="color:var(--ink-2);text-align:center;margin:0">Drag the photo to move it. Pinch or slide to zoom. / Arrastra para mover, desliza para acercar.</p>
-    <button class="go" id="cUse" type="button">Use photo</button>
-    <button class="linkbtn" id="cCancel" type="button">Cancel</button>
+    <div class="csave"><button class="go" id="cUse" type="button">Save photo <span style="font-weight:400;text-transform:none">/ Guardar</span></button>
+    <button class="linkbtn" id="cCancel" type="button">Cancel</button></div>
   </div>
 </div>
 <div class="tmodal" id="termsModal" hidden role="dialog" aria-modal="true" aria-labelledby="termsTitle">
@@ -1113,7 +1115,7 @@ function editPhoto(src){
   document.querySelectorAll("[data-mv]").forEach(bt => bt.addEventListener("click", () => { const [dx, dy] = bt.dataset.mv.split(",").map(Number), step = cropSize() * 0.05; crop.x += dx * step; crop.y += dy * step; cropPaint(); }));
   $("cReset").addEventListener("click", () => crop.img && cropReset());
   st.addEventListener("keydown", e => { const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; if(!k) return; e.preventDefault(); crop.x += k[0] * 8; crop.y += k[1] * 8; cropPaint(); });
-  $("cUse").addEventListener("click", () => crop.done && crop.done(true));
+  $("cUse").addEventListener("click", () => { if(!crop.done) return; $("cUse").disabled = true; crop.done(true); });
   $("cCancel").addEventListener("click", () => crop.done && crop.done(false));
   addEventListener("resize", () => { if(!$("cropModal").hidden && crop.img){ const old = crop.base; crop.base = cropSize() / Math.min(crop.img.naturalWidth, crop.img.naturalHeight); crop.x *= crop.base / old; crop.y *= crop.base / old; cropPaint(); } });
 })();
@@ -1130,8 +1132,9 @@ async function uploadPhoto(data){
     if(r.status === 428){ termsAccepted = false; pendingPhoto = data; openTerms(); return; }
     if(!r.ok) throw new Error(j.error || "Couldn't save the photo.");
     paintPhoto(j.photo); refresh();
+    $("picErr").innerHTML = '<span class="picok">✓ Photo saved / Foto guardada</span>'; clearTimeout(window._picOk); window._picOk = setTimeout(() => { $("picErr").textContent = ""; }, 4000);
   }catch(e){ $("picErr").textContent = e.message || "Couldn't save the photo. Check your signal."; }
-  finally{ $("picAdd").disabled = false; if($("picAdd").textContent === "Saving…") $("picAdd").textContent = $("picDel").hidden ? "Add photo" : "Change photo"; }
+  finally{ $("cUse").disabled = false; $("picAdd").disabled = false; if($("picAdd").textContent === "Saving…") $("picAdd").textContent = $("picDel").hidden ? "Add photo" : "Change photo"; }
 }
 const pickPhoto = () => { $("picFile").value = ""; $("picFile").click(); };
 // tapping your current photo re-sizes it; the button picks a new one
