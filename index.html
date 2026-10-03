@@ -68,6 +68,14 @@ li.up .av{border-color:var(--green)}
 .pic .pbtns{display:flex;gap:6px;flex-wrap:wrap}
 .pic .pbtns .sm{padding:7px 12px}
 .pic .ring:not(.none) i{display:none}
+.cropbox{max-width:400px;align-items:stretch}
+.cstage{position:relative;width:min(100%,300px);aspect-ratio:1;margin:4px auto;overflow:hidden;border-radius:14px;background:#000;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.cstage:active{cursor:grabbing}
+.cstage img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;pointer-events:none;-webkit-user-drag:none}
+.cstage .cmask{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.62);border:3px solid var(--green);pointer-events:none}
+.czoom{display:flex;gap:10px;align-items:center}
+.czoom input{flex:1;accent-color:var(--green)}
+.czoom .sm{width:40px;height:40px;padding:0;font-size:20px;line-height:1}
 .empty{padding:14px;color:var(--ink-2);text-align:center}
 .closed{text-align:center;color:var(--ink-2)}
 .rate{text-align:center}
@@ -218,7 +226,7 @@ li.up .av{border-color:var(--green)}
       <button type="button" class="ring none" id="picRing" aria-label="Add your profile photo"><img id="picImg" src="/logo.png" alt=""><i aria-hidden="true">+</i></button>
       <div class="ptx">
         <b id="picTitle">Add your photo <span style="font-weight:400;color:var(--ink-2)">/ Tu foto</span></b>
-        <small>Shows on the TV when you're up. No photo? We show The Dive logo.</small>
+        <small>Shows on the TV when you're up. Tap your photo to resize it. No photo? We show The Dive logo.</small>
         <div class="pbtns"><button type="button" class="sm" id="picAdd">Add photo</button><button type="button" class="sm" id="picDel" hidden>Remove</button></div>
       </div>
       <input type="file" id="picFile" accept="image/*" hidden>
@@ -360,6 +368,16 @@ li.up .av{border-color:var(--green)}
     <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
   </section>
 </main>
+<div class="tmodal" id="cropModal" hidden role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+  <div class="tbox cropbox">
+    <h2 id="cropTitle">Size your photo <span style="font-weight:400;color:var(--ink-2)">/ Ajusta tu foto</span></h2>
+    <div class="cstage" id="cStage"><img id="cImg" alt="Your photo" draggable="false"><div class="cmask"></div></div>
+    <div class="czoom"><button type="button" class="sm" id="cOut" aria-label="Zoom out">−</button><input type="range" id="cRange" min="1" max="5" step="0.01" value="1" aria-label="Zoom"><button type="button" class="sm" id="cIn" aria-label="Zoom in">+</button></div>
+    <p class="hint" style="color:var(--ink-2);text-align:center;margin:0">Drag to move. Pinch or slide to zoom. / Arrastra y acerca.</p>
+    <button class="go" id="cUse" type="button">Use photo</button>
+    <button class="linkbtn" id="cCancel" type="button">Cancel</button>
+  </div>
+</div>
 <div class="tmodal" id="termsModal" hidden role="dialog" aria-modal="true" aria-labelledby="termsTitle">
   <div class="tbox">
     <h2 id="termsTitle">Before you sing <span>/ Antes de cantar</span></h2>
@@ -1016,7 +1034,7 @@ $("termsGo").addEventListener("click", async () => {
     const r = await fetch("/api/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ v: termsV, agree: true }) });
     if(!r.ok) throw new Error();
     termsAccepted = true; $("termsHint").hidden = false; closeTerms();
-    if(pendingPhoto){ const f = pendingPhoto; pendingPhoto = null; uploadPhoto(f); }
+    if(pendingPhoto){ const f = pendingPhoto; pendingPhoto = null; if(typeof f === "string") uploadPhoto(f); else choosePhoto(f); }
     else if(pendingQuick){ const q = pendingQuick; pendingQuick = null; const b = document.createElement("button"); quickSignup(q.song, q.artist, b); }
     else $("form").requestSubmit ? $("form").requestSubmit() : $("submit").click();
   }catch(e){ $("termsErr").textContent = "Couldn't save. Check your signal and try again."; $("termsGo").disabled = false; }
@@ -1033,38 +1051,89 @@ function paintPhoto(v){
   $("picTitle").firstChild.textContent = has ? "Your photo " : "Add your photo ";
   $("picRing").setAttribute("aria-label", has ? "Change your profile photo" : "Add your profile photo");
 }
-function shrinkPhoto(file){
+/* crop editor: drag to move, pinch / slider / mouse wheel to zoom; the circle is what shows on the TV */
+const crop = { img: null, z: 1, x: 0, y: 0, base: 1, done: null };
+function cropSize(){ return $("cStage").clientWidth || 300; }
+function cropClamp(){
+  const S = cropSize(), sc = crop.base * crop.z, w = crop.img.naturalWidth * sc, h = crop.img.naturalHeight * sc;
+  crop.x = Math.min(0, Math.max(S - w, crop.x)); crop.y = Math.min(0, Math.max(S - h, crop.y));
+}
+function cropPaint(){ cropClamp(); $("cImg").style.transform = "translate(" + crop.x + "px," + crop.y + "px) scale(" + crop.base * crop.z + ")"; $("cRange").value = crop.z; }
+function cropZoom(z, cx, cy){
+  const S = cropSize(); if(cx == null){ cx = S / 2; cy = S / 2; }
+  z = Math.min(5, Math.max(1, z)); const k = z / crop.z;
+  crop.x = cx - (cx - crop.x) * k; crop.y = cy - (cy - crop.y) * k; crop.z = z; cropPaint();
+}
+function editPhoto(src){
   return new Promise((ok, no) => {
-    const url = URL.createObjectURL(file), img = new Image();
+    const img = new Image(); let url = null;
+    if(src instanceof Blob){ url = URL.createObjectURL(src); img.src = url; } else img.src = src;
+    img.onerror = () => { if(url) URL.revokeObjectURL(url); no(new Error("bad")); };
     img.onload = () => {
-      const w = img.naturalWidth, h = img.naturalHeight, s = Math.min(w, h), c = document.createElement("canvas");
-      c.width = c.height = 360; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, 360, 360);
-      g.drawImage(img, (w - s) / 2, (h - s) / 3, s, s, 0, 0, 360, 360);   // a bit above center keeps faces in frame
-      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", 0.82));
+      crop.img = img; $("cImg").src = img.src; $("cropModal").hidden = false; document.body.style.overflow = "hidden";
+      requestAnimationFrame(() => {
+        const S = cropSize(), w = img.naturalWidth, h = img.naturalHeight;
+        crop.base = S / Math.min(w, h); crop.z = 1;
+        crop.x = (S - w * crop.base) / 2; crop.y = Math.min(0, (S - h * crop.base) / 3);   // a bit above center keeps faces in frame
+        cropPaint();
+      });
+      crop.done = (use) => {
+        $("cropModal").hidden = true; document.body.style.overflow = "";
+        if(!use){ if(url) URL.revokeObjectURL(url); return ok(null); }
+        const S = cropSize(), sc = crop.base * crop.z, c = document.createElement("canvas"); c.width = c.height = 360;
+        const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, 360, 360);
+        g.drawImage(img, -crop.x / sc, -crop.y / sc, S / sc, S / sc, 0, 0, 360, 360);
+        if(url) URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", 0.85));
+      };
     };
-    img.onerror = () => { URL.revokeObjectURL(url); no(new Error("bad")); };
-    img.src = url;
   });
 }
-async function uploadPhoto(file){
+(function(){
+  const st = $("cStage"), pts = new Map(); let pinch = null;
+  const local = e => { const r = st.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  st.addEventListener("pointerdown", e => { st.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e)); pinch = null; });
+  st.addEventListener("pointermove", e => {
+    if(!pts.has(e.pointerId) || !crop.img) return;
+    const p = local(e), prev = pts.get(e.pointerId); pts.set(e.pointerId, p);
+    if(pts.size === 1){ crop.x += p.x - prev.x; crop.y += p.y - prev.y; cropPaint(); return; }
+    const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    if(pinch){ crop.x += mx - pinch.mx; crop.y += my - pinch.my; cropZoom(crop.z * d / pinch.d, mx, my); }
+    pinch = { d, mx, my };
+  });
+  const up = e => { pts.delete(e.pointerId); pinch = null; };
+  st.addEventListener("pointerup", up); st.addEventListener("pointercancel", up);
+  st.addEventListener("wheel", e => { e.preventDefault(); const p = local(e); cropZoom(crop.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1), p.x, p.y); }, { passive: false });
+  $("cRange").addEventListener("input", e => cropZoom(parseFloat(e.target.value)));
+  $("cIn").addEventListener("click", () => cropZoom(crop.z + 0.25));
+  $("cOut").addEventListener("click", () => cropZoom(crop.z - 0.25));
+  $("cUse").addEventListener("click", () => crop.done && crop.done(true));
+  $("cCancel").addEventListener("click", () => crop.done && crop.done(false));
+  addEventListener("resize", () => { if(!$("cropModal").hidden && crop.img){ const old = crop.base; crop.base = cropSize() / Math.min(crop.img.naturalWidth, crop.img.naturalHeight); crop.x *= crop.base / old; crop.y *= crop.base / old; cropPaint(); } });
+})();
+async function choosePhoto(src){
+  $("picErr").textContent = "";
+  let data; try{ data = await editPhoto(src); }catch(e){ $("picErr").textContent = "That picture didn't open. Try another one."; return; }
+  if(data) uploadPhoto(data);
+}
+async function uploadPhoto(data){
   $("picErr").textContent = ""; $("picAdd").disabled = true; $("picAdd").textContent = "Saving…";
   try{
-    const data = await shrinkPhoto(file);
     const r = await fetch("/api/photo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
     const j = await r.json().catch(() => ({}));
-    if(r.status === 428){ termsAccepted = false; pendingPhoto = file; openTerms(); return; }
+    if(r.status === 428){ termsAccepted = false; pendingPhoto = data; openTerms(); return; }
     if(!r.ok) throw new Error(j.error || "Couldn't save the photo.");
-    paintPhoto(j.photo); mineSig = ""; refresh();
-  }catch(e){ $("picErr").textContent = e.message === "bad" ? "That picture didn't open. Try another one." : (e.message || "Couldn't save the photo. Check your signal."); }
+    paintPhoto(j.photo); refresh();
+  }catch(e){ $("picErr").textContent = e.message || "Couldn't save the photo. Check your signal."; }
   finally{ $("picAdd").disabled = false; if($("picAdd").textContent === "Saving…") $("picAdd").textContent = $("picDel").hidden ? "Add photo" : "Change photo"; }
 }
 const pickPhoto = () => { $("picFile").value = ""; $("picFile").click(); };
-$("picRing").addEventListener("click", pickPhoto);
+// tapping your current photo re-sizes it; the button picks a new one
+$("picRing").addEventListener("click", () => { if($("picRing").classList.contains("none")) pickPhoto(); else choosePhoto($("picImg").src); });
 $("picAdd").addEventListener("click", pickPhoto);
 $("picFile").addEventListener("change", () => {
   const f = $("picFile").files[0]; if(!f) return;
   if(!termsAccepted){ pendingPhoto = f; openTerms(); return; }
-  uploadPhoto(f);
+  choosePhoto(f);
 });
 $("picDel").addEventListener("click", async () => {
   if(!confirm("Remove your photo?")) return;
