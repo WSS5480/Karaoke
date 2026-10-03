@@ -37,6 +37,14 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .cp.done{border-color:var(--green);color:var(--green-hi)}
 ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 #raw{position:absolute;left:-9999px}
+.group{display:flex;flex-direction:column;gap:10px;border-left:3px solid var(--green);padding-left:12px}
+.group[data-who="DJ"]{border-color:#4da3ff}.group[data-who="Staff"]{border-color:#ffc93c}
+.ghd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0 2px}
+.ghd h3{font-family:var(--slab);font-weight:800;font-size:21px;margin:0;line-height:1.1}
+.ghd p{margin:2px 0 0;font-size:13px;color:var(--ink-2)}
+.cpg{flex:none;background:var(--green);color:#041206;border:0;border-radius:999px;padding:10px 14px;font:inherit;font-weight:700;font-size:14px;cursor:pointer}
+.group[data-who="DJ"] .cpg{background:#4da3ff}.group[data-who="Staff"] .cpg{background:#ffc93c}
+.cpg.done{outline:2px solid var(--ink)}
 
 :root{--panel-2:#1b211b;--wall:#0a0c0a}
 .brand{display:flex;align-items:center;gap:12px}.brand img{width:52px}
@@ -73,48 +81,71 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     <div class="brand"><img src="/logo.png" alt="The Dive on 495"><h1>Karaoke Staff List</h1></div>
     <button class="copyall" id="copyAll" type="button">Copy whole list</button>
     <p class="msg" id="msg" role="status"></p>
-    <p style="margin:0;font-size:14px;color:var(--ink-2)">Every link below is its own app. Open it and tap <b>Add</b> to put it on your home screen.</p>
+    <p style="margin:0;font-size:14px;color:var(--ink-2)">Each group has its own copy button, so you only send people what they need. Every link is its own app: open it and tap <b>Add</b> to put it on the home screen.</p>
   </header>
 
+  <div class="group" data-who="Customer">
+    <div class="ghd"><div><h3>👥 Customers</h3><p>Share with guests</p></div><button class="cpg" type="button">Copy customer list</button></div>
   <section>
-    <h2>Customers</h2>
+    <h2>Links</h2>
     <div class="ln"><div class="t"><b>Sign up</b><a href="/">the-dive-karaoke.onrender.com</a></div><button class="cp" type="button">Copy</button></div>
     <div class="ln"><div class="t"><b>Wall of Fame</b><a href="/wall">the-dive-karaoke.onrender.com/wall</a></div><button class="cp" type="button">Copy</button></div>
     <div class="ln"><div class="t"><b>Terms &amp; Privacy</b><a href="/terms">the-dive-karaoke.onrender.com/terms</a></div><button class="cp" type="button">Copy</button></div>
   </section>
+  </div>
 
+  <div class="group" data-who="DJ">
+    <div class="ghd"><div><h3>🎧 DJs</h3><p>Send to DJs only</p></div><button class="cpg" type="button">Copy DJ list</button></div>
   <section>
-    <h2>Host <span>· sign in with your own PIN</span></h2>
+    <h2>Links <span>· sign in with your own PIN</span></h2>
+    <div class="ln"><div class="t"><b>Queue</b><a href="/kj">the-dive-karaoke.onrender.com/kj</a></div><button class="cp" type="button">Copy</button></div>
+    <div class="ln"><div class="t"><b>Spin wheel</b><a href="/wheel">the-dive-karaoke.onrender.com/wheel</a></div><button class="cp" type="button">Copy</button></div>
+    <div class="ln"><div class="t"><b>TV screen</b><a href="/tv">the-dive-karaoke.onrender.com/tv</a></div><button class="cp" type="button">Copy</button></div>
+  </section>
+  <section>
+    <h2>Sign in</h2>
+    <ol><li>Be at the bar and allow location. Only one DJ at a time.</li><li>Sign in with the PIN the owner gave you, then tap <b>Change my PIN</b>.</li><li>In the <b>Tips</b> card, save your payment links once, then tap <b>Send tips to me tonight</b>.</li></ol>
+  </section>
+  <section>
+    <h2>During the night</h2>
+    <ul><li><b>Next singer</b> moves the line</li><li><b>Pause</b> for breaks</li><li><b>Fix name</b> if someone signs up wrong</li><li>Bad photo? Tap it, then <b>🙈 Blur now</b>. It's off the TV and wheel instantly.</li><li><b>Lyrics: on / off</b> in Night controls hides the lyrics buttons on guests' phones.</li><li>Cast the <b>TV screen</b> or the <b>Spin wheel</b> to the bar TV.</li></ul>
+  </section>
+  <section>
+    <h2>End of night</h2>
+    <ul><li>Tap <b>Stop taking tips</b>, then <b>Sign out</b>. Leaving the bar also signs you out.</li></ul>
+  </section>
+  </div>
+
+  <div class="group" data-who="Staff">
+    <div class="ghd"><div><h3>🍺 House staff</h3><p>Bar staff and managers only</p></div><button class="cpg" type="button">Copy staff list</button></div>
+  <section>
+    <h2>Links <span>· sign in with your own PIN</span></h2>
     <div class="ln"><div class="t"><b>Queue</b><a href="/kj">the-dive-karaoke.onrender.com/kj</a></div><button class="cp" type="button">Copy</button></div>
     <div class="ln"><div class="t"><b>Analytics</b><a href="/stats">the-dive-karaoke.onrender.com/stats</a></div><button class="cp" type="button">Copy</button></div>
     <div class="ln"><div class="t"><b>Daily ads</b><a href="/ads">the-dive-karaoke.onrender.com/ads</a></div><button class="cp" type="button">Copy</button></div>
     <div class="ln"><div class="t"><b>Customer history</b><a href="/history">the-dive-karaoke.onrender.com/history</a></div><button class="cp" type="button">Copy</button></div>
-  </section>
-
-  <section>
-    <h2>Cast &amp; print</h2>
     <div class="ln"><div class="t"><b>Spin wheel</b><a href="/wheel">the-dive-karaoke.onrender.com/wheel</a></div><button class="cp" type="button">Copy</button></div>
     <div class="ln"><div class="t"><b>TV screen</b><a href="/tv">the-dive-karaoke.onrender.com/tv</a></div><button class="cp" type="button">Copy</button></div>
     <div class="ln"><div class="t"><b>Poster</b><a href="/poster">the-dive-karaoke.onrender.com/poster</a></div><button class="cp" type="button">Copy</button></div>
     <div class="ln"><div class="t"><b>Table signs</b><a href="/tent">the-dive-karaoke.onrender.com/tent</a></div><button class="cp" type="button">Copy</button></div>
   </section>
-
   <section>
     <h2>Start of night</h2>
     <ol><li>Queue page, tap <b>Open sign-ups</b></li><li>Location check <b>on</b></li><li>Cast the TV screen</li></ol>
   </section>
   <section>
-    <h2>During</h2>
-    <ul><li><b>Next singer</b> moves the line</li><li><b>Pause</b> for breaks</li><li><b>Fix name</b> if someone signs up wrong</li><li>Bad photo? Tap it, then <b>🙈 Blur now</b>. It's off the TV and wheel instantly.</li><li><b>🔒 Lock tonight</b> or <b>Lock always</b> stops that person adding new photos</li><li>Rowdy night? Turn on <b>Approve photos first</b>. New photos wait for your <b>✓ Approve</b>.</li><li>DJ: in the <b>Tips</b> card, save your payment links once, then tap <b>Send tips to me tonight</b>.</li></ul>
+    <h2>Running the night</h2>
+    <ul><li>Same controls as the DJ: <b>Next singer</b>, <b>Pause</b>, <b>Fix name</b>, photos, <b>Lyrics on / off</b>.</li><li><b>🔒 Lock tonight</b> or <b>Lock always</b> stops someone adding new photos. Rowdy night? Turn on <b>Approve photos first</b>.</li><li>DJ left or forgot to sign out? Tap <b>Close DJ session</b> in the Tips card. That also stops their tips, and the next DJ can sign in.</li><li>Staff can reset a DJ's PIN or remove a login in the <b>Hosts</b> card.</li><li>Ads page: headline, picture, pick days, Save. Shows at the top of the customer app.</li></ul>
   </section>
   <section>
     <h2>End of night</h2>
-    <ul><li>DJ: tap <b>Stop taking tips</b>, then <b>Sign out</b>.</li><li><b>Start a new night</b>. History stays saved.</li></ul>
+    <ul><li><b>Start a new night</b>. History stays saved.</li></ul>
   </section>
   <section>
-    <h2>DJs, staff &amp; ads</h2>
-    <ul><li>Owner adds DJs and staff at the bottom of the Queue page. Pick DJ or Staff.</li><li>Everyone signs in with their own PIN. DJs must change the starting PIN before they can take tips.</li><li>Only one DJ at a time, and DJs sign in from the bar (allow location). The DJ stays live until they tap Sign out. If their phone leaves the bar, the session closes on its own.</li><li>Only the DJ turns their tips on or off. Staff and the house PIN can't.</li><li>Staff can tap <b>Close DJ session</b> if the DJ left or forgot to sign out. That also stops their tips. Staff can also reset a DJ's PIN or remove a login. Only the house PIN adds logins.</li><li>Ads page: headline, picture, pick days, Save. Shows at the top of the customer app.</li></ul>
+    <h2>Owner only <span>· house PIN</span></h2>
+    <ul><li>Add DJs and staff in the <b>Hosts</b> card. Pick DJ or Staff.</li><li><b>Make DJ / Make staff</b> switches someone's login type.</li><li>Never share the house PIN. Give everyone their own login.</li></ul>
   </section>
+  </div>
 </main>
 <div class="iosguide" id="iosGuide" hidden role="dialog" aria-label="Add The Dive app">
   <div class="box">
@@ -129,8 +160,18 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 const $ = id => document.getElementById(id);
 
 const msg = document.getElementById("msg");
+function sectionText(s){
+  const h = s.querySelector("h2").textContent.trim().toUpperCase();
+  const lines = [...s.querySelectorAll(".ln")].map(l => l.querySelector("b").textContent + ": " + new URL(l.querySelector("a").getAttribute("href"), location.origin).href.replace(/\/$/, ""));
+  const items = [...s.querySelectorAll("li")].map((li, i) => (s.querySelector("ol") ? (i + 1) + ". " : "- ") + li.textContent.trim());
+  return h + "\n" + lines.concat(items).join("\n");
+}
+function groupText(g){ return "THE DIVE KARAOKE – " + g.querySelector("h3").textContent.replace(/^\W+/, "").trim().toUpperCase() + "\n\n" + [...g.querySelectorAll("section")].map(sectionText).join("\n\n"); }
 function plain(){
-  return "THE DIVE KARAOKE – QUICK LIST\n\n" + [...document.querySelectorAll("section")].map(s => {
+  return "THE DIVE KARAOKE – QUICK LIST\n\n" + [...document.querySelectorAll(".group")].map(g => "== " + g.querySelector("h3").textContent.replace(/^\W+/, "").trim().toUpperCase() + " ==\n\n" + [...g.querySelectorAll("section")].map(sectionText).join("\n\n")).join("\n\n\n");
+}
+function oldPlain(){
+  return [...document.querySelectorAll("section")].map(s => {
     const h = s.querySelector("h2").textContent.trim().toUpperCase();
     const lines = [...s.querySelectorAll(".ln")].map(l => l.querySelector("b").textContent + ": " + new URL(l.querySelector("a").getAttribute("href"), location.origin).href.replace(/\/$/, ""));
     const items = [...s.querySelectorAll("li")].map((li, i) => (s.querySelector("ol") ? (i + 1) + ". " : "- ") + li.textContent.trim());
@@ -147,6 +188,7 @@ async function copy(text, btn, label){
   msg.textContent = ok ? label + " copied. Paste it into a text." : "Couldn't copy here. Press and hold a link to copy it.";
 }
 document.getElementById("copyAll").addEventListener("click", e => copy(plain(), e.currentTarget, "Whole list"));
+document.querySelectorAll(".cpg").forEach(b => b.addEventListener("click", () => { const g = b.closest(".group"); copy(groupText(g), b, g.dataset.who + " list"); }));
 document.querySelectorAll(".cp").forEach(b => b.addEventListener("click", () => {
   const l = b.closest(".ln"); copy(new URL(l.querySelector("a").getAttribute("href"), location.origin).href.replace(/\/$/, ""), b, l.querySelector("b").textContent + " link");
 }));
