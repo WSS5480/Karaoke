@@ -799,7 +799,7 @@ function cleanTipLinks(b) {
 async function getTipLinks(name) { try { return JSON.parse((await db.getSetting("tiplinks:" + name)) || "{}"); } catch (e) { return {}; } }
 async function tipState() {
   const host = await db.getSetting("tip_host");
-  if (!host) return { on: false };
+  if (!host || host === "Owner") return { on: false };
   const links = await getTipLinks(host);
   return Object.keys(links).length ? { on: true, host, links } : { on: false };
 }
@@ -831,9 +831,10 @@ app.post("/api/tip", wrap(async (req, res) => {
 // host side
 app.get("/api/kj/tips", wrap(async (req, res) => {
   const s = await tipState(), list = await getTips(barDay().date);
-  res.json({ mine: await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, tonight: list.slice().reverse(), total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
+  res.json({ house: !!req.kj.admin, mine: req.kj.admin ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, tonight: list.slice().reverse(), total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
 }));
 app.post("/api/kj/tips/links", wrap(async (req, res) => {
+  if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Add yourself in Hosts with your own PIN, then log in with that." });
   let links; try { links = cleanTipLinks(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
   await db.setSetting("tiplinks:" + req.kj.name, JSON.stringify(links));
   if (!Object.keys(links).length && (await db.getSetting("tip_host")) === req.kj.name) await db.setSetting("tip_host", "");
@@ -841,6 +842,7 @@ app.post("/api/kj/tips/links", wrap(async (req, res) => {
 }));
 app.post("/api/kj/tips/take", wrap(async (req, res) => {
   if (!req.body.on) { await db.setSetting("tip_host", ""); return res.json({ ok: true }); }
+  if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Log in with your own host PIN." });
   if (!Object.keys(await getTipLinks(req.kj.name)).length) return res.status(400).json({ error: "Add at least one payment link first." });
   await db.setSetting("tip_host", req.kj.name); res.json({ ok: true });
 }));

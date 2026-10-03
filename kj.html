@@ -201,6 +201,7 @@ a{color:var(--green-hi)}
       <div class="row" style="justify-content:space-between"><div><div class="tiptot" id="tipTotal">$0</div><small style="color:var(--ink-2)">tapped tonight · check your apps to confirm</small></div>
         <button id="tipTake"></button></div>
       <ol id="tipList"></ol>
+      <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">You're on the house PIN, which everyone shares, so it can't take tips. Add yourself in <b>Hosts</b> below with your own PIN, then log in with that to set up your payment links.</p>
       <button id="tipLinksBtn" type="button">My payment links</button>
       <form id="tipLinksForm" hidden novalidate style="display:flex;flex-direction:column;gap:8px">
         <div class="tipgrid">
@@ -559,6 +560,8 @@ async function loadTips(){
   $("tipTake").textContent = mineOn ? "Stop taking tips" : has ? "Send tips to me tonight" : "Add your links to take tips";
   $("tipTake").className = mineOn ? "" : "next";
   $("tipTotal").textContent = $$m(tips.total);
+  $("tipHouse").hidden = !tips.house; $("tipLinksBtn").hidden = !!tips.house; $("tipTake").hidden = false;
+  if(tips.house){ $("tipLinksForm").hidden = true; $("tipTake").hidden = !tips.on; $("tipTake").textContent = "Turn tips off"; $("tipTake").className = ""; }
   const by = {}; tips.tonight.forEach(t => by[t.who] = (by[t.who] || 0) + t.amount);
   const topWho = Object.keys(by).sort((a, b) => by[b] - by[a])[0];
   const ol = $("tipList"); ol.innerHTML = "";
@@ -579,6 +582,7 @@ async function loadTips(){
 $("tipTake").addEventListener("click", async () => {
   if(!tips) return;
   const me = state.me.name;
+  if(tips.house){ try{ await api("/api/kj/tips/take", { on: false }); }catch(e){} loadTips(); return; }
   if(!Object.keys(tips.mine).length){ $("tipLinksForm").hidden = false; return; }
   try{ await api("/api/kj/tips/take", { on: !(tips.on && tips.host === me) }); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
   loadTips();
