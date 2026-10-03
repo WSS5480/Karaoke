@@ -202,6 +202,8 @@ a{color:var(--green-hi)}
         <button id="tipTake"></button></div>
       <ol id="tipList"></ol>
       <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">You're on the house PIN, which everyone shares, so it can't take tips. Add yourself in <b>Hosts</b> below with your own PIN, then log in with that to set up your payment links.</p>
+      <p id="tipNeedPin" hidden style="margin:0;color:#ffc93c;font-size:14px">🔒 Change your PIN first. The owner set your starting PIN, so make one only you know before adding payment info.</p>
+      <button id="tipPinBtn" type="button" class="next" hidden>Change my PIN</button>
       <button id="tipLinksBtn" type="button">My payment links</button>
       <form id="tipLinksForm" hidden novalidate style="display:flex;flex-direction:column;gap:8px">
         <div class="tipgrid">
@@ -544,7 +546,7 @@ $("myPinBtn").addEventListener("click", () => { $("myPinForm").hidden = !$("myPi
 $("myPinForm").addEventListener("submit", async e => {
   e.preventDefault(); const p = $("myPin").value.trim();
   if(!/^\d{4,8}$/.test(p)){ $("myPinErr").textContent = "PIN must be 4 to 8 digits."; return; }
-  try{ await api("/api/kj/my-pin", { pin: p }); pin = p; try{ sessionStorage.setItem("kj_pin", p); }catch(er){} $("myPin").value = ""; $("myPinForm").hidden = true; $("meLine").textContent = "PIN changed. Signed in as " + state.me.name; }
+  try{ await api("/api/kj/my-pin", { pin: p }); pin = p; try{ sessionStorage.setItem("kj_pin", p); }catch(er){} $("myPin").value = ""; $("myPinForm").hidden = true; $("meLine").textContent = "PIN changed. Signed in as " + state.me.name;  loadTips(); }
   catch(err){ $("myPinErr").textContent = err.message; }
 });
 $("signOut").addEventListener("click", () => { hostsLoaded = false; logout(""); });
@@ -561,6 +563,8 @@ async function loadTips(){
   $("tipTake").className = mineOn ? "" : "next";
   $("tipTotal").textContent = $$m(tips.total);
   $("tipHouse").hidden = !tips.house; $("tipLinksBtn").hidden = !!tips.house; $("tipTake").hidden = false;
+  $("tipNeedPin").hidden = !tips.needPin; $("tipPinBtn").hidden = !tips.needPin;
+  if(tips.needPin){ $("tipLinksBtn").hidden = true; $("tipLinksForm").hidden = true; $("tipTake").hidden = true; }
   if(tips.house){ $("tipLinksForm").hidden = true; $("tipTake").hidden = !tips.on; $("tipTake").textContent = "Turn tips off"; $("tipTake").className = ""; }
   const by = {}; tips.tonight.forEach(t => by[t.who] = (by[t.who] || 0) + t.amount);
   const topWho = Object.keys(by).sort((a, b) => by[b] - by[a])[0];
@@ -587,6 +591,7 @@ $("tipTake").addEventListener("click", async () => {
   try{ await api("/api/kj/tips/take", { on: !(tips.on && tips.host === me) }); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
   loadTips();
 });
+$("tipPinBtn").addEventListener("click", () => { $("myPinForm").hidden = false; $("myPinErr").textContent = ""; $("myPinForm").scrollIntoView({ behavior: "smooth", block: "center" }); $("myPin").focus(); });
 $("tipLinksBtn").addEventListener("click", () => { $("tipLinksForm").hidden = !$("tipLinksForm").hidden; $("tipLinksErr").textContent = ""; });
 $("tipLinksForm").addEventListener("submit", async e => {
   e.preventDefault(); $("tipLinksErr").textContent = "";

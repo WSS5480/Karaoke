@@ -616,7 +616,7 @@ async function whoIs(pin) {
   if (!pin) return null;
   if (T() === "dive" ? same(pin, KJ_PIN) : pinMatches(pin, TEN().pinHash)) return { name: "Owner", admin: true };
   const h = (await getHosts()).find(x => same(pin, x.pin));
-  return h ? { name: h.name, admin: false } : null;
+  return h ? { name: h.name, admin: false, own: h.own === true } : null;
 }
 const pinTries = new Map();
 async function kjAuth(req, res, next) {
@@ -759,7 +759,7 @@ app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   if ((await whoIs(pin)) || hosts.some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is already used. Pick another." });
   if (T() !== "dive" && hosts.length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " host logins. Remove one to add another." });
   if (hosts.some(h => h.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: "There's already a host with that name." });
-  hosts.push({ name, pin }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+  hosts.push({ name, pin, own: false }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
 app.post("/api/kj/my-pin", wrap(async (req, res) => {
   if (req.kj.admin) return res.status(400).json({ error: T() === "dive" ? "The owner PIN is changed in Render (KJ_PIN)." : "Change the owner PIN on the Setup page." });
@@ -768,11 +768,11 @@ app.post("/api/kj/my-pin", wrap(async (req, res) => {
   const taken = await whoIs(pin);
   if ((taken && taken.admin) || hosts.some(h => h.pin === pin && h.name !== req.kj.name)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
   const me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Host not found." });
-  me.pin = pin; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+  me.pin = pin; me.own = true; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
 app.post("/api/kj/hosts/remove", ownerOnly, wrap(async (req, res) => {
   const name = String(req.body.name || ""), hosts = (await getHosts()).filter(h => h.name !== name);
-  await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+  await db.setSetting("hosts", JSON.stringify(hosts)); await db.setSetting("tiplinks:" + name, "{}"); if ((await db.getSetting("tip_host")) === name) await db.setSetting("tip_host", ""); res.json({ ok: true });
 }));
 /* ---------- tip the DJ: each host links their own Cash App / Venmo / PayPal / Zelle / Apple Cash ----------
    We never touch the money. A guest picks an amount + leaves a comment, we log it for the host,
@@ -831,10 +831,11 @@ app.post("/api/tip", wrap(async (req, res) => {
 // host side
 app.get("/api/kj/tips", wrap(async (req, res) => {
   const s = await tipState(), list = await getTips(barDay().date);
-  res.json({ house: !!req.kj.admin, mine: req.kj.admin ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, tonight: list.slice().reverse(), total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
+  res.json({ house: !!req.kj.admin, needPin: !req.kj.admin && !req.kj.own, mine: req.kj.admin ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, tonight: list.slice().reverse(), total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
 }));
 app.post("/api/kj/tips/links", wrap(async (req, res) => {
   if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Add yourself in Hosts with your own PIN, then log in with that." });
+  if (!req.kj.own) return res.status(403).json({ error: "Change your PIN first so only you know it. Tap Change my PIN." });
   let links; try { links = cleanTipLinks(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
   await db.setSetting("tiplinks:" + req.kj.name, JSON.stringify(links));
   if (!Object.keys(links).length && (await db.getSetting("tip_host")) === req.kj.name) await db.setSetting("tip_host", "");
@@ -843,6 +844,7 @@ app.post("/api/kj/tips/links", wrap(async (req, res) => {
 app.post("/api/kj/tips/take", wrap(async (req, res) => {
   if (!req.body.on) { await db.setSetting("tip_host", ""); return res.json({ ok: true }); }
   if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Log in with your own host PIN." });
+  if (!req.kj.own) return res.status(403).json({ error: "Change your PIN first so only you know it." });
   if (!Object.keys(await getTipLinks(req.kj.name)).length) return res.status(400).json({ error: "Add at least one payment link first." });
   await db.setSetting("tip_host", req.kj.name); res.json({ ok: true });
 }));
