@@ -405,6 +405,15 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
   </section>
 </main>
+<div class="tmodal" id="upModal" hidden role="dialog" aria-modal="true" aria-labelledby="upTitle">
+  <div class="tbox" style="text-align:center;gap:14px">
+    <div style="font-size:54px;line-height:1">🎤</div>
+    <h2 id="upTitle" style="font-size:26px;letter-spacing:.06em">You're up! <span style="display:block;font-size:16px;font-weight:400;color:var(--ink-2);letter-spacing:0;text-transform:none">¡Te toca!</span></h2>
+    <p id="upSong" style="margin:0;font-size:18px"></p>
+    <a class="go" id="upLyr" target="_blank" rel="noopener" style="text-decoration:none;display:block">🔎 My lyrics / Mi letra</a>
+    <button class="linkbtn" id="upClose" type="button">Head to the stage</button>
+  </div>
+</div>
 <div class="tmodal" id="tipModal" hidden role="dialog" aria-modal="true" aria-labelledby="tipTitle">
   <div class="tbox" style="overflow:auto">
     <h2 id="tipTitle">Tip <span id="tipTo"></span></h2>
@@ -592,6 +601,14 @@ function render(data){
     $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
     $("mineLyr").href = lyricsUrl(mine);
     if(mine.status === "up" && !buzzed && navigator.vibrate){ navigator.vibrate([200, 100, 200]); buzzed = true; }
+    if(mine.status === "up"){
+      let seen = null; try{ seen = sessionStorage.getItem("dive_up_seen"); }catch(e){}
+      if(seen !== String(mine.id)){
+        try{ sessionStorage.setItem("dive_up_seen", String(mine.id)); }catch(e){}
+        $("upSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
+        $("upLyr").href = lyricsUrl(mine); $("upModal").hidden = false;
+      }
+    }
   }
   const ol = $("queue"); ol.innerHTML = "";
   if(!data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
@@ -1353,6 +1370,8 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   $("tipModal").addEventListener("click", e => { if(e.target.id === "tipModal") $("tipModal").hidden = true; });
   loadTip(); setInterval(loadTip, 30000);
 })();
+$("upClose").addEventListener("click", () => $("upModal").hidden = true);
+$("upLyr").addEventListener("click", () => setTimeout(() => $("upModal").hidden = true, 300));
 async function refresh(){
   try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
   loadMine();
