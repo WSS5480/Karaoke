@@ -212,6 +212,14 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 .nowbar .lyr{font-size:14px;padding:8px 12px;background:var(--green);color:#041206;border:0}
 .nowopt{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);margin:-6px 0 0;cursor:pointer;text-transform:none;letter-spacing:0}
 .nowopt input{width:18px;height:18px;accent-color:var(--green);margin:0}
+.lyrwhere{margin:-2px 0 0;cursor:default}
+.lyrwhere b{color:var(--ink)}
+#lyrModal{z-index:75}
+.lyrapps{display:flex;flex-direction:column;gap:8px}
+.lyrapps button{font:inherit;font-weight:600;font-size:16px;text-align:left;border-radius:14px;padding:12px 14px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:12px}
+.lyrapps button i{font-style:normal;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:18px;flex:none}
+.lyrapps button small{display:block;font-weight:400;font-size:12px;color:var(--ink-2)}
+.lyrapps button.on{border-color:var(--green)}
 </style>
 </head>
 <body>
@@ -231,6 +239,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <a class="lyr" id="nowLyr" target="_blank" rel="noopener">🔎 Sing along</a>
   </div>
   <label class="nowopt" id="nowOpt" hidden for="nowPop"><input type="checkbox" id="nowPop"> Pop up lyrics for every new song / Letra en cada canción</label>
+  <p class="nowopt lyrwhere" id="lyrWhere" hidden>Lyrics open in: <b id="lyrAppName">not picked</b> <button type="button" class="linkbtn" id="lyrChange" style="font-size:14px;padding:0 4px">Change</button></p>
   <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
 
   <section class="card" id="authCard" hidden>
@@ -418,6 +427,21 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
   </section>
 </main>
+<div class="tmodal" id="lyrModal" hidden role="dialog" aria-modal="true" aria-labelledby="lyrTitle">
+  <div class="tbox" style="gap:12px;max-width:420px">
+    <h2 id="lyrTitle">Open lyrics in… <span style="font-weight:400;color:var(--ink-2)">/ Abrir letra en…</span></h2>
+    <p style="margin:0;color:var(--ink-2);font-size:14px">Pick a music app you already have. It opens to your song, and you tap Lyrics there.</p>
+    <div class="lyrapps">
+      <button type="button" data-app="apple"><i style="background:#fa2d48;color:#fff">♫</i><span>Apple Music<small>Tap the song, then the lyrics button</small></span></button>
+      <button type="button" data-app="spotify"><i style="background:#1ed760;color:#000">●</i><span>Spotify<small>Open the song and scroll down for lyrics</small></span></button>
+      <button type="button" data-app="ytm"><i style="background:#f00;color:#fff">▶</i><span>YouTube Music<small>Open the song, then the Lyrics tab</small></span></button>
+      <button type="button" data-app="amazon"><i style="background:#25d1da;color:#000">♪</i><span>Amazon Music<small>Open the song, then lyrics</small></span></button>
+      <button type="button" data-app="google"><i style="background:#fff;color:#4285f4;font-weight:800">G</i><span>Web search<small>Free, no app needed</small></span></button>
+    </div>
+    <label class="nowopt" for="lyrRemember" style="margin:0"><input type="checkbox" id="lyrRemember" checked> Remember my choice / Recordar</label>
+    <button class="linkbtn" id="lyrCancel" type="button">Cancel</button>
+  </div>
+</div>
 <div class="tmodal" id="singModal" hidden role="dialog" aria-modal="true" aria-labelledby="singTitle">
   <div class="tbox" style="text-align:center;gap:12px">
     <h2 id="singTitle">🎶 Sing along <span style="font-weight:400;color:var(--ink-2)">/ Canta</span></h2>
@@ -604,7 +628,29 @@ $("cancel").addEventListener("click", async () => {
   $("cancel").dataset.armed = ""; $("cancel").textContent = "Cancel my song"; refresh();
 });
 
-const lyricsUrl = r => "https://www.google.com/search?q=" + encodeURIComponent(r.song + (r.artist ? " " + r.artist : "") + " lyrics");
+/* ---------- lyrics: open in the music app the guest already pays for (Apple Music, Spotify...), or a web search ---------- */
+const LYR_APPS = {
+  apple:   { name: "Apple Music",   url: q => "https://music.apple.com/us/search?term=" + encodeURIComponent(q) },
+  spotify: { name: "Spotify",       url: q => "https://open.spotify.com/search/" + encodeURIComponent(q) },
+  ytm:     { name: "YouTube Music", url: q => "https://music.youtube.com/search?q=" + encodeURIComponent(q) },
+  amazon:  { name: "Amazon Music",  url: q => "https://music.amazon.com/search/" + encodeURIComponent(q) },
+  google:  { name: "Web search",    url: q => "https://www.google.com/search?q=" + encodeURIComponent(q + " lyrics") }
+};
+let lyrApp = ""; try{ lyrApp = localStorage.getItem("dive_lyrics_app") || ""; }catch(e){}
+if(!LYR_APPS[lyrApp]) lyrApp = "";
+const lyrQ = r => r.song + (r.artist ? " " + r.artist : "");
+const lyricsUrl = r => LYR_APPS[lyrApp || "google"].url(lyrQ(r));
+function setLyr(a, r){ a.dataset.lq = lyrQ(r); a.href = lyricsUrl(r); }
+function repaintLyr(){ document.querySelectorAll("a[data-lq]").forEach(a => { a.href = LYR_APPS[lyrApp || "google"].url(a.dataset.lq); }); const n = $("lyrAppName"); if(n) n.textContent = lyrApp ? LYR_APPS[lyrApp].name : "not picked"; }
+let lyrPending = null;
+function openLyrPick(q){
+  lyrPending = q; $("lyrRemember").checked = true; $("lyrModal").hidden = false;
+}
+document.addEventListener("click", e => {
+  const a = e.target.closest && e.target.closest("a[data-lq]");
+  if(!a || lyrApp) return;
+  e.preventDefault(); openLyrPick(a.dataset.lq);   // first time: ask which app
+}, true);
 function render(data){
   mine = data.mine; multiOn = !!data.multi;
   $("venueLine").hidden = !data.venue; $("venueLine").textContent = data.venue ? "Tonight at " + data.venue : "";
@@ -621,14 +667,14 @@ function render(data){
     $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + (ahead + 1);
     $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
     $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
-    $("mineLyr").href = lyricsUrl(mine);
+    setLyr($("mineLyr"), mine);
     if(mine.status === "up" && !buzzed && navigator.vibrate){ navigator.vibrate([200, 100, 200]); buzzed = true; }
     if(mine.status === "up"){
       let seen = null; try{ seen = sessionStorage.getItem("dive_up_seen"); }catch(e){}
       if(seen !== String(mine.id)){
         try{ sessionStorage.setItem("dive_up_seen", String(mine.id)); }catch(e){}
         $("upSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
-        $("upLyr").href = lyricsUrl(mine); $("upModal").hidden = false;
+        setLyr($("upLyr"), mine); $("upModal").hidden = false;
       }
     }
   }
@@ -644,7 +690,7 @@ function render(data){
     const av = document.createElement("img"); av.className = "av"; av.alt = ""; av.loading = "lazy";
     av.src = r.photo ? "/api/photo/" + r.id + "?v=" + r.photo : "/logo.png"; av.onerror = () => { av.onerror = null; av.src = "/logo.png"; };
     t.append(b, s); li.append(n, av, t);
-    if(r.status === "up" || (mine && r.id === mine.id)){ const lk = document.createElement("a"); lk.className = "lyr"; lk.href = lyricsUrl(r); lk.target = "_blank"; lk.rel = "noopener"; lk.textContent = "🔎 Lyrics"; lk.setAttribute("aria-label", "Search lyrics for " + r.song); li.appendChild(lk); }
+    if(r.status === "up" || (mine && r.id === mine.id)){ const lk = document.createElement("a"); lk.className = "lyr"; setLyr(lk, r); lk.target = "_blank"; lk.rel = "noopener"; lk.textContent = "🔎 Lyrics"; lk.setAttribute("aria-label", "Search lyrics for " + r.song); li.appendChild(lk); }
     ol.appendChild(li);
   });
 }
@@ -1401,11 +1447,11 @@ try{ popOn = localStorage.getItem("dive_singalong") === "1"; }catch(e){}
 $("nowPop").checked = popOn;
 $("nowPop").addEventListener("change", () => { popOn = $("nowPop").checked; try{ localStorage.setItem("dive_singalong", popOn ? "1" : "0"); }catch(e){} });
 function paintNow(up){
-  $("nowBar").hidden = !up; $("nowOpt").hidden = !up;
+  $("nowBar").hidden = !up; $("nowOpt").hidden = !up; $("lyrWhere").hidden = !up;
   if(!up){ lastNowId = null; return; }
   $("nowSong").textContent = up.song + (up.artist ? " – " + up.artist : "");
   $("nowWho").textContent = up.name;
-  $("nowLyr").href = lyricsUrl(up);
+  setLyr($("nowLyr"), up);
   const isMe = mine && mine.id === up.id;
   if(up.id !== lastNowId){
     const first = lastNowId === null; lastNowId = up.id;
@@ -1413,11 +1459,23 @@ function paintNow(up){
     if(popOn && !first && !isMe){
       $("singSong").textContent = up.song + (up.artist ? " – " + up.artist : "");
       $("singWho").textContent = up.name + " is singing";
-      $("singLyr").href = lyricsUrl(up); $("singModal").hidden = false;
+      setLyr($("singLyr"), up); $("singModal").hidden = false;
     }
   }
 }
 $("singClose").addEventListener("click", () => $("singModal").hidden = true);
+document.querySelectorAll("#lyrModal [data-app]").forEach(b => b.addEventListener("click", () => {
+  const app = b.dataset.app, q = lyrPending; $("lyrModal").hidden = true; lyrPending = null;
+  if($("lyrRemember").checked){ lyrApp = app; try{ localStorage.setItem("dive_lyrics_app", app); }catch(e){} repaintLyr(); }
+  if(q) window.open(LYR_APPS[app].url(q), "_blank", "noopener");
+}));
+$("lyrCancel").addEventListener("click", () => { $("lyrModal").hidden = true; lyrPending = null; });
+$("lyrModal").addEventListener("click", e => { if(e.target.id === "lyrModal"){ $("lyrModal").hidden = true; lyrPending = null; } });
+$("lyrChange").addEventListener("click", () => {
+  document.querySelectorAll("#lyrModal [data-app]").forEach(b => b.classList.toggle("on", b.dataset.app === lyrApp));
+  openLyrPick(null);
+});
+repaintLyr();
 $("singLyr").addEventListener("click", () => setTimeout(() => $("singModal").hidden = true, 300));
 $("singModal").addEventListener("click", e => { if(e.target.id === "singModal") $("singModal").hidden = true; });
 async function refresh(){

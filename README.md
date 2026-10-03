@@ -27,6 +27,7 @@ Guests scan a QR code (or open the link), sign up for a song, and watch their pl
   - **Practice:** their own list, built from the library or typed in.
   - Every song has a one-touch **Sign me up** button.
 - **Profile photo** (optional): picked on the phone, sized in a drag/pinch/slider editor (tap the photo to resize it later), cropped square and shrunk to about 30 KB, and stored in the settings table (`photo:<device>`). It shows in the lineup, on the TV and on the wheel's cast lineup. No photo means the bar's logo. Covered in Terms Section 5 (version 2026-10-02).
+- **Lyrics:** the Lyrics / Sing along buttons open the song in the guest's own music app (Apple Music, Spotify, YouTube Music, Amazon Music) or a web search. They pick once; it's saved on their phone and can be changed under the Now singing bar. The app never shows lyrics itself.
 - **Daily ads** banner from the host.
 - **Phone sign-in** with a text code (Twilio). It's optional and can be turned off.
 - One profile per phone. The name is locked after the first sign-up, and the host can fix it.

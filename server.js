@@ -530,7 +530,7 @@ app.get("/api/wall", wrap(async (req, res) => {
 
 /* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
 // user agreement: which version this phone agreed to, and when (kept as a record)
-const TERMS_V = "2026-10-02";
+const TERMS_V = "2026-10-02.2";
 async function termsOk(dev) { try { return JSON.parse((await db.getSetting("terms:" + dev)) || "{}").v === TERMS_V; } catch (e) { return false; } }
 async function recordTerms(req, dev) { const u = currentUser(req); await db.setSetting("terms:" + dev, JSON.stringify({ v: TERMS_V, at: new Date().toISOString(), ip: req.ip, customer: u || null, ua: String(req.headers["user-agent"] || "").slice(0, 200) })); }
 app.post("/api/terms", wrap(async (req, res) => {
