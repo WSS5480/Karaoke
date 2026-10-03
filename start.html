@@ -150,7 +150,7 @@ $("form").addEventListener("submit", async e => {
   if(!$("agree").checked){ $("err").textContent = "Check the box to agree to the service terms."; return; }
   $("go").disabled = true; $("go").textContent = "Setting you up…";
   const body = { type, name: $("name").value, slug: slugify($("slug").value), city: $("city").value, email: $("email").value, address: type === "bar" ? $("address").value : "",
-    pin, logo, code: $("code").value.trim(), agree: true, ...(spot || {}) };
+    pin, logo, code: $("code").value.trim(), agree: true, tz: (Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago"), ...(spot || {}) };
   try{
     const r = await fetch("/api/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json();

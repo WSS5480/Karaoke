@@ -430,7 +430,7 @@ app.get("/api/queue", wrap(async (req, res) => {
 app.post("/api/signup", wrap(async (req, res) => {
   const dev = device(req, res), uid = currentUser(req), d = uid ? "c" + uid : dev;
   if ((await db.getSetting("open")) === "no") return res.status(403).json({ error: "Sign-ups are closed for tonight." });
-  { const ps = await pauseState(); if (ps.paused) return res.status(403).json({ error: ps.until ? "Sign-ups are paused until " + new Date(ps.until).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) + ". Try again then." : "Sign-ups are paused for a bit. Try again soon." }); }
+  { const ps = await pauseState(); if (ps.paused) return res.status(403).json({ error: ps.until ? "Sign-ups are paused until " + new Date(ps.until).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: ZONE() }) + ". Try again then." : "Sign-ups are paused for a bit. Try again soon." }); }
   if ((await authOn()) && !currentUser(req)) return res.status(401).json({ error: "signin", message: "Sign in with your phone number first." });
   if (rateLimited(req.ip)) return res.status(429).json({ error: "Too many tries. Wait a minute and try again." });
   if (!(await termsOk(dev))) return res.status(428).json({ error: "terms", message: "Please read and agree to the Terms to sign up." });
@@ -591,7 +591,7 @@ async function getPromos() { try { return JSON.parse((await db.getSetting("promo
 // the bar's "day" runs 6 AM to 6 AM, McAllen time
 function barDay() {
   const t = new Date(Date.now() - 6 * 3600 * 1000);
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).formatToParts(t).map(x => [x.type, x.value]));
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: ZONE(), year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).formatToParts(t).map(x => [x.type, x.value]));
   return { date: `${parts.year}-${parts.month}-${parts.day}`, dow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday) };
 }
 const promoLive = (p, d) => p.on && (!p.days || !p.days.length || p.days.includes(d.dow)) && (!p.start || p.start <= d.date) && (!p.end || p.end >= d.date);
@@ -624,7 +624,7 @@ app.get("/api/kj/state", wrap(async (req, res) => {
 app.get("/api/kj/singer/:id", wrap(async (req, res) => {
   const r = await db.get(parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: "Not found." });
   const past = (await db.mineAll(r.device, "new")).filter(x => x.id !== r.id);
-  const nightOf = t => new Date(new Date(t).getTime() - 6 * 3600e3).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const nightOf = t => new Date(new Date(t).getTime() - 6 * 3600e3).toLocaleDateString("en-CA", { timeZone: ZONE() });
   const tonight = nightOf(Date.now());
   const nights = new Set(past.map(x => nightOf(x.done_at))), before = past.filter(x => nightOf(x.done_at) !== tonight);
   const rated = past.filter(x => x.rating), counts = {};
@@ -643,9 +643,10 @@ app.get("/api/kj/history", wrap(async (req, res) => {
 }));
 
 // analytics for the KJ: everything is grouped by "karaoke night" (a night runs until 6 AM, McAllen time)
-const TZ = "America/Chicago";
-function nightOf(d) { return new Date(new Date(d).getTime() - 6 * 3600e3).toLocaleDateString("en-CA", { timeZone: TZ }); }
-function hourOf(d) { return parseInt(new Date(d).toLocaleString("en-US", { timeZone: TZ, hour: "numeric", hour12: false }), 10) % 24; }
+// each bar keeps its own time zone (The Dive: Central)
+const ZONE = () => TEN().tz || "America/Chicago";
+function nightOf(d) { return new Date(new Date(d).getTime() - 6 * 3600e3).toLocaleDateString("en-CA", { timeZone: ZONE() }); }
+function hourOf(d) { return parseInt(new Date(d).toLocaleString("en-US", { timeZone: ZONE(), hour: "numeric", hour12: false }), 10) % 24; }
 app.get("/api/kj/stats", wrap(async (req, res) => {
   const days = { "7": 7, "30": 30, "90": 90 }[req.query.range] || 0;
   const rows = await db.sungSince(days ? Date.now() - days * 864e5 : 0);
@@ -789,6 +790,7 @@ function cleanTenantFields(b, t) {
   }
   if (b.radius !== undefined) t.radius = Math.min(1000, Math.max(50, Number(b.radius) || 150));
   if (b.venue !== undefined) t.venue = cleanName(b.venue, 60);
+  if (b.tz !== undefined) { try { new Intl.DateTimeFormat("en-US", { timeZone: String(b.tz) }); t.tz = String(b.tz).slice(0, 60); } catch (e) { return "Pick a time zone from the list."; } }
   if (b.tags) t.tags = Object.fromEntries(["Facebook", "Instagram", "TikTok"].map(k => [k, cleanName(b.tags[k] || "", 60)]).filter(([, v]) => v));
   if (b.logo !== undefined) {
     if (!b.logo) t.logo = "";
@@ -847,7 +849,7 @@ async function ownerAuth(req, res) {
   return fresh;
 }
 const ownerView = (t, req) => ({ slug: t.slug, type: t.type || "bar", name: t.name, short: t.short, city: t.city || "", address: t.address || "", email: t.email || "",
-  lat: t.lat ?? null, lng: t.lng ?? null, radius: t.radius || 150, venue: t.venue || "", tags: t.tags || {}, logo: t.logo || "", hasLogo: !!t.logo,
+  lat: t.lat ?? null, lng: t.lng ?? null, radius: t.radius || 150, tz: t.tz || "America/Chicago", venue: t.venue || "", tags: t.tags || {}, logo: t.logo || "", hasLogo: !!t.logo,
   plan: planSummary(t), price: PRICE_TEXT, cardReady: !!(STRIPE.key && STRIPE.price), paid: !!(t.stripe && t.stripe.customer), hostLimit: HOST_LIMIT,
   links: { app: siteUrl(req) + BASE() + "/", kj: siteUrl(req) + BASE() + "/kj", tv: siteUrl(req) + BASE() + "/tv", poster: siteUrl(req) + BASE() + "/poster", staff: siteUrl(req) + BASE() + "/staff" } });
 app.post("/api/setup/me", wrap(async (req, res) => { const t = await ownerAuth(req, res); if (t) res.json(ownerView(t, req)); }));
