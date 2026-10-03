@@ -893,15 +893,17 @@ app.get("/api/tip", wrap(async (req, res) => {
   res.json({ on: true, host: s.host === "Owner" ? "the KJ" : s.host, links: s.links, name: (p && p.name) || "" });
 }));
 app.post("/api/tip", wrap(async (req, res) => {
-  const t = Date.now(), l = (tipHits.get(req.ip) || []).filter(x => t - x < 600000);
-  if (l.length >= 8) return res.status(429).json({ error: "That's a lot of tips! Wait a few minutes." });
+  // limits per phone, plus a high per-connection cap (the whole bar can share one Wi-Fi address)
+  const t = Date.now(), dk = "d:" + device(req, res), ik = "i:" + req.ip;
+  const l = (tipHits.get(dk) || []).filter(x => t - x < 600000), li = (tipHits.get(ik) || []).filter(x => t - x < 600000);
+  if (l.length >= 8 || li.length >= 80) return res.status(429).json({ error: "That's a lot of tips! Wait a few minutes." });
   const s = await tipState(); if (!s.on) return res.status(409).json({ error: "Tips aren't open right now." });
   const b = req.body || {}, method = String(b.method || "");
   if (!TIP_KEYS.includes(method) || !s.links[method]) return res.status(400).json({ error: "Pick how you want to pay." });
   const amount = Math.round(Number(b.amount) * 100) / 100;
   if (!(amount >= 1 && amount <= 500)) return res.status(400).json({ error: "Tip between $1 and $500." });
   const name = cleanName(b.name, 30) || "Someone", comment = clean(b.comment, 140);
-  l.push(t); tipHits.set(req.ip, l);
+  l.push(t); tipHits.set(dk, l); li.push(t); tipHits.set(ik, li);
   const night = barDay().date, list = await getTips(night);
   list.push({ at: t, who: owner(req, res), name, amount, method, comment, to: s.host });
   await db.setSetting("tips:" + night, JSON.stringify(list.slice(-500)));

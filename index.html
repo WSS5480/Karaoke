@@ -213,6 +213,12 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 .nowopt{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);margin:-6px 0 0;cursor:pointer;text-transform:none;letter-spacing:0}
 .nowopt input{width:18px;height:18px;accent-color:var(--green);margin:0}
 .lyrwhere{margin:-2px 0 0;cursor:default}
+.tipnudge{position:fixed;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:58;max-width:520px;margin:0 auto;background:var(--panel);border:2px solid var(--green);border-radius:18px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 10px 40px rgba(0,0,0,.7);animation:tnup .35s ease-out}
+.tipnudge b{font-size:17px}.tipnudge>span{color:var(--ink-2);font-size:14px}
+.tnrow{display:flex;gap:10px;align-items:center}.tnrow .go{flex:1;padding:12px}
+.tnx{position:absolute;top:6px;right:8px;background:none;border:0;color:var(--ink-2);font-size:22px;cursor:pointer;padding:4px 8px}
+.tnoff{background:none;border:0;color:var(--ink-2);font:inherit;font-size:12px;text-decoration:underline;cursor:pointer;align-self:flex-start;padding:0}
+@keyframes tnup{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
 /* host turned lyrics off: hide every lyrics button and option */
 .nolyr a[data-lq],.nolyr #lyrWhere,.nolyr #nowOpt{display:none!important}
 .lyrwhere b{color:var(--ink)}
@@ -461,6 +467,13 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <a class="go" id="upLyr" target="_blank" rel="noopener" style="text-decoration:none;display:block">🔎 My lyrics / Mi letra</a>
     <button class="linkbtn" id="upClose" type="button">Head to the stage</button>
   </div>
+</div>
+<div class="tipnudge" id="tipNudge" hidden role="dialog" aria-labelledby="tnTitle">
+  <button type="button" class="tnx" id="tnX" aria-label="Close">×</button>
+  <b id="tnTitle">👏 That was <span id="tnWho"></span>!</b>
+  <span>Enjoying the music? Tip the DJ / Propina al DJ</span>
+  <div class="tnrow"><button type="button" class="go" id="tnTip">💵 Tip <span id="tnHost"></span></button><button type="button" class="linkbtn" id="tnNo">Not now</button></div>
+  <button type="button" class="tnoff" id="tnOff">Don't ask again tonight</button>
 </div>
 <div class="tmodal" id="tipModal" hidden role="dialog" aria-modal="true" aria-labelledby="tipTitle">
   <div class="tbox" style="overflow:auto">
@@ -1450,6 +1463,20 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   });
   $("tipClose").addEventListener("click", () => $("tipModal").hidden = true);
   $("tipModal").addEventListener("click", e => { if(e.target.id === "tipModal") $("tipModal").hidden = true; });
+  // after each song, anyone with the app gets a quick "Tip the DJ?" card (only while a DJ is taking tips)
+  const night = () => new Date(Date.now() - 6 * 3600e3).toISOString().slice(0, 10);
+  const offTonight = () => { try{ return localStorage.getItem("dive_tipnudge_off") === night(); }catch(e){ return false; } };
+  let tnTimer = null;
+  const hideNudge = () => { $("tipNudge").hidden = true; clearTimeout(tnTimer); };
+  window.diveTipNudge = singer => {
+    if(!tipInfo || !tipInfo.on || offTonight() || !$("tipModal").hidden) return;
+    $("tnWho").textContent = singer || "a great song"; $("tnHost").textContent = tipInfo.host;
+    $("tipNudge").hidden = false; clearTimeout(tnTimer); tnTimer = setTimeout(hideNudge, 30000);
+  };
+  $("tnTip").addEventListener("click", () => { hideNudge(); $("tipOpen").click(); });
+  $("tnNo").addEventListener("click", hideNudge);
+  $("tnX").addEventListener("click", hideNudge);
+  $("tnOff").addEventListener("click", () => { try{ localStorage.setItem("dive_tipnudge_off", night()); }catch(e){} hideNudge(); });
   loadTip(); setInterval(loadTip, 30000);
 })();
 $("upClose").addEventListener("click", () => $("upModal").hidden = true);
@@ -1459,7 +1486,10 @@ let popOn = false, lastNowId = null;
 try{ popOn = localStorage.getItem("dive_singalong") === "1"; }catch(e){}
 $("nowPop").checked = popOn;
 $("nowPop").addEventListener("change", () => { popOn = $("nowPop").checked; try{ localStorage.setItem("dive_singalong", popOn ? "1" : "0"); }catch(e){} });
+let prevUp = null;   // who was singing, so we know when their song ends
 function paintNow(up){
+  if(prevUp && (!up || up.id !== prevUp.id) && window.diveTipNudge) window.diveTipNudge(prevUp.name);
+  prevUp = up ? { id: up.id, name: up.name } : null;
   $("nowBar").hidden = !up; $("nowOpt").hidden = !up; $("lyrWhere").hidden = !up;
   if(!up){ lastNowId = null; return; }
   $("nowSong").textContent = up.song + (up.artist ? " – " + up.artist : "");
