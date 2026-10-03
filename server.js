@@ -786,7 +786,7 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     tips: await tipStats(days)
   });
 }));
-const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins." });
+const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
 const staffOnly = (req, res, next) => req.kj && req.kj.role !== "dj" ? next() : res.status(403).json({ error: "Only staff can do that." });
 app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj" })) }); }));
 app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
@@ -816,6 +816,15 @@ app.post("/api/kj/hosts/reset", staffOnly, wrap(async (req, res) => {
   if ((taken && taken.admin) || hosts.some(x => x.pin === pin && x.name !== name)) return res.status(409).json({ error: "That PIN is already used. Pick another." });
   h.pin = pin; h.own = false; await db.setSetting("hosts", JSON.stringify(hosts));
   await endDj(name, "Your PIN was reset. Sign in with the new PIN and change it.");
+  res.json({ ok: true });
+}));
+// switch a login between DJ and staff (house PIN only). A DJ moved to staff loses tips and their DJ session.
+app.post("/api/kj/hosts/role", ownerOnly, wrap(async (req, res) => {
+  const name = String(req.body.name || ""), role = req.body.role === "staff" ? "staff" : "dj", hosts = await getHosts();
+  const h = hosts.find(x => x.name === name); if (!h) return res.status(404).json({ error: "Login not found." });
+  if (role === "dj" && h.role === "staff" && T() !== "dive" && hosts.filter(x => x.role !== "staff").length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " DJ logins. Remove one first." });
+  h.role = role; await db.setSetting("hosts", JSON.stringify(hosts));
+  if (role === "staff") { if ((await db.getSetting("tip_host")) === name) await db.setSetting("tip_host", ""); await endDj(name, "Your login is now a staff login."); }
   res.json({ ok: true });
 }));
 app.post("/api/kj/hosts/remove", staffOnly, wrap(async (req, res) => {

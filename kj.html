@@ -536,6 +536,15 @@ async function loadHosts(){
         catch(err){ if(err.message !== "pin") alert(err.message); }
       });
       const acts = document.createElement("span"); acts.className = "row"; acts.style.gap = "6px"; acts.append(rs, x);
+      if(state && state.me && state.me.admin){
+        const sw = document.createElement("button"); sw.textContent = h.role === "staff" ? "Make DJ" : "Make staff";
+        sw.title = h.role === "staff" ? "DJ: runs the night and takes tips. No Close DJ session, no PIN resets." : "Staff: closes DJ sessions, resets PINs. No tips.";
+        sw.addEventListener("click", async () => {
+          try{ await api("/api/kj/hosts/role", { name: h.name, role: h.role === "staff" ? "dj" : "staff" }); loadHosts(); }
+          catch(err){ if(err.message !== "pin") alert(err.message); }
+        });
+        acts.prepend(sw);
+      }
       li.append(t, acts); ol.appendChild(li);
     });
   }catch(e){}
