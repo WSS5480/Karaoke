@@ -38,6 +38,18 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .singer .phrow{display:flex;gap:12px;align-items:center}
 .singer .phrow img{width:84px;height:84px;border-radius:50%;object-fit:cover;border:3px solid var(--green);background:#fff;flex:none}
 .singer .phrow span{font-size:13px;color:var(--ink-2);flex:1}
+.singer .phrow{flex-wrap:wrap}
+.singer .phrow .pbox{position:relative;flex:none;cursor:pointer}
+.singer .phrow .pbox i{position:absolute;inset:auto 0 -6px;text-align:center;font-style:normal;font-size:11px;font-weight:700;color:#000;background:var(--gold,#ffc93c);border-radius:999px;padding:1px 4px}
+.singer .phrow .pacts{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+.singer .phrow .pacts button{font-size:14px;padding:8px 12px}
+.singer .phrow .pacts .blurnow{background:#c0392b;color:#fff;border-color:#c0392b;font-weight:700}
+.singer .phrow .pacts .okbtn{background:var(--green);color:#000;border-color:var(--green);font-weight:700}
+img.blur{filter:blur(14px) grayscale(.4);transition:filter .2s}
+img.blur.peek{filter:none}
+li .av.blur{filter:blur(5px)}
+li .av.pend{border-color:var(--gold,#ffc93c);border-style:dashed}
+li .av.hid{border-color:#c0392b}
 li .av{width:30px;height:30px;border-radius:50%;object-fit:cover;flex:none;border:2px solid var(--line);background:#fff;cursor:pointer;align-self:center}
 .singer .new{color:var(--green-hi);font-weight:600}
 .singer ol{border:0}
@@ -183,6 +195,7 @@ a{color:var(--green-hi)}
         <button id="toggleGeo"></button>
         <label class="multi" for="multiChk"><input type="checkbox" id="multiChk"> Allow more than one song per person</label>
         <button id="togglePhone" hidden></button>
+        <button id="togglePhotoReview"></button>
         <a href="/stats">Analytics</a>
         <a href="/history">Customer history</a>
         <a href="/ads">Daily ads</a>
@@ -260,6 +273,52 @@ function ago(t){
   const d = Math.round((Date.now() - Date.parse(t)) / 864e5);
   return d <= 0 ? "today" : d === 1 ? "yesterday" : d < 14 ? d + " days ago" : d < 60 ? Math.round(d / 7) + " weeks ago" : new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
+// host-only photo fetch (works for blurred and waiting photos too); cached per photo version
+const picUrls = new Map();
+async function kjPic(img, r){
+  const k = r.id + ":" + r.photo;
+  if(picUrls.has(k)){ img.src = picUrls.get(k); return; }
+  try{
+    const res = await fetch("/api/kj/photo/" + r.id, { cache: "no-store", headers: { "x-kj-pin": pin } });
+    if(!res.ok) throw 0;
+    const u = URL.createObjectURL(await res.blob()); if(picUrls.size > 200) picUrls.clear(); picUrls.set(k, u); img.src = u;
+  }catch(e){ img.src = "/logo.png"; }
+}
+// after a photo action, reload and reopen the card with fresh info
+async function photoAct(r, path, body, btn){
+  if(btn) btn.disabled = true;
+  try{ await api(path, body || {}); await load(); const n = (state.queue || []).find(x => x.id === r.id) || { ...r, photo: null }; showSinger(n, singerPinned); }
+  catch(e){ if(btn) btn.disabled = false; if(e.message !== "pin") $("err").textContent = e.message; }
+}
+function photoRow(r){
+  const pr = document.createElement("div"); pr.className = "phrow";
+  const st = r.photoSt, lock = r.photoLock;
+  if(r.photo){
+    const bx = document.createElement("div"); bx.className = "pbox";
+    const im = document.createElement("img"); im.alt = r.name + "'s photo"; kjPic(im, r);
+    if(st !== "ok"){ im.className = "blur"; bx.title = "Hold to peek"; const tag = document.createElement("i"); tag.textContent = st === "pending" ? "WAITING" : "BLURRED"; bx.append(im, tag);
+      const peek = on => im.classList.toggle("peek", on);
+      bx.addEventListener("pointerdown", () => peek(true)); ["pointerup", "pointerleave", "pointercancel"].forEach(ev => bx.addEventListener(ev, () => peek(false)));
+    } else bx.append(im);
+    pr.appendChild(bx);
+  }
+  const tx = document.createElement("span");
+  tx.textContent = !r.photo ? "No photo." : st === "ok" ? "Their photo shows on the TV and wheel. Not OK? Blur it now." : st === "pending" ? "Waiting for your OK. Nobody sees it until you approve. Hold the photo to peek." : "Blurred. It's off the TV, wheel and list. Hold the photo to peek.";
+  if(lock) tx.textContent += lock === "always" ? " 🔒 Photo button locked for good." : " 🔒 Photo button locked tonight.";
+  pr.appendChild(tx);
+  const a = document.createElement("div"); a.className = "pacts";
+  const b = (label, cls, fn) => { const x = document.createElement("button"); x.type = "button"; x.textContent = label; if(cls) x.className = cls; x.addEventListener("click", () => fn(x)); a.appendChild(x); return x; };
+  const P = "/api/kj/photo/" + r.id;
+  if(r.photo && st === "ok") b("🙈 Blur now", "blurnow", x => photoAct(r, P + "/blur", {}, x));
+  if(r.photo && st === "pending" && !lock) b("✓ Approve", "okbtn", x => photoAct(r, P + "/show", {}, x));
+  if(r.photo && st === "hidden" && !lock) b("Unblur", "", x => photoAct(r, P + "/show", {}, x));
+  if(lock !== "night" && lock !== "always") b("🔒 Lock tonight", "", x => photoAct(r, P + "/lock", { mode: "night" }, x));
+  if(lock !== "always") b("🔒 Lock always", "", x => { if(confirm("Lock " + r.name + "'s photo button for good? You can unlock it later.")) photoAct(r, P + "/lock", { mode: "always" }, x); });
+  if(lock) b("🔓 Unlock", "", x => photoAct(r, P + "/lock", { mode: "off" }, x));
+  if(r.photo) b("Delete photo", "danger", x => photoAct(r, P + "/remove", {}, x));
+  pr.appendChild(a);
+  return pr;
+}
 async function showSinger(r, pinned){
   singerFor = r.id; singerPinned = !!pinned;
   const box = $("singer"); box.hidden = false;
@@ -271,14 +330,7 @@ async function showSinger(r, pinned){
   const t = document.createElement("b"); t.textContent = (pinned ? "About " + r.name : "Singer history");
   const x = document.createElement("button"); x.type = "button"; x.textContent = "Hide"; x.addEventListener("click", () => { box.hidden = true; singerPinned = false; });
   hd.append(t, x); box.appendChild(hd);
-  if(r.photo){
-    const pr = document.createElement("div"); pr.className = "phrow";
-    const im = document.createElement("img"); im.alt = r.name + "'s photo"; im.src = "/api/photo/" + r.id + "?v=" + r.photo;
-    const tx = document.createElement("span"); tx.textContent = "Their photo shows on the TV. Not OK? Remove it.";
-    const rm = document.createElement("button"); rm.type = "button"; rm.className = "danger"; rm.textContent = "Remove photo";
-    rm.addEventListener("click", async () => { rm.disabled = true; try{ await api("/api/kj/photo/" + r.id + "/remove", {}); r.photo = null; pr.remove(); load(); }catch(e){ rm.disabled = false; if(e.message !== "pin") $("err").textContent = e.message; } });
-    pr.append(im, tx, rm); box.appendChild(pr);
-  }
+  if(r.photo || r.photoLock) box.appendChild(photoRow(r));
   if(!j.songs){
     const p = document.createElement("p"); p.className = "note new"; p.textContent = "★ First time singing here! Give them a shout-out."; box.appendChild(p); return;
   }
@@ -311,7 +363,7 @@ function item(r, i, waiting){
   if(r.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(r.rating); b.appendChild(st); }
   if(r.posted && r.posted.length) b.appendChild(chips(r.posted));
   t.append(b, s); li.append(n);
-  if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av"; av.alt = "Photo of " + r.name + ". Tap to check it."; av.src = "/api/photo/" + r.id + "?v=" + r.photo; av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
+  if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av" + (r.photoSt === "pending" ? " blur pend" : r.photoSt === "hidden" ? " blur hid" : ""); av.alt = "Photo of " + r.name + (r.photoSt === "pending" ? ", waiting for your OK" : r.photoSt === "hidden" ? ", blurred" : "") + ". Tap to check it."; kjPic(av, r); av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
   li.append(t);
   const info = document.createElement("button"); info.textContent = "History"; info.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); });
   if(!waiting){ const a = document.createElement("div"); a.className = "acts"; a.appendChild(info); li.appendChild(a); }
@@ -354,6 +406,8 @@ function render(){
   $("multiChk").checked = !!state.multi;
   $("togglePhone").hidden = !state.twilioReady;
   $("togglePhone").textContent = state.phoneSignin ? "Phone sign-in: on" : "Phone sign-in: off";
+  const wait = (state.queue || []).filter(x => x.photo && x.photoSt === "pending").length;
+  $("togglePhotoReview").textContent = (state.photoReview ? "Approve photos first: on" : "Approve photos first: off") + (wait ? " (" + wait + " waiting)" : "");
 }
 function start(){ $("login").hidden = true; $("panel").hidden = false; load(); clearInterval(timer); timer = setInterval(load, 4000); }
 
@@ -376,6 +430,7 @@ $("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !sta
 $("toggleGeo").addEventListener("click", () => act("/api/kj-geofence", { on: !state.geofence }));
 $("multiChk").addEventListener("change", () => act("/api/kj-multi", { on: $("multiChk").checked }));
 $("togglePhone").addEventListener("click", () => act("/api/kj-phone", { on: !state.phoneSignin }));
+$("togglePhotoReview").addEventListener("click", () => act("/api/kj-photoreview", { on: !state.photoReview }));
 $("newNight").addEventListener("click", () => $("nnConfirm").hidden = false);
 $("nnNo").addEventListener("click", () => $("nnConfirm").hidden = true);
 $("nnYes").addEventListener("click", () => { $("nnConfirm").hidden = true; act("/api/kj-newnight"); });

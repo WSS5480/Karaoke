@@ -360,17 +360,27 @@ const postedList = r => String((r && r.posted_to) || "").split(",").filter(x => 
 const kjRow = r => ({ ...publicRow(r), rating: r.rating || null, posted: postedList(r) });
 
 /* ---------- singer photos: a guest's own picture, shown on the TV when they're up (logo when none) ---------- */
-const photoCache = new Map();   // settings key -> version string ("" = no photo)
+// a photo is "ok" (shows everywhere), "hidden" (host blurred it) or "pending" (approve-first mode, waiting on a host)
+const photoCache = new Map();   // settings key -> { at, st } (at "" = no photo)
+const photoSt = p => !p ? "" : p.hide ? "hidden" : p.ok === false ? "pending" : "ok";
 async function getPhoto(dev) { try { const p = JSON.parse((await db.getSetting("photo:" + dev)) || "null"); return p && p.d ? p : null; } catch (e) { return null; } }
-async function photoAt(dev) {
-  if (!dev) return "";
+async function photoInfo(dev) {
+  if (!dev) return { at: "", st: "" };
   const k = SK("photo:" + dev); if (photoCache.has(k)) return photoCache.get(k);
-  const p = await getPhoto(dev), at = p ? p.at : "";
+  const p = await getPhoto(dev), v = { at: p ? p.at : "", st: photoSt(p) };
   if (photoCache.size > 5000) photoCache.clear();
-  photoCache.set(k, at); return at;
+  photoCache.set(k, v); return v;
 }
-async function setPhoto(dev, p) { await db.setSetting("photo:" + dev, p ? JSON.stringify(p) : ""); photoCache.set(SK("photo:" + dev), p ? p.at : ""); }
+// public screens only ever get a photo that's OK to show
+async function photoAt(dev) { const v = await photoInfo(dev); return v.st === "ok" ? v.at : ""; }
+async function setPhoto(dev, p) { await db.setSetting("photo:" + dev, p ? JSON.stringify(p) : ""); photoCache.set(SK("photo:" + dev), { at: p ? p.at : "", st: photoSt(p) }); }
 async function withPhotos(rows, src) { await Promise.all(rows.map(async (o, i) => { o.photo = (await photoAt(src[i].device)) || null; })); return rows; }
+// hosts see every photo plus its status and whether that singer's photo button is locked
+async function withPhotosKJ(rows, src) { await Promise.all(rows.map(async (o, i) => { const v = await photoInfo(src[i].device); o.photo = v.at || null; o.photoSt = v.st || null; o.photoLock = await photoLocked(src[i].device); })); return rows; }
+// photo lock: "night" ends at 6 AM bar time, "always" until a host unlocks
+async function getLock(dev) { try { return JSON.parse((await db.getSetting("photolock:" + dev)) || "null"); } catch (e) { return null; } }
+async function photoLocked(dev) { const l = dev && await getLock(dev); return !l ? null : l.always ? "always" : l.night === barDay().date ? "night" : null; }
+const photoReview = async () => (await db.getSetting("photo_review")) === "on";
 function device(req, res) {
   let d = (req.headers.cookie || "").split(/;\s*/).map(c => c.split("=")).find(([k]) => k === "dive_device");
   d = d && /^[a-f0-9]{32}$/.test(d[1]) ? d[1] : null;
@@ -532,6 +542,7 @@ function photoBytes(p) { const m = PHOTO_RE.exec(p.d); return m ? { type: "image
 app.post("/api/photo", wrap(async (req, res) => {
   const dev = device(req, res), d = owner(req, res);
   if (!(await termsOk(dev))) return res.status(428).json({ error: "terms", message: "Please read and agree to the Terms first." });
+  if (await photoLocked(d)) return res.status(403).json({ error: "Photos are turned off for you right now. Ask the host. / Fotos desactivadas, pregunta al host." });
   const now = Date.now(), l = (photoTries.get(req.ip) || []).filter(x => now - x < 600000);
   if (l.length >= 15) return res.status(429).json({ error: "Too many photo changes. Try again later." });
   l.push(now); photoTries.set(req.ip, l);
@@ -541,8 +552,9 @@ app.post("/api/photo", wrap(async (req, res) => {
   if (!(jpg || png || webp) || buf.length < 200) return res.status(400).json({ error: "That picture didn't work. Try another one." });
   if (buf.length > 280000) return res.status(413).json({ error: "That picture is too big. Try another one." });
   const at = now.toString(36);
-  await setPhoto(d, { d: m[0], at, on: new Date(now).toISOString() });
-  res.json({ ok: true, photo: at });
+  const review = await photoReview();
+  await setPhoto(d, { d: m[0], at, on: new Date(now).toISOString(), ...(review ? { ok: false } : {}) });
+  res.json({ ok: true, photo: at, photoSt: review ? "pending" : "ok" });
 }));
 app.delete("/api/photo", wrap(async (req, res) => { await setPhoto(owner(req, res), null); res.json({ ok: true }); }));
 app.get("/api/photo/me", wrap(async (req, res) => {
@@ -552,13 +564,14 @@ app.get("/api/photo/me", wrap(async (req, res) => {
 // only singers on tonight's list have a public picture link
 app.get("/api/photo/:id", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), r = (await db.active()).find(x => x.id === id);
-  const p = r && await getPhoto(r.device), b = p && photoBytes(p); if (!b) return res.status(404).end();
+  const p = r && await getPhoto(r.device), b = p && photoSt(p) === "ok" && photoBytes(p); if (!b) return res.status(404).end();
   res.set({ "Content-Type": b.type, "Cache-Control": "public, max-age=600", "X-Content-Type-Options": "nosniff" }).send(b.buf);
 }));
 app.get("/api/me", wrap(async (req, res) => {
   const u = currentUser(req), c = u ? await db.customer(u) : null, p = await getProfile(device(req, res));
   const dv = device(req, res);
-  res.json({ photo: (await photoAt(owner(req, res))) || null, terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null, profileName: (c && c.name) || (p && p.name) || null });
+  const pi = await photoInfo(owner(req, res));
+  res.json({ photo: pi.at || null, photoSt: pi.st || null, photoLock: await photoLocked(owner(req, res)), terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null, profileName: (c && c.name) || (p && p.name) || null });
 }));
 const textHits = new Map();
 app.post("/api/auth/start", wrap(async (req, res) => {
@@ -648,12 +661,36 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
   await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true });
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ me: req.kj, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: await (async () => { const l = await db.active(); return withPhotos(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
+  res.json({ me: req.kj, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
   const r = await db.get(parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: "Not found." });
   await setPhoto(r.device, null); res.json({ ok: true });
+}));
+// the host's own look at a photo, even one that's blurred or waiting
+app.get("/api/kj/photo/:id", wrap(async (req, res) => {
+  const r = await db.get(parseInt(req.params.id, 10)), p = r && await getPhoto(r.device), b = p && photoBytes(p); if (!b) return res.status(404).end();
+  res.set({ "Content-Type": b.type, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" }).send(b.buf);
+}));
+// blur = pull it off every screen now; show = approve / unblur
+app.post("/api/kj/photo/:id/:act(blur|show)", wrap(async (req, res) => {
+  const r = await db.get(parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: "Not found." });
+  const p = await getPhoto(r.device); if (!p) return res.status(404).json({ error: "No photo." });
+  if (req.params.act === "blur") { p.hide = true; p.by = req.kj.name; }
+  else { if (await photoLocked(r.device)) return res.status(400).json({ error: "Unlock their photo button first." }); delete p.hide; p.ok = true; }
+  await setPhoto(r.device, p); res.json({ ok: true });
+}));
+// lock this singer's photo button: "night", "always" or "off"
+app.post("/api/kj/photo/:id/lock", wrap(async (req, res) => {
+  const r = await db.get(parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: "Not found." });
+  const m = String((req.body || {}).mode || "");
+  if (m === "off") await db.setSetting("photolock:" + r.device, "");
+  else if (m === "night" || m === "always") {
+    await db.setSetting("photolock:" + r.device, JSON.stringify(m === "always" ? { always: true, by: req.kj.name } : { night: barDay().date, by: req.kj.name }));
+    const p = await getPhoto(r.device); if (p && !p.hide) { p.hide = true; p.by = req.kj.name; await setPhoto(r.device, p); }
+  } else return res.status(400).json({ error: "Pick tonight, always or off." });
+  res.json({ ok: true });
 }));
 app.get("/api/kj/singer/:id", wrap(async (req, res) => {
   const r = await db.get(parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: "Not found." });
@@ -775,6 +812,9 @@ app.post("/api/kj-multi", kjAuth, wrap(async (req, res) => {
 }));
 app.post("/api/kj-geofence", kjAuth, wrap(async (req, res) => {
   await db.setSetting("geofence", req.body.on ? "on" : "off"); res.json({ ok: true });
+}));
+app.post("/api/kj-photoreview", kjAuth, wrap(async (req, res) => {
+  await db.setSetting("photo_review", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
 app.post("/api/kj-phone", kjAuth, wrap(async (req, res) => {
   await db.setSetting("phone_signin", req.body.on ? "on" : "off"); res.json({ ok: true });

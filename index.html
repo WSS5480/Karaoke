@@ -248,6 +248,7 @@ li.up .av{border-color:var(--green)}
       <input type="file" id="picFile" accept="image/*" hidden>
     </div>
     <p class="err" id="picErr" role="alert" style="margin:0"></p>
+    <p class="hint" id="picNote" style="margin:0;color:var(--ink-2)" hidden></p>
   </section>
 
   <section class="card" id="formCard">
@@ -1059,8 +1060,13 @@ $("termsGo").addEventListener("click", async () => {
 });
 /* ---------- profile photo: picked on the phone, squared and shrunk here, shown on the TV when you're up ---------- */
 let pendingPhoto = null;
-function paintPhoto(v){
+function paintPhoto(v, st, lock){
   const has = !!v, img = $("picImg");
+  const note = st === "pending" ? "⏳ The host will OK your photo before it shows on the TV. / El host aprobará tu foto."
+    : st === "hidden" ? "The host hid your photo. Ask them about it. / El host ocultó tu foto." : "";
+  const lk = lock ? "Photos are off for you right now. Ask the host. / Fotos desactivadas, pregunta al host." : "";
+  $("picNote").textContent = lk || note; $("picNote").hidden = !(lk || note);
+  $("picAdd").disabled = !!lock; $("picEdit").disabled = !!lock; $("picRing").disabled = !!lock;
   $("picRing").classList.toggle("none", !has);
   img.onerror = () => { img.onerror = null; img.src = "/logo.png"; $("picRing").classList.add("none"); };
   img.src = has ? "/api/photo/me?v=" + v : "/logo.png";
@@ -1146,7 +1152,7 @@ async function uploadPhoto(data){
     const j = await r.json().catch(() => ({}));
     if(r.status === 428){ termsAccepted = false; pendingPhoto = data; openTerms(); return; }
     if(!r.ok) throw new Error(j.error || "Couldn't save the photo.");
-    paintPhoto(j.photo); refresh();
+    paintPhoto(j.photo, j.photoSt); refresh();
     $("picErr").innerHTML = '<span class="picok">✓ Photo saved / Foto guardada</span>'; clearTimeout(window._picOk); window._picOk = setTimeout(() => { $("picErr").textContent = ""; }, 4000);
   }catch(e){ $("picErr").textContent = e.message || "Couldn't save the photo. Check your signal."; }
   finally{ $("cUse").disabled = false; $("picAdd").disabled = false; if($("picAdd").textContent === "Saving…") $("picAdd").textContent = $("picDel").hidden ? "Add photo" : "Change photo"; }
@@ -1171,7 +1177,7 @@ async function loadMe(){
     const j = await (await fetch("/api/me", { cache: "no-store" })).json();
     authOn = j.auth; me = j.user; paintWho();
     termsV = j.terms || ""; termsAccepted = !!j.termsOk; $("termsHint").hidden = !termsAccepted;
-    paintPhoto(j.photo);
+    paintPhoto(j.photo, j.photoSt, j.photoLock);
     loadLists();
     if(j.profileName){ $("name").value = j.profileName; $("name").readOnly = true; $("nameLock").hidden = false; $("nameLock").textContent = "This phone signs up as " + j.profileName + ". One person per phone."; }
     if(authOn && !me) showAuth("stepPhone");
