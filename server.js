@@ -257,6 +257,8 @@ if (DB_URL && !DB_OK) console.error(`DATABASE_URL doesn't look like a Postgres l
 if (DB_OK) {
   const { Pool } = require("pg");
   const pool = new Pool({ connectionString: DB_URL, ssl: process.env.PGSSL === "off" ? false : { rejectUnauthorized: false } });
+  // a dropped idle database connection must not take the whole app down; the pool reconnects on the next query
+  pool.on("error", e => console.error("db idle connection dropped:", e.message));
   const Q = (sql, args) => pool.query(sql, args);
   db = {
     async init() {
@@ -993,6 +995,22 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
 }));
 app.post("/api/kj-open", kjAuth, wrap(async (req, res) => {
   await db.setSetting("open", req.body.open ? "yes" : "no"); res.json({ ok: true });
+}));
+// Lyrics in Apple Music: find the exact song so the guest lands on it, not on a search page.
+// Uses Apple's public iTunes Search API (no key). Cached, and falls back to search if it fails.
+const appleSongs = new Map();
+app.get("/api/applesong", wrap(async (req, res) => {
+  const q = String(req.query.q || "").replace(/\s+/g, " ").trim().slice(0, 140);
+  if (!q) return res.json({ url: null });
+  if (appleSongs.has(q)) return res.json({ url: appleSongs.get(q) });
+  let url = null;
+  try {
+    const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&limit=1&country=us&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
+    if (r.ok) { const j = await r.json(); const t = j && j.results && j.results[0]; if (t && /^https:\/\/music\.apple\.com\//.test(t.trackViewUrl || "")) url = t.trackViewUrl.replace(/[?&]uo=\d+/, ""); }
+  } catch (e) {}
+  if (appleSongs.size > 3000) appleSongs.clear();
+  if (url) appleSongs.set(q, url);
+  res.set("Cache-Control", "public, max-age=86400").json({ url });
 }));
 app.post("/api/kj-lyrics", kjAuth, wrap(async (req, res) => {
   await db.setSetting("lyrics", req.body.on ? "on" : "off"); res.json({ ok: true });

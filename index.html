@@ -434,11 +434,11 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <h2 id="lyrTitle">Open lyrics in… <span style="font-weight:400;color:var(--ink-2)">/ Abrir letra en…</span></h2>
     <p style="margin:0;color:var(--ink-2);font-size:14px">Pick a music app you already have. It opens to your song, and you tap Lyrics there.</p>
     <div class="lyrapps">
-      <button type="button" data-app="apple"><i style="background:#fa2d48;color:#fff">♫</i><span>Apple Music<small>Tap the song, then the lyrics button</small></span></button>
+      <button type="button" data-app="apple"><i style="background:#fa2d48;color:#fff">♫</i><span>Apple Music<small>Opens your song. Tap ••• then View Full Lyrics</small></span></button>
       <button type="button" data-app="spotify"><i style="background:#1ed760;color:#000">●</i><span>Spotify<small>Open the song and scroll down for lyrics</small></span></button>
       <button type="button" data-app="ytm"><i style="background:#f00;color:#fff">▶</i><span>YouTube Music<small>Open the song, then the Lyrics tab</small></span></button>
       <button type="button" data-app="amazon"><i style="background:#25d1da;color:#000">♪</i><span>Amazon Music<small>Open the song, then lyrics</small></span></button>
-      <button type="button" data-app="google"><i style="background:#fff;color:#4285f4;font-weight:800">G</i><span>Web search<small>Free, no app needed</small></span></button>
+      <button type="button" data-app="google"><i style="background:#fff;color:#4285f4;font-weight:800">G</i><span>Web search<small>Lyrics usually show right at the top. Free, no app</small></span></button>
     </div>
     <label class="nowopt" for="lyrRemember" style="margin:0"><input type="checkbox" id="lyrRemember" checked> Remember my choice / Recordar</label>
     <button class="linkbtn" id="lyrCancel" type="button">Cancel</button>
@@ -632,17 +632,26 @@ $("cancel").addEventListener("click", async () => {
 
 /* ---------- lyrics: open in the music app the guest already pays for (Apple Music, Spotify...), or a web search ---------- */
 const LYR_APPS = {
-  apple:   { name: "Apple Music",   url: q => "https://music.apple.com/us/search?term=" + encodeURIComponent(q) },
+  apple:   { name: "Apple Music",   url: q => appleExact[q] || "https://music.apple.com/us/search?term=" + encodeURIComponent(q) },
   spotify: { name: "Spotify",       url: q => "https://open.spotify.com/search/" + encodeURIComponent(q) },
   ytm:     { name: "YouTube Music", url: q => "https://music.youtube.com/search?q=" + encodeURIComponent(q) },
   amazon:  { name: "Amazon Music",  url: q => "https://music.amazon.com/search/" + encodeURIComponent(q) },
   google:  { name: "Web search",    url: q => "https://www.google.com/search?q=" + encodeURIComponent(q + " lyrics") }
 };
+const appleExact = {}, appleAsked = {};
+// look up the exact Apple Music song in the background so the link opens the song itself
+function appleLookup(q){
+  if(!q || appleExact[q] || appleAsked[q]) return; appleAsked[q] = 1;
+  fetch("/api/applesong?q=" + encodeURIComponent(q)).then(r => r.json()).then(j => {
+    if(!j.url) return; appleExact[q] = j.url;
+    if(lyrApp === "apple") document.querySelectorAll("a[data-lq]").forEach(a => { if(a.dataset.lq === q) a.href = j.url; });
+  }).catch(() => {});
+}
 let lyricsOn = true, lyrApp = ""; try{ lyrApp = localStorage.getItem("dive_lyrics_app") || ""; }catch(e){}
 if(!LYR_APPS[lyrApp]) lyrApp = "";
 const lyrQ = r => r.song + (r.artist ? " " + r.artist : "");
 const lyricsUrl = r => LYR_APPS[lyrApp || "google"].url(lyrQ(r));
-function setLyr(a, r){ a.dataset.lq = lyrQ(r); a.href = lyricsUrl(r); }
+function setLyr(a, r){ a.dataset.lq = lyrQ(r); a.href = lyricsUrl(r); if(!lyrApp || lyrApp === "apple") appleLookup(a.dataset.lq); }
 function repaintLyr(){ document.querySelectorAll("a[data-lq]").forEach(a => { a.href = LYR_APPS[lyrApp || "google"].url(a.dataset.lq); }); const n = $("lyrAppName"); if(n) n.textContent = lyrApp ? LYR_APPS[lyrApp].name : "not picked"; }
 let lyrPending = null;
 function openLyrPick(q){
