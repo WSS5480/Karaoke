@@ -35,6 +35,10 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .sgrid b{display:block;font-family:var(--slab);font-size:20px;font-variant-numeric:tabular-nums}
 .sgrid span{font-size:11px;color:var(--ink-2);line-height:1.2;display:block}
 .singer .note{font-size:14px;margin:0}
+.singer .phrow{display:flex;gap:12px;align-items:center}
+.singer .phrow img{width:84px;height:84px;border-radius:50%;object-fit:cover;border:3px solid var(--green);background:#fff;flex:none}
+.singer .phrow span{font-size:13px;color:var(--ink-2);flex:1}
+li .av{width:30px;height:30px;border-radius:50%;object-fit:cover;flex:none;border:2px solid var(--line);background:#fff;cursor:pointer;align-self:center}
 .singer .new{color:var(--green-hi);font-weight:600}
 .singer ol{border:0}
 .singer li{padding:6px 0;border-top:1px solid var(--line);font-size:14px}
@@ -267,6 +271,14 @@ async function showSinger(r, pinned){
   const t = document.createElement("b"); t.textContent = (pinned ? "About " + r.name : "Singer history");
   const x = document.createElement("button"); x.type = "button"; x.textContent = "Hide"; x.addEventListener("click", () => { box.hidden = true; singerPinned = false; });
   hd.append(t, x); box.appendChild(hd);
+  if(r.photo){
+    const pr = document.createElement("div"); pr.className = "phrow";
+    const im = document.createElement("img"); im.alt = r.name + "'s photo"; im.src = "/api/photo/" + r.id + "?v=" + r.photo;
+    const tx = document.createElement("span"); tx.textContent = "Their photo shows on the TV. Not OK? Remove it.";
+    const rm = document.createElement("button"); rm.type = "button"; rm.className = "danger"; rm.textContent = "Remove photo";
+    rm.addEventListener("click", async () => { rm.disabled = true; try{ await api("/api/kj/photo/" + r.id + "/remove", {}); r.photo = null; pr.remove(); load(); }catch(e){ rm.disabled = false; if(e.message !== "pin") $("err").textContent = e.message; } });
+    pr.append(im, tx, rm); box.appendChild(pr);
+  }
   if(!j.songs){
     const p = document.createElement("p"); p.className = "note new"; p.textContent = "★ First time singing here! Give them a shout-out."; box.appendChild(p); return;
   }
@@ -298,7 +310,9 @@ function item(r, i, waiting){
   const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
   if(r.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(r.rating); b.appendChild(st); }
   if(r.posted && r.posted.length) b.appendChild(chips(r.posted));
-  t.append(b, s); li.append(n, t);
+  t.append(b, s); li.append(n);
+  if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av"; av.alt = "Photo of " + r.name + ". Tap to check it."; av.src = "/api/photo/" + r.id + "?v=" + r.photo; av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
+  li.append(t);
   const info = document.createElement("button"); info.textContent = "History"; info.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); });
   if(!waiting){ const a = document.createElement("div"); a.className = "acts"; a.appendChild(info); li.appendChild(a); }
   if(waiting){

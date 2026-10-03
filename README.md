@@ -26,6 +26,7 @@ Guests scan a QR code (or open the link), sign up for a song, and watch their pl
   - **♥ Favorites:** tap the heart on any song.
   - **Practice:** their own list, built from the library or typed in.
   - Every song has a one-touch **Sign me up** button.
+- **Profile photo** (optional): picked on the phone, squared and shrunk to about 30 KB, and stored in the settings table (`photo:<device>`). It shows in the lineup, on the TV and on the wheel's cast lineup. No photo means the bar's logo. Covered in Terms Section 5 (version 2026-10-02).
 - **Daily ads** banner from the host.
 - **Phone sign-in** with a text code (Twilio). It's optional and can be turned off.
 - One profile per phone. The name is locked after the first sign-up, and the host can fix it.
@@ -34,6 +35,7 @@ Guests scan a QR code (or open the link), sign up for a song, and watch their pl
 - Next singer, Sing now, move up or down, Remove, Fix name, History.
 - **Singer history pops up** when someone is up: songs, nights, average stars, songs posted, favorite song, recent songs, or "First time!"
 - **Posted icons** (f / IG / TT) show on songs the guest shared.
+- **Photo check:** guest photos show as thumbnails in the waiting list. Tap one, then **Remove photo** if it's not OK.
 - Open or close sign-ups, pause (15 min, 30 min, 1 hour, or until resumed), location check on or off, phone sign-in on or off.
 - **Allow more than one song per person** checkbox. It's off by default.
 - Start a new night: clears the line and keeps all history.

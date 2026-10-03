@@ -93,9 +93,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .lineup .lb{font-family:var(--slab);font-weight:800;font-size:clamp(11px,2vmin,24px);letter-spacing:.16em;text-transform:uppercase;color:var(--green-hi);display:flex;align-items:center;gap:.8vmin}
 .lineup .lb i{width:1.4vmin;height:1.4vmin;min-width:8px;min-height:8px;border-radius:50%;background:#ff3b3b;box-shadow:0 0 1.6vmin #ff3b3b;animation:livepulse 1.4s ease-in-out infinite}
 @keyframes livepulse{50%{opacity:.35}}
-.lineup .nowc{background:linear-gradient(160deg,#18301b,#0f150f);border:.45vmin solid var(--green);border-radius:2vmin;padding:1.8vmin 2vmin;box-shadow:0 0 4vmin rgba(57,181,74,.35)}
+.lineup .nowc{display:flex;gap:1.8vmin;align-items:center;background:linear-gradient(160deg,#18301b,#0f150f);border:.45vmin solid var(--green);border-radius:2vmin;padding:1.8vmin 2vmin;box-shadow:0 0 4vmin rgba(57,181,74,.35)}
 .lineup .nowc b{display:block;font-family:var(--slab);font-weight:800;font-size:clamp(18px,4.6vmin,56px);line-height:1.05;overflow-wrap:anywhere}
 .lineup .nowc span{display:block;font-size:clamp(12px,2.4vmin,28px);color:var(--ink-2);margin-top:.6vmin;overflow-wrap:anywhere}
+.lineup .nowc .ph{width:clamp(44px,11vmin,130px);height:clamp(44px,11vmin,130px);border-radius:50%;object-fit:cover;flex:none;background:#fff;border:.5vmin solid var(--green);box-shadow:0 0 3vmin rgba(95,211,110,.5)}
+.lineup .nowc .tx{min-width:0;flex:1}
+.lineup img.logo{object-fit:contain;padding:4%}
+.lineup li .av{width:clamp(22px,4.4vmin,52px);height:clamp(22px,4.4vmin,52px);border-radius:50%;object-fit:cover;flex:none;background:#fff;border:2px solid var(--line)}
+.lineup li:first-child .av{border-color:var(--green)}
 .lineup .nowc.pop{animation:nowpop .9s ease-out}
 @keyframes nowpop{0%{transform:scale(.92);box-shadow:0 0 0 rgba(57,181,74,0)}50%{transform:scale(1.04);box-shadow:0 0 8vmin rgba(95,211,110,.8)}100%{transform:scale(1)}}
 .lineup ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1vmin}
@@ -462,14 +467,20 @@ function spin(){
 
 /* ---------- lineup beside the wheel on the TV (now singing + who's next) ---------- */
 let luLast = "";
+function luPic(r, cls){
+  const im = document.createElement("img"); im.alt = ""; im.className = cls;
+  const logo = () => { im.onerror = null; im.src = LOGO_SRC; im.classList.add("logo"); };
+  if(r && r.photo){ im.src = "/api/photo/" + r.id + "?v=" + r.photo; im.onerror = logo; } else logo();
+  return im;
+}
 function luRender(d){
   const q = (d && d.queue) || [], up = q.find(r => r.status === "up"), wait = q.filter(r => r.status === "queued");
   const now = $("luNow"), b = document.createElement("b"), sp = document.createElement("span");
   if(up){ b.textContent = up.name; sp.textContent = up.song + (up.artist ? " – " + up.artist : ""); }
   else if(wait.length){ b.textContent = "Starting soon"; sp.textContent = wait.length + " singer" + (wait.length === 1 ? "" : "s") + " on the list"; }
   else { b.textContent = "Who's first?"; sp.textContent = "Scan the code to grab the mic."; }
-  const key = up ? up.id + "" : "";
-  now.replaceChildren(b, sp);
+  const key = up ? up.id + "" : "", tx = document.createElement("div"); tx.className = "tx"; tx.append(b, sp);
+  now.replaceChildren(luPic(up, "ph"), tx);
   if(key && key !== luLast){ now.classList.remove("pop"); void now.offsetWidth; now.classList.add("pop"); }
   luLast = key;
   const ol = $("luList"); ol.replaceChildren();
@@ -481,7 +492,7 @@ function luRender(d){
     nb.textContent = r.name;
     if(i === 0){ const em = document.createElement("em"); em.textContent = "On deck"; nb.appendChild(em); }
     s2.textContent = r.song + (r.artist ? " – " + r.artist : "");
-    t.append(nb, s2); li.append(n, t); ol.appendChild(li);
+    t.append(nb, s2); li.append(n, luPic(r, "av"), t); ol.appendChild(li);
   });
   $("luMore").textContent = wait.length > show ? "+ " + (wait.length - show) + " more on the list" : "";
 }

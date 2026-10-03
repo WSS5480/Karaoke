@@ -55,6 +55,19 @@ li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywher
 li.up{background:rgba(57,181,74,.14)}
 li.up .n{color:var(--green-hi)}
 li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
+li .av{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none;background:#fff;border:2px solid var(--line)}
+li.up .av{border-color:var(--green)}
+.pic{display:flex;gap:14px;align-items:center}
+.pic .ring{position:relative;width:72px;height:72px;flex:none;border-radius:50%;padding:0;border:3px solid var(--green);background:#fff;cursor:pointer;overflow:hidden;box-shadow:0 0 18px rgba(57,181,74,.35)}
+.pic .ring img{width:100%;height:100%;object-fit:cover;display:block}
+.pic .ring.none img{object-fit:contain;padding:6px}
+.pic .ring i{position:absolute;right:0;bottom:0;width:24px;height:24px;border-radius:50%;background:var(--green);color:#041206;font:800 17px/24px system-ui,sans-serif;font-style:normal;text-align:center}
+.pic .ptx{min-width:0;flex:1;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.pic .ptx b{font-size:15px}
+.pic .ptx small{font-size:13px;color:var(--ink-2);line-height:1.35}
+.pic .pbtns{display:flex;gap:6px;flex-wrap:wrap}
+.pic .pbtns .sm{padding:7px 12px}
+.pic .ring:not(.none) i{display:none}
 .empty{padding:14px;color:var(--ink-2);text-align:center}
 .closed{text-align:center;color:var(--ink-2)}
 .rate{text-align:center}
@@ -199,6 +212,19 @@ li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
   </section>
 
   <div class="who" id="who" hidden><span id="whoText"></span><button id="logout" type="button">Sign out</button></div>
+
+  <section class="card" id="picCard" style="gap:8px">
+    <div class="pic">
+      <button type="button" class="ring none" id="picRing" aria-label="Add your profile photo"><img id="picImg" src="/logo.png" alt=""><i aria-hidden="true">+</i></button>
+      <div class="ptx">
+        <b id="picTitle">Add your photo <span style="font-weight:400;color:var(--ink-2)">/ Tu foto</span></b>
+        <small>Shows on the TV when you're up. No photo? We show The Dive logo.</small>
+        <div class="pbtns"><button type="button" class="sm" id="picAdd">Add photo</button><button type="button" class="sm" id="picDel" hidden>Remove</button></div>
+      </div>
+      <input type="file" id="picFile" accept="image/*" hidden>
+    </div>
+    <p class="err" id="picErr" role="alert" style="margin:0"></p>
+  </section>
 
   <section class="card" id="formCard">
     <form id="form" novalidate>
@@ -478,6 +504,7 @@ function render(data){
   const blocked = !data.open || data.paused;
   $("closedCard").hidden = !blocked || !!mine;
   $("closedMsg").textContent = !data.open ? "Sign-ups are closed right now. Ask the KJ." : data.pausedUntil ? "Sign-ups are paused. Back at " + new Date(data.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + "." : "Sign-ups are paused for a bit. Check back soon.";
+  $("picCard").hidden = !!(authOn && (!me || !me.name));
   $("formCard").hidden = (!!mine && !multiOn) || !data.open || data.paused || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
   if(mine){
@@ -495,7 +522,9 @@ function render(data){
     const t = document.createElement("div"); t.className = "t";
     const b = document.createElement("b"); b.textContent = r.name;
     const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
-    t.append(b, s); li.append(n, t); ol.appendChild(li);
+    const av = document.createElement("img"); av.className = "av"; av.alt = ""; av.loading = "lazy";
+    av.src = r.photo ? "/api/photo/" + r.id + "?v=" + r.photo : "/logo.png"; av.onerror = () => { av.onerror = null; av.src = "/logo.png"; };
+    t.append(b, s); li.append(n, av, t); ol.appendChild(li);
   });
 }
 
@@ -987,16 +1016,66 @@ $("termsGo").addEventListener("click", async () => {
     const r = await fetch("/api/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ v: termsV, agree: true }) });
     if(!r.ok) throw new Error();
     termsAccepted = true; $("termsHint").hidden = false; closeTerms();
-    if(pendingQuick){ const q = pendingQuick; pendingQuick = null; const b = document.createElement("button"); quickSignup(q.song, q.artist, b); }
+    if(pendingPhoto){ const f = pendingPhoto; pendingPhoto = null; uploadPhoto(f); }
+    else if(pendingQuick){ const q = pendingQuick; pendingQuick = null; const b = document.createElement("button"); quickSignup(q.song, q.artist, b); }
     else $("form").requestSubmit ? $("form").requestSubmit() : $("submit").click();
   }catch(e){ $("termsErr").textContent = "Couldn't save. Check your signal and try again."; $("termsGo").disabled = false; }
   $("termsGo").textContent = "Agree & sign up";
+});
+/* ---------- profile photo: picked on the phone, squared and shrunk here, shown on the TV when you're up ---------- */
+let pendingPhoto = null;
+function paintPhoto(v){
+  const has = !!v, img = $("picImg");
+  $("picRing").classList.toggle("none", !has);
+  img.onerror = () => { img.onerror = null; img.src = "/logo.png"; $("picRing").classList.add("none"); };
+  img.src = has ? "/api/photo/me?v=" + v : "/logo.png";
+  $("picAdd").textContent = has ? "Change photo" : "Add photo"; $("picDel").hidden = !has;
+  $("picTitle").firstChild.textContent = has ? "Your photo " : "Add your photo ";
+  $("picRing").setAttribute("aria-label", has ? "Change your profile photo" : "Add your profile photo");
+}
+function shrinkPhoto(file){
+  return new Promise((ok, no) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth, h = img.naturalHeight, s = Math.min(w, h), c = document.createElement("canvas");
+      c.width = c.height = 360; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, 360, 360);
+      g.drawImage(img, (w - s) / 2, (h - s) / 3, s, s, 0, 0, 360, 360);   // a bit above center keeps faces in frame
+      URL.revokeObjectURL(url); ok(c.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); no(new Error("bad")); };
+    img.src = url;
+  });
+}
+async function uploadPhoto(file){
+  $("picErr").textContent = ""; $("picAdd").disabled = true; $("picAdd").textContent = "Saving…";
+  try{
+    const data = await shrinkPhoto(file);
+    const r = await fetch("/api/photo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
+    const j = await r.json().catch(() => ({}));
+    if(r.status === 428){ termsAccepted = false; pendingPhoto = file; openTerms(); return; }
+    if(!r.ok) throw new Error(j.error || "Couldn't save the photo.");
+    paintPhoto(j.photo); mineSig = ""; refresh();
+  }catch(e){ $("picErr").textContent = e.message === "bad" ? "That picture didn't open. Try another one." : (e.message || "Couldn't save the photo. Check your signal."); }
+  finally{ $("picAdd").disabled = false; if($("picAdd").textContent === "Saving…") $("picAdd").textContent = $("picDel").hidden ? "Add photo" : "Change photo"; }
+}
+const pickPhoto = () => { $("picFile").value = ""; $("picFile").click(); };
+$("picRing").addEventListener("click", pickPhoto);
+$("picAdd").addEventListener("click", pickPhoto);
+$("picFile").addEventListener("change", () => {
+  const f = $("picFile").files[0]; if(!f) return;
+  if(!termsAccepted){ pendingPhoto = f; openTerms(); return; }
+  uploadPhoto(f);
+});
+$("picDel").addEventListener("click", async () => {
+  if(!confirm("Remove your photo?")) return;
+  try{ await fetch("/api/photo", { method: "DELETE" }); paintPhoto(null); mineSig = ""; refresh(); }catch(e){ $("picErr").textContent = "Couldn't remove it. Try again."; }
 });
 async function loadMe(){
   try{
     const j = await (await fetch("/api/me", { cache: "no-store" })).json();
     authOn = j.auth; me = j.user; paintWho();
     termsV = j.terms || ""; termsAccepted = !!j.termsOk; $("termsHint").hidden = !termsAccepted;
+    paintPhoto(j.photo);
     loadLists();
     if(j.profileName){ $("name").value = j.profileName; $("name").readOnly = true; $("nameLock").hidden = false; $("nameLock").textContent = "This phone signs up as " + j.profileName + ". One person per phone."; }
     if(authOn && !me) showAuth("stepPhone");

@@ -24,11 +24,19 @@ h1{font-family:var(--slab);font-weight:800;font-size:7.4vmin;line-height:1;margi
 .url{font-size:2.6vmin;color:var(--ink-2)}
 .line{display:flex;flex-direction:column;gap:2.4vmin;min-width:0}
 .label{font-family:var(--slab);font-weight:800;font-size:2.6vmin;letter-spacing:.16em;text-transform:uppercase;color:var(--green-hi)}
-.now{background:var(--panel);border:.5vmin solid var(--green);border-radius:2.4vmin;padding:2.6vmin 3vmin}
+.now{background:linear-gradient(160deg,#18301b,#101510);border:.5vmin solid var(--green);border-radius:2.4vmin;padding:2.4vmin 3vmin;display:flex;gap:3vmin;align-items:center;box-shadow:0 0 5vmin rgba(57,181,74,.3)}
+.now .ph{width:17vmin;height:17vmin;border-radius:50%;object-fit:cover;flex:none;background:#fff;border:.7vmin solid var(--green);box-shadow:0 0 4vmin rgba(95,211,110,.55)}
+.now .ph.logo{object-fit:contain;padding:1.2vmin}
+.now .tx{min-width:0;flex:1}
+.now.pop{animation:nowpop .9s ease-out}
+@keyframes nowpop{0%{transform:scale(.94)}50%{transform:scale(1.03);box-shadow:0 0 9vmin rgba(95,211,110,.8)}100%{transform:scale(1)}}
+li .av{width:6.4vmin;height:6.4vmin;border-radius:50%;object-fit:cover;flex:none;background:#fff;border:.4vmin solid var(--line);align-self:center}
+li .av.logo{object-fit:contain;padding:.5vmin}
+li:first-child .av{border-color:var(--green)}
 .now b{display:block;font-family:var(--slab);font-weight:800;font-size:6.4vmin;line-height:1.05;overflow-wrap:anywhere}
 .now span{display:block;font-size:3.4vmin;color:var(--ink-2);margin-top:.8vmin;overflow-wrap:anywhere}
 ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.2vmin}
-li{display:flex;gap:2vmin;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:1.2vmin;min-width:0}
+li{display:flex;gap:2vmin;align-items:center;border-bottom:1px solid var(--line);padding-bottom:1.2vmin;min-width:0}
 li .n{font-family:var(--slab);font-weight:800;font-size:3.6vmin;color:var(--green-hi);width:5vmin;text-align:right;font-variant-numeric:tabular-nums;flex:none}
 li .t{min-width:0}
 li .t b{display:block;font-weight:600;font-size:3.8vmin;line-height:1.15;overflow-wrap:anywhere}
@@ -62,16 +70,27 @@ li .t span{display:block;font-size:2.8vmin;color:var(--ink-2);overflow-wrap:anyw
 <script>
 const $ = id => document.getElementById(id);
 fetch("/api/url").then(r => r.json()).then(j => $("url").textContent = j.url.replace(/^https?:\/\//, "").replace(/\/$/, "")).catch(() => {});
+let lastUp = "";
+// the singer's own photo, or the bar's logo when there isn't one
+function pic(r, cls){
+  const im = document.createElement("img"); im.alt = ""; im.className = cls;
+  const logo = () => { im.onerror = null; im.src = "/logo.png"; im.classList.add("logo"); };
+  if(r && r.photo){ im.src = "/api/photo/" + r.id + "?v=" + r.photo; im.onerror = logo; } else logo();
+  return im;
+}
 function render(d){
   $("closed").hidden = d.open && !d.paused;
   $("closed").textContent = !d.open ? "Sign-ups are closed" : d.pausedUntil ? "Sign-ups paused until " + new Date(d.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Sign-ups paused";
   const up = d.queue.find(r => r.status === "up"), wait = d.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
-  const b = document.createElement("b"), s = document.createElement("span");
+  const b = document.createElement("b"), s = document.createElement("span"), tx = document.createElement("div"); tx.className = "tx";
   if(up){ b.textContent = up.name; s.textContent = up.song + (up.artist ? " – " + up.artist : ""); }
   else if(wait.length){ b.textContent = "Starting soon"; s.textContent = wait.length + " singer" + (wait.length === 1 ? "" : "s") + " on the list"; }
   else { b.textContent = "Who's first?"; s.textContent = "Scan the code to grab the mic."; }
-  now.append(b, s);
+  tx.append(b, s); now.append(pic(up, "ph"), tx);
+  const key = up ? String(up.id) : "";
+  if(key && key !== lastUp){ now.classList.remove("pop"); void now.offsetWidth; now.classList.add("pop"); }
+  lastUp = key;
   const ol = $("queue"); ol.innerHTML = "";
   if(!wait.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody waiting yet."; ol.appendChild(li); }
   wait.slice(0, 6).forEach((r, i) => {
@@ -80,7 +99,7 @@ function render(d){
     const t = document.createElement("div"); t.className = "t";
     const nb = document.createElement("b"); nb.textContent = r.name;
     const sp = document.createElement("span"); sp.textContent = r.song + (r.artist ? " – " + r.artist : "");
-    t.append(nb, sp); li.append(n, t); ol.appendChild(li);
+    t.append(nb, sp); li.append(n, pic(r, "av"), t); ol.appendChild(li);
   });
   $("more").textContent = wait.length > 6 ? "+ " + (wait.length - 6) + " more on the list" : "";
 }

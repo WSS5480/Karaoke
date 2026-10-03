@@ -244,6 +244,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "*/*", limit: "1mb" }), asyn
 
 app.use("/api/kj/promos", express.json({ limit: "1mb" })); // ad pictures
 app.use(["/api/setup", "/api/start"], express.json({ limit: "1mb" })); // logos
+app.use("/api/photo", express.json({ limit: "400kb" })); // singer photos
 app.use(express.json({ limit: "20kb" }));
 // reading a request body loses track of which bar it is for, so put it back
 app.use((req, res, next) => req._ctx ? ctx.run(req._ctx, next) : next());
@@ -357,6 +358,19 @@ const publicRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist
 const NETS = ["Facebook", "Instagram", "TikTok"];
 const postedList = r => String((r && r.posted_to) || "").split(",").filter(x => NETS.includes(x));
 const kjRow = r => ({ ...publicRow(r), rating: r.rating || null, posted: postedList(r) });
+
+/* ---------- singer photos: a guest's own picture, shown on the TV when they're up (logo when none) ---------- */
+const photoCache = new Map();   // settings key -> version string ("" = no photo)
+async function getPhoto(dev) { try { const p = JSON.parse((await db.getSetting("photo:" + dev)) || "null"); return p && p.d ? p : null; } catch (e) { return null; } }
+async function photoAt(dev) {
+  if (!dev) return "";
+  const k = SK("photo:" + dev); if (photoCache.has(k)) return photoCache.get(k);
+  const p = await getPhoto(dev), at = p ? p.at : "";
+  if (photoCache.size > 5000) photoCache.clear();
+  photoCache.set(k, at); return at;
+}
+async function setPhoto(dev, p) { await db.setSetting("photo:" + dev, p ? JSON.stringify(p) : ""); photoCache.set(SK("photo:" + dev), p ? p.at : ""); }
+async function withPhotos(rows, src) { await Promise.all(rows.map(async (o, i) => { o.photo = (await photoAt(src[i].device)) || null; })); return rows; }
 function device(req, res) {
   let d = (req.headers.cookie || "").split(/;\s*/).map(c => c.split("=")).find(([k]) => k === "dive_device");
   d = d && /^[a-f0-9]{32}$/.test(d[1]) ? d[1] : null;
@@ -425,7 +439,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: list.map(publicRow), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
+  res.json({ venue: TEN().venue || "", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await withPhotos(list.map(publicRow), list), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
     last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null });
 }));
 
@@ -506,17 +520,45 @@ app.get("/api/wall", wrap(async (req, res) => {
 
 /* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
 // user agreement: which version this phone agreed to, and when (kept as a record)
-const TERMS_V = "2026-10-01";
+const TERMS_V = "2026-10-02";
 async function termsOk(dev) { try { return JSON.parse((await db.getSetting("terms:" + dev)) || "{}").v === TERMS_V; } catch (e) { return false; } }
 async function recordTerms(req, dev) { const u = currentUser(req); await db.setSetting("terms:" + dev, JSON.stringify({ v: TERMS_V, at: new Date().toISOString(), ip: req.ip, customer: u || null, ua: String(req.headers["user-agent"] || "").slice(0, 200) })); }
 app.post("/api/terms", wrap(async (req, res) => {
   if (req.body.v !== TERMS_V || req.body.agree !== true) return res.status(400).json({ error: "Check the box to agree." });
   await recordTerms(req, device(req, res)); res.json({ ok: true, v: TERMS_V });
 }));
+const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+=*)$/, photoTries = new Map();
+function photoBytes(p) { const m = PHOTO_RE.exec(p.d); return m ? { type: "image/" + m[1], buf: Buffer.from(m[2], "base64") } : null; }
+app.post("/api/photo", wrap(async (req, res) => {
+  const dev = device(req, res), d = owner(req, res);
+  if (!(await termsOk(dev))) return res.status(428).json({ error: "terms", message: "Please read and agree to the Terms first." });
+  const now = Date.now(), l = (photoTries.get(req.ip) || []).filter(x => now - x < 600000);
+  if (l.length >= 15) return res.status(429).json({ error: "Too many photo changes. Try again later." });
+  l.push(now); photoTries.set(req.ip, l);
+  const m = PHOTO_RE.exec(String(req.body.data || ""));
+  if (!m) return res.status(400).json({ error: "That picture didn't work. Try another one." });
+  const buf = Buffer.from(m[2], "base64"), jpg = buf[0] === 0xff && buf[1] === 0xd8, png = buf[0] === 0x89 && buf[1] === 0x50, webp = buf.slice(0, 4).toString() === "RIFF" && buf.slice(8, 12).toString() === "WEBP";
+  if (!(jpg || png || webp) || buf.length < 200) return res.status(400).json({ error: "That picture didn't work. Try another one." });
+  if (buf.length > 280000) return res.status(413).json({ error: "That picture is too big. Try another one." });
+  const at = now.toString(36);
+  await setPhoto(d, { d: m[0], at, on: new Date(now).toISOString() });
+  res.json({ ok: true, photo: at });
+}));
+app.delete("/api/photo", wrap(async (req, res) => { await setPhoto(owner(req, res), null); res.json({ ok: true }); }));
+app.get("/api/photo/me", wrap(async (req, res) => {
+  const p = await getPhoto(owner(req, res)), b = p && photoBytes(p); if (!b) return res.status(404).end();
+  res.set({ "Content-Type": b.type, "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff" }).send(b.buf);
+}));
+// only singers on tonight's list have a public picture link
+app.get("/api/photo/:id", wrap(async (req, res) => {
+  const id = parseInt(req.params.id, 10), r = (await db.active()).find(x => x.id === id);
+  const p = r && await getPhoto(r.device), b = p && photoBytes(p); if (!b) return res.status(404).end();
+  res.set({ "Content-Type": b.type, "Cache-Control": "public, max-age=600", "X-Content-Type-Options": "nosniff" }).send(b.buf);
+}));
 app.get("/api/me", wrap(async (req, res) => {
   const u = currentUser(req), c = u ? await db.customer(u) : null, p = await getProfile(device(req, res));
   const dv = device(req, res);
-  res.json({ terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null, profileName: (c && c.name) || (p && p.name) || null });
+  res.json({ photo: (await photoAt(owner(req, res))) || null, terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null, profileName: (c && c.name) || (p && p.name) || null });
 }));
 const textHits = new Map();
 app.post("/api/auth/start", wrap(async (req, res) => {
@@ -606,9 +648,13 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
   await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true });
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ me: req.kj, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: (await db.active()).map(kjRow), done: (await db.done(50)).map(kjRow) });
+  res.json({ me: req.kj, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, queue: await (async () => { const l = await db.active(); return withPhotos(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
+app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
+  const r = await db.get(parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: "Not found." });
+  await setPhoto(r.device, null); res.json({ ok: true });
+}));
 app.get("/api/kj/singer/:id", wrap(async (req, res) => {
   const r = await db.get(parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: "Not found." });
   const past = (await db.mineAll(r.device, "new")).filter(x => x.id !== r.id);
