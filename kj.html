@@ -201,7 +201,8 @@ a{color:var(--green-hi)}
       <div class="row" style="justify-content:space-between"><div><div class="tiptot" id="tipTotal">$0</div><small style="color:var(--ink-2)">tapped tonight · check your apps to confirm</small></div>
         <button id="tipTake"></button></div>
       <ol id="tipList"></ol>
-      <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">You're on the house PIN, which everyone shares, so it can't take tips. Add yourself in <b>Hosts</b> below with your own PIN, then log in with that to set up your payment links.</p>
+      <div class="row" id="djOnRow" hidden style="justify-content:space-between"><span id="djOnTxt"></span><button id="kickDj" class="danger" type="button">Kick DJ</button></div>
+      <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">Tips go to a DJ, not this login. DJs set up their payment links under their own PIN. You can turn tips off or kick a DJ who forgot to sign out.</p>
       <p id="tipNeedPin" hidden style="margin:0;color:#ffc93c;font-size:14px">🔒 Change your PIN first. The owner set your starting PIN, so make one only you know before adding payment info.</p>
       <button id="tipPinBtn" type="button" class="next" hidden>Change my PIN</button>
       <button id="tipLinksBtn" type="button">My payment links</button>
@@ -245,12 +246,14 @@ a{color:var(--green-hi)}
     </section>
 
     <section class="card" id="hostsCard" hidden>
-      <h2>Hosts <span>each host has their own PIN</span></h2>
+      <h2>DJs &amp; staff <span>each has their own PIN</span></h2>
+      <p style="margin:0;color:var(--ink-2);font-size:14px"><b>DJ</b>: runs the night and takes tips. One DJ logged in at a time. <b>Staff</b>: runs the queue, can turn tips off and kick a DJ, can't take tips.</p>
       <ol id="hostList"></ol>
       <form id="hostForm" class="row" novalidate>
-        <input id="hostName" placeholder="Host name" aria-label="Host name" maxlength="30" style="flex:1 1 140px;letter-spacing:0;font-size:16px;text-align:left">
+        <input id="hostName" placeholder="Name" aria-label="Name" maxlength="30" style="flex:1 1 140px;letter-spacing:0;font-size:16px;text-align:left">
         <input id="hostPin" placeholder="PIN" aria-label="Host PIN, 4 to 8 digits" inputmode="numeric" maxlength="8" style="flex:0 1 110px;font-size:16px">
-        <button type="submit">Add host</button>
+        <select id="hostRole" aria-label="Login type" style="flex:0 1 120px;font:inherit;font-size:16px;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px"><option value="dj">DJ</option><option value="staff">Staff</option></select>
+        <button type="submit">Add</button>
       </form>
       <p class="err" id="hostErr" role="alert"></p>
     </section>
@@ -274,10 +277,13 @@ const $ = id => document.getElementById(id);
 let pin = "", state = null, timer = null;
 try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
 
+let loginTry = false;
 async function api(path, body){
-  const r = await fetch(path, { method: body === undefined ? "GET" : "POST", cache: "no-store", headers: { "Content-Type": "application/json", "x-kj-pin": pin }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const h = { "Content-Type": "application/json", "x-kj-pin": pin }; if(loginTry) h["x-kj-login"] = "1";
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST", cache: "no-store", headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if(r.status === 401){ logout("Wrong PIN."); throw new Error("pin"); }
+  if(r.status === 401){ logout(j.kicked ? j.error : "Wrong PIN."); throw new Error("pin"); }
+  if(r.status === 423){ logout(j.error); throw new Error("pin"); }
   if(!r.ok) throw new Error(j.error || "Something went wrong. Try again.");
   return j;
 }
@@ -445,8 +451,9 @@ $("pinForm").addEventListener("submit", async e => {
   e.preventDefault(); const v = $("pin").value.trim();
   if(!v){ $("pinErr").textContent = "Enter the PIN."; return; }
   pin = v;
-  try{ await api("/api/kj/state"); try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("pinErr").textContent = ""; start(); }
-  catch(e){ if(e.message !== "pin") $("pinErr").textContent = "Couldn't reach the server. Try again."; }
+  loginTry = true;
+  try{ await api("/api/kj/state"); try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("pinErr").textContent = ""; loginTry = false; start(); }
+  catch(e){ loginTry = false; if(e.message !== "pin") $("pinErr").textContent = "Couldn't reach the server. Try again."; }
 });
 $("pin").addEventListener("input", () => $("pinErr").textContent = "");
 $("nextBtn").addEventListener("click", () => act("/api/kj/next"));
@@ -496,7 +503,7 @@ async function loadHosts(){
     if(!j.hosts.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No hosts yet. Add one below."; ol.appendChild(li); }
     j.hosts.forEach(h => {
       const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
-      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = "PIN " + h.pin;
+      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? "Staff" : "DJ") + " · PIN " + h.pin;
       t.append(b, sp); const x = document.createElement("button"); x.className = "danger"; x.textContent = "Remove";
       x.addEventListener("click", async () => {
         if(x.dataset.armed !== "1"){ x.dataset.armed = "1"; x.textContent = "Tap to confirm"; setTimeout(() => { x.dataset.armed = ""; x.textContent = "Remove"; }, 4000); return; }
@@ -532,6 +539,7 @@ function paintMe(){
   $("meLine").textContent = "Signed in as " + state.me.name;
   $("hostsCard").hidden = !state.me.admin;
   $("myPinBtn").hidden = state.me.admin;
+  $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "staff" ? " (staff)" : state.me.role === "dj" ? " (DJ)" : " (house)");
   if(state.me.admin && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
 }
 $("hostForm").addEventListener("submit", async e => {
@@ -539,7 +547,7 @@ $("hostForm").addEventListener("submit", async e => {
   const name = $("hostName").value.trim(), pin = $("hostPin").value.trim();
   if(!name){ $("hostErr").textContent = "Enter the host's name."; return; }
   if(!/^\d{4,8}$/.test(pin)){ $("hostErr").textContent = "PIN must be 4 to 8 digits."; return; }
-  try{ await api("/api/kj/hosts", { name, pin }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
+  try{ await api("/api/kj/hosts", { name, pin, role: $("hostRole").value }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
   catch(err){ $("hostErr").textContent = err.message; }
 });
 $("myPinBtn").addEventListener("click", () => { $("myPinForm").hidden = !$("myPinForm").hidden; $("myPinErr").textContent = ""; });
@@ -549,7 +557,7 @@ $("myPinForm").addEventListener("submit", async e => {
   try{ await api("/api/kj/my-pin", { pin: p }); pin = p; try{ sessionStorage.setItem("kj_pin", p); }catch(er){} $("myPin").value = ""; $("myPinForm").hidden = true; $("meLine").textContent = "PIN changed. Signed in as " + state.me.name;  loadTips(); }
   catch(err){ $("myPinErr").textContent = err.message; }
 });
-$("signOut").addEventListener("click", () => { hostsLoaded = false; logout(""); });
+$("signOut").addEventListener("click", async () => { try{ await api("/api/kj/logout", {}); }catch(e){} hostsLoaded = false; logout(""); });
 
 /* ---------- tips ---------- */
 let tips = null;
@@ -563,6 +571,7 @@ async function loadTips(){
   $("tipTake").className = mineOn ? "" : "next";
   $("tipTotal").textContent = $$m(tips.total);
   $("tipHouse").hidden = !tips.house; $("tipLinksBtn").hidden = !!tips.house; $("tipTake").hidden = false;
+  $("djOnRow").hidden = !(tips.house && tips.dj); $("djOnTxt").textContent = tips.dj ? "🎧 DJ on now: " + tips.dj : "";
   $("tipNeedPin").hidden = !tips.needPin; $("tipPinBtn").hidden = !tips.needPin;
   if(tips.needPin){ $("tipLinksBtn").hidden = true; $("tipLinksForm").hidden = true; $("tipTake").hidden = true; }
   if(tips.house){ $("tipLinksForm").hidden = true; $("tipTake").hidden = !tips.on; $("tipTake").textContent = "Turn tips off"; $("tipTake").className = ""; }
@@ -589,6 +598,13 @@ $("tipTake").addEventListener("click", async () => {
   if(tips.house){ try{ await api("/api/kj/tips/take", { on: false }); }catch(e){} loadTips(); return; }
   if(!Object.keys(tips.mine).length){ $("tipLinksForm").hidden = false; return; }
   try{ await api("/api/kj/tips/take", { on: !(tips.on && tips.host === me) }); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
+  loadTips();
+});
+$("kickDj").addEventListener("click", async () => {
+  const b = $("kickDj");
+  if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "Tap to confirm"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Kick DJ"; }, 4000); return; }
+  b.dataset.armed = ""; b.textContent = "Kick DJ";
+  try{ await api("/api/kj/kick", {}); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
   loadTips();
 });
 $("tipPinBtn").addEventListener("click", () => { $("myPinForm").hidden = false; $("myPinErr").textContent = ""; $("myPinForm").scrollIntoView({ behavior: "smooth", block: "center" }); $("myPin").focus(); });

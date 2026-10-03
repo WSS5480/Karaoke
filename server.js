@@ -614,9 +614,9 @@ async function getHosts() { try { return JSON.parse((await db.getSetting("hosts"
 const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 async function whoIs(pin) {
   if (!pin) return null;
-  if (T() === "dive" ? same(pin, KJ_PIN) : pinMatches(pin, TEN().pinHash)) return { name: "Owner", admin: true };
+  if (T() === "dive" ? same(pin, KJ_PIN) : pinMatches(pin, TEN().pinHash)) return { name: "Owner", admin: true, role: "house" };
   const h = (await getHosts()).find(x => same(pin, x.pin));
-  return h ? { name: h.name, admin: false, own: h.own === true } : null;
+  return h ? { name: h.name, admin: false, own: h.own === true, role: h.role === "staff" ? "staff" : "dj" } : null;
 }
 const pinTries = new Map();
 async function kjAuth(req, res, next) {
@@ -625,8 +625,29 @@ async function kjAuth(req, res, next) {
     if (l.length >= 20) return res.status(429).json({ error: "Too many wrong PINs. Wait 10 minutes." });
     const who = await whoIs(String(req.headers["x-kj-pin"] || ""));
     if (!who) { l.push(t); pinTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
+    if (who.role === "dj") { const bad = await djGate(req, who); if (bad) return res.status(bad.status).json(bad.body); }
     req.kj = who; next();
   } catch (e) { console.error(e); res.status(500).json({ error: "Something went wrong. Try again." }); }
+}
+// one DJ logged in at a time. A DJ who goes quiet for DJ_IDLE frees the spot; house/staff can kick.
+const DJ_IDLE = 30 * 60000;
+async function djSession() { try { const d = JSON.parse((await db.getSetting("dj_session")) || "null"); return d && Date.now() - d.seen < DJ_IDLE ? d : null; } catch (e) { return null; } }
+async function djGate(req, who) {
+  const ds = await djSession(), fresh = req.headers["x-kj-login"] === "1";
+  if (ds && ds.name !== who.name) return { status: 423, body: { error: ds.name + " is logged in as DJ. They need to sign out, or a manager can kick them.", locked: true } };
+  if (!ds) {
+    let k = null; try { k = JSON.parse((await db.getSetting("dj_kicked")) || "null"); } catch (e) {}
+    if (k && k.name === who.name && !fresh) return { status: 401, body: { error: "A manager signed you out.", kicked: true } };
+    if (k && k.name === who.name) await db.setSetting("dj_kicked", "");
+  }
+  if (!ds || Date.now() - ds.seen > 30000) await db.setSetting("dj_session", JSON.stringify({ name: who.name, since: ds ? ds.since : Date.now(), seen: Date.now() }));
+  return null;
+}
+async function endDj(name, kicked) {
+  const ds = await djSession();
+  if (ds && (!name || ds.name === name)) { await db.setSetting("dj_session", ""); if (kicked) await db.setSetting("dj_kicked", JSON.stringify({ name: ds.name, at: Date.now() })); }
+  if (kicked && ds && (await db.getSetting("tip_host")) === ds.name) await db.setSetting("tip_host", "");
+  return ds;
 }
 app.use("/api/kj", kjAuth);
 /* ---------- daily ads / promos ---------- */
@@ -661,7 +682,8 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
   await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true });
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
-  res.json({ me: req.kj, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
+  const djNow = await djSession();
+  res.json({ me: req.kj, djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -750,16 +772,16 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
   });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the owner can manage hosts." });
-app.get("/api/kj/hosts", ownerOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2) })) }); }));
+app.get("/api/kj/hosts", ownerOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj" })) }); }));
 app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   const name = clean(req.body.name, 30), pin = String(req.body.pin || "").replace(/\D/g, "");
   if (!name) return res.status(400).json({ error: "Enter the host's name." });
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
   const hosts = await getHosts();
   if ((await whoIs(pin)) || hosts.some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is already used. Pick another." });
-  if (T() !== "dive" && hosts.length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " host logins. Remove one to add another." });
+  if (T() !== "dive" && req.body.role !== "staff" && hosts.filter(h => h.role !== "staff").length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " DJ logins. Remove one to add another." });
   if (hosts.some(h => h.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: "There's already a host with that name." });
-  hosts.push({ name, pin, own: false }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+  hosts.push({ name, pin, own: false, role: req.body.role === "staff" ? "staff" : "dj" }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
 app.post("/api/kj/my-pin", wrap(async (req, res) => {
   if (req.kj.admin) return res.status(400).json({ error: T() === "dive" ? "The owner PIN is changed in Render (KJ_PIN)." : "Change the owner PIN on the Setup page." });
@@ -772,7 +794,7 @@ app.post("/api/kj/my-pin", wrap(async (req, res) => {
 }));
 app.post("/api/kj/hosts/remove", ownerOnly, wrap(async (req, res) => {
   const name = String(req.body.name || ""), hosts = (await getHosts()).filter(h => h.name !== name);
-  await db.setSetting("hosts", JSON.stringify(hosts)); await db.setSetting("tiplinks:" + name, "{}"); if ((await db.getSetting("tip_host")) === name) await db.setSetting("tip_host", ""); res.json({ ok: true });
+  await db.setSetting("hosts", JSON.stringify(hosts)); await db.setSetting("tiplinks:" + name, "{}"); if ((await db.getSetting("tip_host")) === name) await db.setSetting("tip_host", ""); await endDj(name, false); res.json({ ok: true });
 }));
 /* ---------- tip the DJ: each host links their own Cash App / Venmo / PayPal / Zelle / Apple Cash ----------
    We never touch the money. A guest picks an amount + leaves a comment, we log it for the host,
@@ -831,10 +853,12 @@ app.post("/api/tip", wrap(async (req, res) => {
 // host side
 app.get("/api/kj/tips", wrap(async (req, res) => {
   const s = await tipState(), list = await getTips(barDay().date);
-  res.json({ house: !!req.kj.admin, needPin: !req.kj.admin && !req.kj.own, mine: req.kj.admin ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, tonight: list.slice().reverse(), total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
+  const ds = await djSession();
+  res.json({ role: req.kj.role, dj: ds ? ds.name : null, house: req.kj.role !== "dj", needPin: req.kj.role === "dj" && !req.kj.own, mine: req.kj.role !== "dj" ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, tonight: list.slice().reverse(), total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
 }));
 app.post("/api/kj/tips/links", wrap(async (req, res) => {
   if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Add yourself in Hosts with your own PIN, then log in with that." });
+  if (req.kj.role === "staff") return res.status(403).json({ error: "Staff logins can't take tips. Only DJs can." });
   if (!req.kj.own) return res.status(403).json({ error: "Change your PIN first so only you know it. Tap Change my PIN." });
   let links; try { links = cleanTipLinks(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
   await db.setSetting("tiplinks:" + req.kj.name, JSON.stringify(links));
@@ -844,6 +868,7 @@ app.post("/api/kj/tips/links", wrap(async (req, res) => {
 app.post("/api/kj/tips/take", wrap(async (req, res) => {
   if (!req.body.on) { await db.setSetting("tip_host", ""); return res.json({ ok: true }); }
   if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Log in with your own host PIN." });
+  if (req.kj.role === "staff") return res.status(403).json({ error: "Staff logins can't take tips. Only DJs can." });
   if (!req.kj.own) return res.status(403).json({ error: "Change your PIN first so only you know it." });
   if (!Object.keys(await getTipLinks(req.kj.name)).length) return res.status(400).json({ error: "Add at least one payment link first." });
   await db.setSetting("tip_host", req.kj.name); res.json({ ok: true });
@@ -881,6 +906,11 @@ async function tipStats(days) {
   };
 }
 
+app.post("/api/kj/logout", wrap(async (req, res) => { if (req.kj.role === "dj") await endDj(req.kj.name, false); res.json({ ok: true }); }));
+app.post("/api/kj/kick", wrap(async (req, res) => {
+  if (req.kj.role === "dj") return res.status(403).json({ error: "Only a manager or staff can kick a DJ." });
+  const ds = await endDj(null, true); res.json({ ok: true, kicked: ds ? ds.name : null });
+}));
 app.post("/api/kj/next", wrap(async (req, res) => {
   const list = await db.active();
   const up = list.find(r => r.status === "up"); if (up) await db.setStatus(up.id, "done");
