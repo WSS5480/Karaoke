@@ -42,6 +42,9 @@ Guests scan a QR code (or open the link), sign up for a song, and watch their pl
 - **Lyrics: on / off** button in Night controls. Off hides every Lyrics / Sing along button and the lyrics pop-ups in the customer app (Now singing still shows).
 - Start a new night: clears the line and keeps all history.
 - **Separate host logins:** the owner adds hosts, each with their own PIN, and hosts can change their own PIN.
+- **Starting PINs:** the owner gives each DJ and staff login a starting PIN. On first sign-in they must make their own PIN before anything else works. A PIN reset puts them back to that step.
+- **Tip money:** the house PIN sees every DJ's tips and a per-DJ total (Tips card and Analytics). Each DJ sees only their own. Staff see none.
+- **Staff list (`/staff`) is owner-only:** opens with the list PIN (`STAFF_LIST_PIN` in Render; other bars use their owner PIN). Each group (Customers, DJs, House staff) has its own copy button.
 
 ### Other pages
 | Page | What it's for | PIN |
@@ -130,6 +133,7 @@ Both directions are signed with **the same secret**: My Apps calls it `APP_SECRE
 |---|---|---|
 | `DATABASE_URL` | yes | Internal Database URL of `karaoke-db` (starts with `postgresql://`) |
 | `KJ_PIN` | yes | The Dive's house PIN (set in Render only; never write it here) |
+| `STAFF_LIST_PIN` | no | PIN that opens the owner-only staff list (`/staff`). Falls back to `KJ_PIN`. Set in Render only. |
 | `SESSION_SECRET` | no | Signs login cookies. Made automatically and saved if blank. |
 | `PUBLIC_URL` | no | Custom domain for QR codes and links, for example `https://karaoke.example.com` |
 | `BAR_LAT`, `BAR_LNG`, `GEOFENCE_M` | no | The Dive's location check (defaults: 26.2183801, -98.2287714, 150) |

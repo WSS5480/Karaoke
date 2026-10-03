@@ -91,6 +91,7 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
       <section class="card"><h2>Top songs</h2><ol class="rank" id="topSongs"></ol></section>
       <section class="card"><h2>Top artists</h2><ol class="rank" id="topArtists"></ol></section>
     </div>
+    <div id="tipSection" style="display:contents">
     <div style="margin:8px 0 0"><h2 style="display:block">💵 Tips</h2><p style="margin:4px 0 0;color:var(--ink-2);font-size:14px">What guests tapped to send. Confirm in your payment apps.</p></div>
     <div class="tiles" id="tipTiles"></div>
     <div class="grid2">
@@ -98,6 +99,7 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
       <section class="card"><h2>Top tippers <span>👑 = nights as #1</span></h2><ol class="rank" id="topTippers"></ol></section>
     </div>
     <section class="card" id="tipHostsCard"><h2>Tips by host</h2><ol class="rank" id="tipHosts"></ol></section>
+    </div>
     <section class="card"><h2>Self-ratings <span id="ratedNote"></span></h2><div class="dist" id="dist"></div></section>
   </div>
 </main>
@@ -159,6 +161,7 @@ async function load(){
   rank($("topSongs"), d.topSongs, x => x.song, x => x.artist, x => x.count + "×", x => x.count);
   rank($("topArtists"), d.topArtists, x => x.artist, () => "", x => x.count + "×", x => x.count);
 
+  $("tipSection").hidden = d.tips === null;   // staff logins don't see tip money
   const TP = d.tips || { lifetime: { total: 0, count: 0, nights: 0 }, range: { total: 0, count: 0, avg: 0, perNight: 0 }, nights: [], topTippers: [], byHost: [] };
   const usd = v => "$" + (Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   $("tipTiles").innerHTML = "";

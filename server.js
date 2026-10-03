@@ -628,6 +628,9 @@ async function kjAuth(req, res, next) {
     const who = await whoIs(String(req.headers["x-kj-pin"] || ""));
     if (!who) { l.push(t); pinTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
     if (who.role === "dj") { const bad = await djGate(req, who); if (bad) return res.status(bad.status).json(bad.body); }
+    // DJ and staff logins start with a PIN the owner made; they must set their own before doing anything else
+    if (!who.admin && !who.own && !/\/api\/kj\/(state|my-pin|logout)(\?|$)/.test(req.originalUrl))
+      return res.status(403).json({ error: "Set your own PIN first.", needNewPin: true });
     req.kj = who; next();
   } catch (e) { console.error(e); res.status(500).json({ error: "Something went wrong. Try again." }); }
 }
@@ -785,7 +788,7 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     topRated: singerList.filter(x => x.avg !== null && x.songs >= 2).sort((a, b) => b.avg - a.avg || b.songs - a.songs).slice(0, 10),
     topSongs: [...songs.values()].sort((a, b) => b.count - a.count).slice(0, 15),
     topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10),
-    tips: await tipStats(days)
+    tips: req.kj.admin ? await tipStats(days) : req.kj.role === "dj" ? await tipStats(days, req.kj.name) : null
   });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
@@ -889,9 +892,12 @@ app.post("/api/tip", wrap(async (req, res) => {
 }));
 // host side
 app.get("/api/kj/tips", wrap(async (req, res) => {
-  const s = await tipState(), list = await getTips(barDay().date);
+  // tip money: the owner (house PIN) sees every DJ's tips with a per-DJ total, a DJ sees only their own, staff see none
+  const s = await tipState(), all = await getTips(barDay().date), dj = req.kj.role === "dj", owner = !!req.kj.admin;
+  const list = owner ? all : dj ? all.filter(x => x.to === req.kj.name) : [];
+  const byDj = {}; if (owner) all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   const ds = await djSession();
-  res.json({ role: req.kj.role, dj: ds ? ds.name : null, house: req.kj.role !== "dj", needPin: req.kj.role === "dj" && !req.kj.own, mine: req.kj.role !== "dj" ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, tonight: list.slice().reverse(), total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
+  res.json({ role: req.kj.role, dj: ds ? ds.name : null, house: req.kj.role !== "dj", needPin: req.kj.role === "dj" && !req.kj.own, mine: req.kj.role !== "dj" ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, owner, seeMoney: owner || dj, tonight: list.slice().reverse(), byDj: owner ? byDj : null, total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
 }));
 app.post("/api/kj/tips/links", wrap(async (req, res) => {
   if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Add yourself in Hosts with your own PIN, then log in with that." });
@@ -912,12 +918,14 @@ app.post("/api/kj/tips/take", wrap(async (req, res) => {
   await db.setSetting("tip_host", req.kj.name); res.json({ ok: true });
 }));
 // analytics: per night totals + top tipper, tipper ranking, lifetime totals
-async function tipStats(days) {
+async function tipStats(days, onlyHost) {
   const nights = await getTipNights(), from = days ? nightOf(Date.now() - days * 864e5) : "";
+  let nightsWith = 0;
   const all = [], perNight = [], people = new Map(), hostsT = new Map();
   let life = 0, lifeCount = 0;
   for (const n of nights.sort()) {
-    const list = await getTips(n); if (!list.length) continue;
+    let list = await getTips(n); if (onlyHost) list = list.filter(x => x.to === onlyHost); if (!list.length) continue;
+    nightsWith++;
     const sum = list.reduce((a, x) => a + x.amount, 0); life += sum; lifeCount += list.length;
     const inRange = n >= from;
     const byWho = new Map();
@@ -936,7 +944,7 @@ async function tipStats(days) {
   }
   const r2 = v => Math.round(v * 100) / 100, rangeSum = all.reduce((a, x) => a + x.amount, 0);
   return {
-    lifetime: { total: r2(life), count: lifeCount, nights: nights.length },
+    lifetime: { total: r2(life), count: lifeCount, nights: nightsWith },
     range: { total: r2(rangeSum), count: all.length, avg: all.length ? r2(rangeSum / all.length) : 0, perNight: perNight.length ? r2(rangeSum / perNight.length) : 0 },
     nights: perNight.slice(-30),
     topTippers: [...people.values()].map(p => ({ name: p.name, total: r2(p.total), count: p.count, nights: p.nights.size, crowns: p.crowns })).sort((a, b) => b.total - a.total).slice(0, 15),
@@ -1011,6 +1019,18 @@ app.get("/api/applesong", wrap(async (req, res) => {
   if (appleSongs.size > 3000) appleSongs.clear();
   if (url) appleSongs.set(q, url);
   res.set("Cache-Control", "public, max-age=86400").json({ url });
+}));
+// the staff list page is owner-only: The Dive uses its own list PIN (STAFF_LIST_PIN in Render, never in code);
+// other bars and DJs use their owner PIN
+const listTries = new Map();
+app.post("/api/staff-list", wrap(async (req, res) => {
+  const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
+  if (l.length >= 10) return res.status(429).json({ ok: false, error: "Too many tries. Wait 10 minutes." });
+  const pin = String(req.body.pin || "").replace(/\D/g, "");
+  const LIST_PIN = process.env.STAFF_LIST_PIN || KJ_PIN;
+  const ok = !!pin && (T() === "dive" ? same(pin, LIST_PIN) : pinMatches(pin, TEN().pinHash));
+  if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ ok: false, error: "Wrong PIN." }); }
+  res.json({ ok: true });
 }));
 app.post("/api/kj-lyrics", kjAuth, wrap(async (req, res) => {
   await db.setSetting("lyrics", req.body.on ? "on" : "off"); res.json({ ok: true });

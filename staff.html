@@ -37,6 +37,13 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .cp.done{border-color:var(--green);color:var(--green-hi)}
 ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 #raw{position:absolute;left:-9999px}
+.lock{min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+.lbox{width:100%;max-width:340px;background:var(--panel);border:1px solid var(--green);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.lbox img{width:72px;margin:0 auto}
+.lbox p{margin:0;color:var(--ink-2)}
+.lbox input{font:inherit;font-size:22px;letter-spacing:.3em;text-align:center;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.lbox .err{color:#ff6b6b;min-height:20px;font-size:14px}
+.lockbtn{align-self:flex-start;background:none;border:1px solid var(--line);color:var(--ink-2);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
 .group{display:flex;flex-direction:column;gap:10px;border-left:3px solid var(--green);padding-left:12px}
 .group[data-who="DJ"]{border-color:#4da3ff}.group[data-who="Staff"]{border-color:#ffc93c}
 .ghd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0 2px}
@@ -70,7 +77,17 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 </style>
 </head>
 <body>
-<main>
+<div class="lock" id="lock" hidden>
+  <form class="lbox" id="lockForm" novalidate>
+    <img src="/logo.png" alt="">
+    <h1>Owner only</h1>
+    <p>Enter your list PIN to open the staff list.</p>
+    <input id="lockPin" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password" aria-label="List PIN" placeholder="List PIN">
+    <button type="submit" class="copyall">Open</button>
+    <p class="err" id="lockErr" role="alert"></p>
+  </form>
+</div>
+<main id="main" hidden>
   <div class="install" id="installBar" hidden>
     <img src="/staff-icon-192.png" alt="">
     <div class="tx"><b>Get the Dive Staff app</b><span id="installHow">Open the staff list in one tap.</span></div>
@@ -80,6 +97,7 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
   <header>
     <div class="brand"><img src="/logo.png" alt="The Dive on 495"><h1>Karaoke Staff List</h1></div>
     <button class="copyall" id="copyAll" type="button">Copy whole list</button>
+    <button class="lockbtn" id="relock" type="button">🔒 Lock this list</button>
     <p class="msg" id="msg" role="status"></p>
     <p style="margin:0;font-size:14px;color:var(--ink-2)">Each group has its own copy button, so you only send people what they need. Every link is its own app: open it and tap <b>Add</b> to put it on the home screen.</p>
   </header>
@@ -104,7 +122,7 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
   </section>
   <section>
     <h2>Sign in</h2>
-    <ol><li>Be at the bar and allow location. Only one DJ at a time.</li><li>Sign in with the PIN the owner gave you, then tap <b>Change my PIN</b>.</li><li>In the <b>Tips</b> card, save your payment links once, then tap <b>Send tips to me tonight</b>.</li></ol>
+    <ol><li>Be at the bar and allow location. Only one DJ at a time.</li><li>Sign in with the starting PIN the owner gave you. It asks you to make your own PIN right away.</li><li>In the <b>Tips</b> card, save your payment links once, then tap <b>Send tips to me tonight</b>.</li></ol>
   </section>
   <section>
     <h2>During the night</h2>
@@ -130,6 +148,10 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     <div class="ln"><div class="t"><b>Table signs</b><a href="/tent">the-dive-karaoke.onrender.com/tent</a></div><button class="cp" type="button">Copy</button></div>
   </section>
   <section>
+    <h2>First sign-in</h2>
+    <ol><li>Sign in on the Queue page with the starting PIN the owner gave you.</li><li>Make your own PIN when it asks. Use that one from now on.</li></ol>
+  </section>
+  <section>
     <h2>Start of night</h2>
     <ol><li>Queue page, tap <b>Open sign-ups</b></li><li>Location check <b>on</b></li><li>Cast the TV screen</li></ol>
   </section>
@@ -143,7 +165,7 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
   </section>
   <section>
     <h2>Owner only <span>· house PIN</span></h2>
-    <ul><li>Add DJs and staff in the <b>Hosts</b> card. Pick DJ or Staff.</li><li><b>Make DJ / Make staff</b> switches someone's login type.</li><li>Never share the house PIN. Give everyone their own login.</li></ul>
+    <ul><li>Add DJs and staff in the <b>Hosts</b> card with a starting PIN. Pick DJ or Staff. They must make their own PIN the first time they sign in.</li><li><b>Make DJ / Make staff</b> switches someone's login type.</li><li>Never share the house PIN. Give everyone their own login. Customers never need a PIN: they use the QR code or the link.</li><li>Tip money (all DJs) shows only for the house PIN. Each DJ sees only their own tips. Staff don't see tips.</li></ul>
   </section>
   </div>
 </main>
@@ -158,6 +180,26 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 <textarea id="raw" aria-hidden="true" tabindex="-1"></textarea>
 <script>
 const $ = id => document.getElementById(id);
+
+/* ---------- owner only: the list PIN opens it; remembered on the owner's phone ---------- */
+const OWN_KEY = "dive_staff_owner_pin";
+async function isOwner(p){
+  try{ const r = await fetch("/api/staff-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: p }), cache: "no-store" }); if(r.status === 429){ $("lockErr").textContent = "Too many tries. Wait 10 minutes."; return false; } return r.ok; }catch(e){ return false; }
+}
+function openList(){ $("lock").hidden = true; $("main").hidden = false; }
+function showLock(t){ $("main").hidden = true; $("lock").hidden = false; $("lockErr").textContent = t || ""; $("lockPin").value = ""; $("lockPin").focus(); }
+(async () => {
+  let saved = ""; try{ saved = localStorage.getItem(OWN_KEY) || ""; }catch(e){}
+  if(saved && await isOwner(saved)) openList(); else { try{ localStorage.removeItem(OWN_KEY); }catch(e){} showLock(saved ? "The list PIN changed. Enter the new one." : ""); }
+})();
+$("lockForm").addEventListener("submit", async e => {
+  e.preventDefault(); const p = $("lockPin").value.replace(/\D/g, "");
+  if(!p) return;
+  $("lockErr").textContent = "Checking…";
+  if(await isOwner(p)){ try{ localStorage.setItem(OWN_KEY, p); }catch(er){} openList(); }
+  else if(!$("lockErr").textContent.startsWith("Too many")) showLock("Wrong PIN. Only the owner can open this list.");
+});
+$("relock").addEventListener("click", () => { try{ localStorage.removeItem(OWN_KEY); }catch(e){} showLock(""); });
 
 const msg = document.getElementById("msg");
 function sectionText(s){

@@ -35,6 +35,10 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .sgrid b{display:block;font-family:var(--slab);font-size:20px;font-variant-numeric:tabular-nums}
 .sgrid span{font-size:11px;color:var(--ink-2);line-height:1.2;display:block}
 .singer .note{font-size:14px;margin:0}
+.forcepin{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.9);display:grid;place-items:center;padding:16px}
+.fpbox{width:100%;max-width:360px;background:var(--panel);border:2px solid var(--green);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:10px}
+.fpbox h2{margin:0}.fpbox p{margin:0;color:var(--ink-2);font-size:14px}
+.fpbox input{font:inherit;font-size:20px;letter-spacing:.25em;text-align:center}
 .singer .phrow{display:flex;gap:12px;align-items:center}
 .singer .phrow img{width:84px;height:84px;border-radius:50%;object-fit:cover;border:3px solid var(--green);background:#fff;flex:none}
 .singer .phrow span{font-size:13px;color:var(--ink-2);flex:1}
@@ -124,6 +128,10 @@ a{color:var(--green-hi)}
 .tipgrid span{font-size:14px;color:var(--ink-2)}
 .tiptot{font-family:"Roboto Slab",serif;font-weight:800;font-size:28px;color:#ffc93c}
 #tipList li{display:block;padding:10px 12px}
+.tipbydj{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;color:var(--ink-2)}
+.tipbydj span{border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink)}
+.tipbydj span b{color:var(--green-hi)}
+.tipbydj a{color:var(--green-hi);font-size:13px}
 #tipList li b{font-weight:600}
 #tipList li q{display:block;color:var(--ink);margin-top:2px;quotes:"“" "”"}
 #tipList li small{color:var(--ink-2)}
@@ -198,8 +206,9 @@ a{color:var(--green-hi)}
 
     <section class="card" id="tipsCard">
       <h2>Tips <span id="tipState"></span></h2>
-      <div class="row" style="justify-content:space-between"><div><div class="tiptot" id="tipTotal">$0</div><small style="color:var(--ink-2)">tapped tonight · check your apps to confirm</small></div>
+      <div class="row" id="tipMoneyRow" style="justify-content:space-between"><div><div class="tiptot" id="tipTotal">$0</div><small style="color:var(--ink-2)" id="tipTotLbl">tapped tonight · check your apps to confirm</small></div>
         <button id="tipTake"></button></div>
+      <div id="tipByDj" class="tipbydj" hidden></div>
       <ol id="tipList"></ol>
       <div class="row" id="djOnRow" hidden style="justify-content:space-between"><span id="djOnTxt"></span><button id="kickDj" class="danger" type="button">Close DJ session</button></div>
       <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">Tips go to the DJ, and only the DJ controls them. If the DJ left or forgot to sign out, tap Close DJ session. That signs them out and stops their tips.</p>
@@ -265,6 +274,17 @@ a{color:var(--green-hi)}
     </section>
   </div>
 </main>
+<div class="forcepin" id="forcePin" hidden role="dialog" aria-modal="true" aria-labelledby="fpTitle">
+  <form class="fpbox" id="fpForm" novalidate>
+    <h2 id="fpTitle">Make your own PIN</h2>
+    <p>The owner gave you a starting PIN. Pick a new one only you know (4 to 8 digits). You'll use it from now on.</p>
+    <input id="fpPin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" placeholder="New PIN" aria-label="New PIN">
+    <input id="fpPin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" placeholder="Type it again" aria-label="Type the new PIN again">
+    <button type="submit" class="next">Save my PIN</button>
+    <p class="err" id="fpErr" role="alert"></p>
+    <button type="button" id="fpOut" style="background:none;border:0;color:var(--ink-2);text-decoration:underline;font:inherit;font-size:14px">Sign out</button>
+  </form>
+</div>
 <div class="iosguide" id="iosGuide" hidden role="dialog" aria-label="Add The Dive app">
   <div class="box">
     <div class="step"><span class="n">1</span><span>Tap the <span class="shareic" aria-hidden="true">⬆︎</span> <b>Share</b> button <span id="iosShareWhere">below</span></span></div>
@@ -295,10 +315,11 @@ async function api(path, body){
   const j = await r.json().catch(() => ({}));
   if(r.status === 401){ logout(j.kicked ? j.error : "Wrong PIN."); throw new Error("pin"); }
   if(r.status === 423){ logout(j.error); throw new Error("pin"); }
+  if(r.status === 403 && j.needNewPin){ showForcePin(); throw new Error("pin"); }
   if(!r.ok){ const er = new Error(j.error || "Something went wrong. Try again."); er.data = j; throw er; }
   return j;
 }
-function logout(msg){ stopDjWatch(); pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
+function logout(msg){ stopDjWatch(); pin = ""; $("forcePin").hidden = true; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
 async function load(){
   try{ state = await api("/api/kj/state"); render(); startDjWatch(); $("err").textContent = ""; }
   catch(e){ if(e.message !== "pin") $("err").textContent = "Lost connection. Retrying…"; }
@@ -425,7 +446,10 @@ function item(r, i, waiting){
   }
   return li;
 }
+/* ---------- first sign-in: DJs and staff replace the owner's starting PIN with their own ---------- */
+function showForcePin(){ if(!$("forcePin").hidden) return; $("forcePin").hidden = false; $("fpErr").textContent = ""; $("fpPin").value = ""; $("fpPin2").value = ""; setTimeout(() => $("fpPin").focus(), 50); }
 function render(){
+  if(state && state.me && !state.me.admin && !state.me.own) showForcePin();
   paintMe(); paintBiz();
   const up = state.queue.find(r => r.status === "up"), waiting = state.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
@@ -589,6 +613,15 @@ $("hostForm").addEventListener("submit", async e => {
   try{ await api("/api/kj/hosts", { name, pin, role: $("hostRole").value }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
   catch(err){ $("hostErr").textContent = err.message; }
 });
+$("fpForm").addEventListener("submit", async e => {
+  e.preventDefault(); const a = $("fpPin").value.trim(), b = $("fpPin2").value.trim();
+  if(!/^\d{4,8}$/.test(a)){ $("fpErr").textContent = "PIN must be 4 to 8 digits."; return; }
+  if(a !== b){ $("fpErr").textContent = "The two PINs don't match."; return; }
+  if(a === pin){ $("fpErr").textContent = "Pick a PIN that's different from the starting one."; return; }
+  try{ await api("/api/kj/my-pin", { pin: a }); pin = a; try{ sessionStorage.setItem("kj_pin", a); }catch(er){} $("forcePin").hidden = true; load(); loadTips(); hostsLoaded = false; }
+  catch(err){ if(err.message !== "pin") $("fpErr").textContent = err.message; }
+});
+$("fpOut").addEventListener("click", async () => { $("forcePin").hidden = true; try{ await api("/api/kj/logout", {}); }catch(e){} logout(""); });
 $("myPinBtn").addEventListener("click", () => { $("myPinForm").hidden = !$("myPinForm").hidden; $("myPinErr").textContent = ""; });
 $("myPinForm").addEventListener("submit", async e => {
   e.preventDefault(); const p = $("myPin").value.trim();
@@ -609,6 +642,16 @@ async function loadTips(){
   $("tipTake").textContent = mineOn ? "Stop taking tips" : has ? "Send tips to me tonight" : "Add your links to take tips";
   $("tipTake").className = mineOn ? "" : "next";
   $("tipTotal").textContent = $$m(tips.total);
+  $("tipTotLbl").textContent = tips.owner ? "all DJs, tapped tonight · confirm in their apps" : "your tips tonight · check your apps to confirm";
+  // staff don't see tip money; only the owner (all DJs) and each DJ (their own)
+  $("tipMoneyRow").hidden = !tips.seeMoney; $("tipList").hidden = !tips.seeMoney;
+  const bd = $("tipByDj"); bd.innerHTML = ""; bd.hidden = !tips.owner;
+  if(tips.owner){
+    const ks = Object.keys(tips.byDj || {}).sort((a, b) => tips.byDj[b] - tips.byDj[a]);
+    const lab = document.createElement("small"); lab.textContent = ks.length ? "By DJ:" : "No DJ tips yet tonight."; bd.appendChild(lab);
+    ks.forEach(k => { const sp = document.createElement("span"); sp.append(k + " "); const b = document.createElement("b"); b.textContent = $$m(tips.byDj[k]); sp.appendChild(b); bd.appendChild(sp); });
+    const a = document.createElement("a"); a.href = "/stats"; a.textContent = "Past nights in Analytics →"; bd.appendChild(a);
+  }
   $("tipHouse").hidden = !tips.house; $("tipLinksBtn").hidden = !!tips.house; $("tipTake").hidden = false;
   $("djOnRow").hidden = !(tips.house && tips.dj); $("djOnTxt").textContent = tips.dj ? "🎧 DJ on now: " + tips.dj : "";
   $("tipNeedPin").hidden = !tips.needPin; $("tipPinBtn").hidden = !tips.needPin;
