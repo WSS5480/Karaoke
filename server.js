@@ -629,26 +629,41 @@ async function kjAuth(req, res, next) {
     req.kj = who; next();
   } catch (e) { console.error(e); res.status(500).json({ error: "Something went wrong. Try again." }); }
 }
-// one DJ logged in at a time. A DJ who goes quiet for DJ_IDLE frees the spot; house/staff can kick.
-const DJ_IDLE = 30 * 60000;
-async function djSession() { try { const d = JSON.parse((await db.getSetting("dj_session")) || "null"); return d && Date.now() - d.seen < DJ_IDLE ? d : null; } catch (e) { return null; } }
+// one DJ logged in at a time, live until they sign out. DJs must be at the bar to sign in, and the
+// session closes if their phone reports it left. Staff / house can close it with one tap.
+const hasSpot = () => { const t = TEN(); return t.lat != null && t.lat !== "" && Number.isFinite(Number(t.lat)); };
+const DJ_SLACK = 100;   // extra meters past the guest radius before we call it "left" (GPS drifts indoors)
+async function djSession() { try { return JSON.parse((await db.getSetting("dj_session")) || "null"); } catch (e) { return null; } }
+function djWhere(req) {
+  const lat = Number(req.headers["x-kj-lat"]), lng = Number(req.headers["x-kj-lng"]), acc = Math.min(Math.max(Number(req.headers["x-kj-acc"]) || 0, 0), 200);
+  return Number.isFinite(lat) && Number.isFinite(lng) && req.headers["x-kj-lat"] ? { lat, lng, acc } : null;
+}
+const djAway = w => metersAway(w.lat, w.lng) - w.acc > (Number(TEN().radius) || 150) + DJ_SLACK;
 async function djGate(req, who) {
   const ds = await djSession(), fresh = req.headers["x-kj-login"] === "1";
-  if (ds && ds.name !== who.name) return { status: 423, body: { error: ds.name + " is logged in as DJ. They need to sign out, or a manager can kick them.", locked: true } };
-  if (!ds) {
-    let k = null; try { k = JSON.parse((await db.getSetting("dj_kicked")) || "null"); } catch (e) {}
-    if (k && k.name === who.name && !fresh) return { status: 401, body: { error: "A manager signed you out.", kicked: true } };
-    if (k && k.name === who.name) await db.setSetting("dj_kicked", "");
+  if (ds && ds.name !== who.name) return { status: 423, body: { error: ds.name + " is the DJ right now. They need to sign out, or staff can close their session.", locked: true } };
+  if (ds) return null;
+  let k = null; try { k = JSON.parse((await db.getSetting("dj_kicked")) || "null"); } catch (e) {}
+  if (k && k.name === who.name && !fresh) return { status: 401, body: { error: k.why || "Your DJ session was closed.", kicked: true } };
+  if (!fresh) return { status: 401, body: { error: "Your DJ session ended. Sign in again.", kicked: true } };
+  if (hasSpot()) {
+    const w = djWhere(req);
+    if (!w) return { status: 403, body: { error: "DJs sign in from the bar. Allow location so we can check.", needLoc: true } };
+    if (djAway(w)) return { status: 403, body: { error: "You need to be at " + (TEN().short || "the bar") + " to sign in as DJ.", far: true } };
   }
-  if (!ds || Date.now() - ds.seen > 30000) await db.setSetting("dj_session", JSON.stringify({ name: who.name, since: ds ? ds.since : Date.now(), seen: Date.now() }));
+  if (k && k.name === who.name) await db.setSetting("dj_kicked", "");
+  await db.setSetting("dj_session", JSON.stringify({ name: who.name, since: Date.now() }));
   return null;
 }
-async function endDj(name, kicked) {
+async function endDj(name, why) {
   const ds = await djSession();
-  if (ds && (!name || ds.name === name)) { await db.setSetting("dj_session", ""); if (kicked) await db.setSetting("dj_kicked", JSON.stringify({ name: ds.name, at: Date.now() })); }
-  if (kicked && ds && (await db.getSetting("tip_host")) === ds.name) await db.setSetting("tip_host", "");
+  if (!ds || (name && ds.name !== name)) return null;
+  await db.setSetting("dj_session", "");
+  if (why) await db.setSetting("dj_kicked", JSON.stringify({ name: ds.name, at: Date.now(), why }));
+  if ((await db.getSetting("tip_host")) === ds.name) await db.setSetting("tip_host", "");
   return ds;
 }
+const djStrikes = new Map();
 app.use("/api/kj", kjAuth);
 /* ---------- daily ads / promos ---------- */
 async function getPromos() { try { return JSON.parse((await db.getSetting("promos")) || "[]"); } catch (e) { return []; } }
@@ -771,8 +786,9 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     tips: await tipStats(days)
   });
 }));
-const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the owner can manage hosts." });
-app.get("/api/kj/hosts", ownerOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj" })) }); }));
+const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins." });
+const staffOnly = (req, res, next) => req.kj && req.kj.role !== "dj" ? next() : res.status(403).json({ error: "Only staff can do that." });
+app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj" })) }); }));
 app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   const name = clean(req.body.name, 30), pin = String(req.body.pin || "").replace(/\D/g, "");
   if (!name) return res.status(400).json({ error: "Enter the host's name." });
@@ -792,9 +808,19 @@ app.post("/api/kj/my-pin", wrap(async (req, res) => {
   const me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Host not found." });
   me.pin = pin; me.own = true; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
-app.post("/api/kj/hosts/remove", ownerOnly, wrap(async (req, res) => {
+app.post("/api/kj/hosts/reset", staffOnly, wrap(async (req, res) => {
+  const name = String(req.body.name || ""), pin = String(req.body.pin || "").replace(/\D/g, ""), hosts = await getHosts();
+  const h = hosts.find(x => x.name === name); if (!h) return res.status(404).json({ error: "Login not found." });
+  if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
+  const taken = await whoIs(pin);
+  if ((taken && taken.admin) || hosts.some(x => x.pin === pin && x.name !== name)) return res.status(409).json({ error: "That PIN is already used. Pick another." });
+  h.pin = pin; h.own = false; await db.setSetting("hosts", JSON.stringify(hosts));
+  await endDj(name, "Your PIN was reset. Sign in with the new PIN and change it.");
+  res.json({ ok: true });
+}));
+app.post("/api/kj/hosts/remove", staffOnly, wrap(async (req, res) => {
   const name = String(req.body.name || ""), hosts = (await getHosts()).filter(h => h.name !== name);
-  await db.setSetting("hosts", JSON.stringify(hosts)); await db.setSetting("tiplinks:" + name, "{}"); if ((await db.getSetting("tip_host")) === name) await db.setSetting("tip_host", ""); await endDj(name, false); res.json({ ok: true });
+  await db.setSetting("hosts", JSON.stringify(hosts)); await db.setSetting("tiplinks:" + name, "{}"); if ((await db.getSetting("tip_host")) === name) await db.setSetting("tip_host", ""); await endDj(name, "Your login was removed."); res.json({ ok: true });
 }));
 /* ---------- tip the DJ: each host links their own Cash App / Venmo / PayPal / Zelle / Apple Cash ----------
    We never touch the money. A guest picks an amount + leaves a comment, we log it for the host,
@@ -866,7 +892,8 @@ app.post("/api/kj/tips/links", wrap(async (req, res) => {
   res.json({ ok: true, links });
 }));
 app.post("/api/kj/tips/take", wrap(async (req, res) => {
-  if (!req.body.on) { await db.setSetting("tip_host", ""); return res.json({ ok: true }); }
+  if (req.kj.role !== "dj") return res.status(403).json({ error: "Only the DJ controls their tips. Close their session to stop them." });
+  if (!req.body.on) { if ((await db.getSetting("tip_host")) === req.kj.name) await db.setSetting("tip_host", ""); return res.json({ ok: true }); }
   if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Log in with your own host PIN." });
   if (req.kj.role === "staff") return res.status(403).json({ error: "Staff logins can't take tips. Only DJs can." });
   if (!req.kj.own) return res.status(403).json({ error: "Change your PIN first so only you know it." });
@@ -906,10 +933,23 @@ async function tipStats(days) {
   };
 }
 
-app.post("/api/kj/logout", wrap(async (req, res) => { if (req.kj.role === "dj") await endDj(req.kj.name, false); res.json({ ok: true }); }));
+app.post("/api/kj/logout", wrap(async (req, res) => { if (req.kj.role === "dj") await endDj(req.kj.name, null); res.json({ ok: true }); }));
 app.post("/api/kj/kick", wrap(async (req, res) => {
-  if (req.kj.role === "dj") return res.status(403).json({ error: "Only a manager or staff can kick a DJ." });
-  const ds = await endDj(null, true); res.json({ ok: true, kicked: ds ? ds.name : null });
+  if (req.kj.role === "dj") return res.status(403).json({ error: "Only staff can close a DJ's session." });
+  const ds = await endDj(null, (req.kj.role === "staff" ? req.kj.name : "Staff") + " closed your DJ session."); res.json({ ok: true, kicked: ds ? ds.name : null });
+}));
+// the DJ's phone reports where it is while the console is open; two readings outside the bar closes the session
+app.post("/api/kj/where", wrap(async (req, res) => {
+  if (req.kj.role !== "dj" || !hasSpot()) return res.json({ ok: true });
+  const lat = Number(req.body.lat), lng = Number(req.body.lng), acc = Math.min(Math.max(Number(req.body.acc) || 0, 0), 200);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.json({ ok: true });
+  const k = SK("dj:" + req.kj.name);
+  if (!djAway({ lat, lng, acc })) { djStrikes.delete(k); return res.json({ ok: true }); }
+  const n = (djStrikes.get(k) || 0) + 1; djStrikes.set(k, n);
+  if (n < 2) return res.json({ ok: true, warn: true });
+  djStrikes.delete(k);
+  await endDj(req.kj.name, "You left " + (TEN().short || "the bar") + ", so your DJ session closed.");
+  res.status(401).json({ error: "You left " + (TEN().short || "the bar") + ", so your DJ session closed.", kicked: true });
 }));
 app.post("/api/kj/next", wrap(async (req, res) => {
   const list = await db.active();

@@ -201,8 +201,8 @@ a{color:var(--green-hi)}
       <div class="row" style="justify-content:space-between"><div><div class="tiptot" id="tipTotal">$0</div><small style="color:var(--ink-2)">tapped tonight · check your apps to confirm</small></div>
         <button id="tipTake"></button></div>
       <ol id="tipList"></ol>
-      <div class="row" id="djOnRow" hidden style="justify-content:space-between"><span id="djOnTxt"></span><button id="kickDj" class="danger" type="button">Kick DJ</button></div>
-      <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">Tips go to a DJ, not this login. DJs set up their payment links under their own PIN. You can turn tips off or kick a DJ who forgot to sign out.</p>
+      <div class="row" id="djOnRow" hidden style="justify-content:space-between"><span id="djOnTxt"></span><button id="kickDj" class="danger" type="button">Close DJ session</button></div>
+      <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">Tips go to the DJ, and only the DJ controls them. If the DJ left or forgot to sign out, tap Close DJ session. That signs them out and stops their tips.</p>
       <p id="tipNeedPin" hidden style="margin:0;color:#ffc93c;font-size:14px">🔒 Change your PIN first. The owner set your starting PIN, so make one only you know before adding payment info.</p>
       <button id="tipPinBtn" type="button" class="next" hidden>Change my PIN</button>
       <button id="tipLinksBtn" type="button">My payment links</button>
@@ -247,7 +247,7 @@ a{color:var(--green-hi)}
 
     <section class="card" id="hostsCard" hidden>
       <h2>DJs &amp; staff <span>each has their own PIN</span></h2>
-      <p style="margin:0;color:var(--ink-2);font-size:14px"><b>DJ</b>: runs the night and takes tips. One DJ logged in at a time. <b>Staff</b>: runs the queue, can turn tips off and kick a DJ, can't take tips.</p>
+      <p style="margin:0;color:var(--ink-2);font-size:14px"><b>DJ</b>: runs the night and takes tips. One DJ at a time, signed in from the bar. <b>Staff</b>: runs the queue, closes a DJ session, resets PINs, removes logins. Can't touch tips. Only the house PIN adds logins.</p>
       <ol id="hostList"></ol>
       <form id="hostForm" class="row" novalidate>
         <input id="hostName" placeholder="Name" aria-label="Name" maxlength="30" style="flex:1 1 140px;letter-spacing:0;font-size:16px;text-align:left">
@@ -277,19 +277,29 @@ const $ = id => document.getElementById(id);
 let pin = "", state = null, timer = null;
 try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
 
-let loginTry = false;
+let loginTry = false, loginWhere = null, djWatch = null, djLastSent = 0;
+function getWhere(){ return new Promise((ok, bad) => { if(!navigator.geolocation) return bad(new Error("none")); navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }), bad, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }); }); }
+function stopDjWatch(){ if(djWatch !== null && navigator.geolocation) navigator.geolocation.clearWatch(djWatch); djWatch = null; }
+function startDjWatch(){
+  if(djWatch !== null || !navigator.geolocation || !state || !state.me || state.me.role !== "dj" || !state.hasSpot) return;
+  djWatch = navigator.geolocation.watchPosition(p => {
+    if(Date.now() - djLastSent < 45000) return; djLastSent = Date.now();
+    api("/api/kj/where", { lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }).catch(() => {});
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 30000 });
+}
 async function api(path, body){
   const h = { "Content-Type": "application/json", "x-kj-pin": pin }; if(loginTry) h["x-kj-login"] = "1";
+  if(loginTry && loginWhere){ h["x-kj-lat"] = loginWhere.lat; h["x-kj-lng"] = loginWhere.lng; h["x-kj-acc"] = loginWhere.acc; }
   const r = await fetch(path, { method: body === undefined ? "GET" : "POST", cache: "no-store", headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if(r.status === 401){ logout(j.kicked ? j.error : "Wrong PIN."); throw new Error("pin"); }
   if(r.status === 423){ logout(j.error); throw new Error("pin"); }
-  if(!r.ok) throw new Error(j.error || "Something went wrong. Try again.");
+  if(!r.ok){ const er = new Error(j.error || "Something went wrong. Try again."); er.data = j; throw er; }
   return j;
 }
-function logout(msg){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
+function logout(msg){ stopDjWatch(); pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
 async function load(){
-  try{ state = await api("/api/kj/state"); render(); $("err").textContent = ""; }
+  try{ state = await api("/api/kj/state"); render(); startDjWatch(); $("err").textContent = ""; }
   catch(e){ if(e.message !== "pin") $("err").textContent = "Lost connection. Retrying…"; }
 }
 async function act(path, body){
@@ -451,9 +461,18 @@ $("pinForm").addEventListener("submit", async e => {
   e.preventDefault(); const v = $("pin").value.trim();
   if(!v){ $("pinErr").textContent = "Enter the PIN."; return; }
   pin = v;
-  loginTry = true;
-  try{ await api("/api/kj/state"); try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("pinErr").textContent = ""; loginTry = false; start(); }
-  catch(e){ loginTry = false; if(e.message !== "pin") $("pinErr").textContent = "Couldn't reach the server. Try again."; }
+  loginTry = true; loginWhere = null;
+  try{
+    try{ await api("/api/kj/state"); }
+    catch(e){
+      if(!(e.data && e.data.needLoc)) throw e;
+      $("pinErr").textContent = "Checking you're at the bar…";
+      try{ loginWhere = await getWhere(); }catch(g){ throw new Error("DJs sign in from the bar. Allow location for this site and try again."); }
+      await api("/api/kj/state");
+    }
+    try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("pinErr").textContent = ""; loginTry = false; loginWhere = null; start();
+  }
+  catch(e){ loginTry = false; loginWhere = null; if(e.message !== "pin") $("pinErr").textContent = e.data ? e.message : (e.message.startsWith("DJs") ? e.message : "Couldn't reach the server. Try again."); }
 });
 $("pin").addEventListener("input", () => $("pinErr").textContent = "");
 $("nextBtn").addEventListener("click", () => act("/api/kj/next"));
@@ -509,7 +528,15 @@ async function loadHosts(){
         if(x.dataset.armed !== "1"){ x.dataset.armed = "1"; x.textContent = "Tap to confirm"; setTimeout(() => { x.dataset.armed = ""; x.textContent = "Remove"; }, 4000); return; }
         await api("/api/kj/hosts/remove", { name: h.name }).catch(() => {}); loadHosts();
       });
-      li.append(t, x); ol.appendChild(li);
+      const rs = document.createElement("button"); rs.textContent = "Reset PIN";
+      rs.addEventListener("click", async () => {
+        const np = prompt("New temporary PIN for " + h.name + " (4 to 8 digits). They'll have to change it before taking tips.");
+        if(np === null) return;
+        try{ await api("/api/kj/hosts/reset", { name: h.name, pin: np.trim() }); loadHosts(); alert(h.name + "'s PIN is reset. Their DJ session was closed."); }
+        catch(err){ if(err.message !== "pin") alert(err.message); }
+      });
+      const acts = document.createElement("span"); acts.className = "row"; acts.style.gap = "6px"; acts.append(rs, x);
+      li.append(t, acts); ol.appendChild(li);
     });
   }catch(e){}
 }
@@ -537,10 +564,10 @@ $("venueSave").addEventListener("click", () => {
 function paintMe(){
   if(!state || !state.me) return;
   $("meLine").textContent = "Signed in as " + state.me.name;
-  $("hostsCard").hidden = !state.me.admin;
+  $("hostsCard").hidden = state.me.role === "dj"; $("hostForm").hidden = !state.me.admin;
   $("myPinBtn").hidden = state.me.admin;
   $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "staff" ? " (staff)" : state.me.role === "dj" ? " (DJ)" : " (house)");
-  if(state.me.admin && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
+  if(state.me.role !== "dj" && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
 }
 $("hostForm").addEventListener("submit", async e => {
   e.preventDefault(); $("hostErr").textContent = "";
@@ -574,7 +601,7 @@ async function loadTips(){
   $("djOnRow").hidden = !(tips.house && tips.dj); $("djOnTxt").textContent = tips.dj ? "🎧 DJ on now: " + tips.dj : "";
   $("tipNeedPin").hidden = !tips.needPin; $("tipPinBtn").hidden = !tips.needPin;
   if(tips.needPin){ $("tipLinksBtn").hidden = true; $("tipLinksForm").hidden = true; $("tipTake").hidden = true; }
-  if(tips.house){ $("tipLinksForm").hidden = true; $("tipTake").hidden = !tips.on; $("tipTake").textContent = "Turn tips off"; $("tipTake").className = ""; }
+  if(tips.house){ $("tipLinksForm").hidden = true; $("tipTake").hidden = true; }
   const by = {}; tips.tonight.forEach(t => by[t.who] = (by[t.who] || 0) + t.amount);
   const topWho = Object.keys(by).sort((a, b) => by[b] - by[a])[0];
   const ol = $("tipList"); ol.innerHTML = "";
@@ -595,15 +622,14 @@ async function loadTips(){
 $("tipTake").addEventListener("click", async () => {
   if(!tips) return;
   const me = state.me.name;
-  if(tips.house){ try{ await api("/api/kj/tips/take", { on: false }); }catch(e){} loadTips(); return; }
   if(!Object.keys(tips.mine).length){ $("tipLinksForm").hidden = false; return; }
   try{ await api("/api/kj/tips/take", { on: !(tips.on && tips.host === me) }); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
   loadTips();
 });
 $("kickDj").addEventListener("click", async () => {
   const b = $("kickDj");
-  if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "Tap to confirm"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Kick DJ"; }, 4000); return; }
-  b.dataset.armed = ""; b.textContent = "Kick DJ";
+  if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "Tap to confirm"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Close DJ session"; }, 4000); return; }
+  b.dataset.armed = ""; b.textContent = "Close DJ session";
   try{ await api("/api/kj/kick", {}); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
   loadTips();
 });
