@@ -35,6 +35,8 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .sgrid b{display:block;font-family:var(--slab);font-size:20px;font-variant-numeric:tabular-nums}
 .sgrid span{font-size:11px;color:var(--ink-2);line-height:1.2;display:block}
 .singer .note{font-size:14px;margin:0}
+.namepick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.namepick p{width:100%;margin:0;color:var(--ink-2);font-size:14px}
 .forcepin{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.9);display:grid;place-items:center;padding:16px}
 .fpbox{width:100%;max-width:360px;background:var(--panel);border:2px solid var(--green);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:10px}
 .fpbox h2{margin:0}.fpbox p{margin:0;color:var(--ink-2);font-size:14px}
@@ -161,6 +163,7 @@ a{color:var(--green-hi)}
     <form id="pinForm" novalidate>
       <input id="pin" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="KJ PIN">
       <p class="err" id="pinErr" role="alert"></p>
+      <div class="namepick" id="namePick" hidden></div>
       <button class="next" type="submit" style="width:100%">Open queue</button>
     </form>
   </section>
@@ -243,7 +246,7 @@ a{color:var(--green-hi)}
         <a href="/stats">Analytics</a>
         <a href="/history">Customer history</a>
         <a href="/ads">Daily ads</a>
-        <a href="/staff">Staff list</a>
+        <a href="/owner" id="ownerLink" hidden>Owner list</a>
         <a href="/wheel" target="_blank" rel="noopener">Spin wheel</a>
         <a href="/wall" target="_blank" rel="noopener">Wall of fame</a>
         <a href="/tv" target="_blank" rel="noopener">TV screen to cast</a>
@@ -303,6 +306,7 @@ a{color:var(--green-hi)}
 const $ = id => document.getElementById(id);
 let pin = "", state = null, timer = null;
 try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
+let pinName = ""; try{ pinName = sessionStorage.getItem("kj_name") || ""; }catch(e){}
 
 let loginTry = false, loginWhere = null, djWatch = null, djLastSent = 0;
 function getWhere(){ return new Promise((ok, bad) => { if(!navigator.geolocation) return bad(new Error("none")); navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }), bad, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }); }); }
@@ -315,7 +319,7 @@ function startDjWatch(){
   }, () => {}, { enableHighAccuracy: true, maximumAge: 30000 });
 }
 async function api(path, body){
-  const h = { "Content-Type": "application/json", "x-kj-pin": pin }; if(loginTry) h["x-kj-login"] = "1";
+  const h = { "Content-Type": "application/json", "x-kj-pin": pin }; if(loginTry) h["x-kj-login"] = "1"; if(pinName) h["x-kj-name"] = encodeURIComponent(pinName);
   if(loginTry && loginWhere){ h["x-kj-lat"] = loginWhere.lat; h["x-kj-lng"] = loginWhere.lng; h["x-kj-acc"] = loginWhere.acc; }
   const r = await fetch(path, { method: body === undefined ? "GET" : "POST", cache: "no-store", headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
@@ -325,7 +329,7 @@ async function api(path, body){
   if(!r.ok){ const er = new Error(j.error || "Something went wrong. Try again."); er.data = j; throw er; }
   return j;
 }
-function logout(msg){ stopDjWatch(); pin = ""; $("forcePin").hidden = true; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
+function logout(msg){ stopDjWatch(); pin = ""; pinName = ""; try{ sessionStorage.removeItem("kj_name"); }catch(e){} $("forcePin").hidden = true; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
 async function load(){
   try{ state = await api("/api/kj/state"); render(); startDjWatch(); $("err").textContent = ""; }
   catch(e){ if(e.message !== "pin") $("err").textContent = "Lost connection. Retrying…"; }
@@ -501,7 +505,7 @@ function start(){ $("login").hidden = true; $("panel").hidden = false; load(); s
 $("pinForm").addEventListener("submit", async e => {
   e.preventDefault(); const v = $("pin").value.trim();
   if(!v){ $("pinErr").textContent = "Enter the PIN."; return; }
-  pin = v;
+  if(pin !== v){ pinName = ""; } pin = v; $("namePick").hidden = true;
   loginTry = true; loginWhere = null;
   try{
     try{ await api("/api/kj/state"); }
@@ -511,9 +515,15 @@ $("pinForm").addEventListener("submit", async e => {
       try{ loginWhere = await getWhere(); }catch(g){ throw new Error("DJs sign in from the bar. Allow location for this site and try again."); }
       await api("/api/kj/state");
     }
-    try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("pinErr").textContent = ""; loginTry = false; loginWhere = null; start();
+    try{ sessionStorage.setItem("kj_pin", pin); sessionStorage.setItem("kj_name", pinName); }catch(e){} $("pinErr").textContent = ""; loginTry = false; loginWhere = null; start();
   }
-  catch(e){ loginTry = false; loginWhere = null; if(e.message !== "pin") $("pinErr").textContent = e.data ? e.message : (e.message.startsWith("DJs") ? e.message : "Couldn't reach the server. Try again."); }
+  catch(e){ loginTry = false; loginWhere = null;
+    // starting PIN shared by several new logins: ask which one they are
+    if(e.data && e.data.pickName){
+      const box = $("namePick"); box.innerHTML = "<p>That's a starting PIN. Tap your name:</p>"; box.hidden = false; $("pinErr").textContent = "";
+      e.data.names.forEach(n => { const b = document.createElement("button"); b.type = "button"; b.textContent = n; b.addEventListener("click", () => { pinName = n; box.hidden = true; $("pinForm").requestSubmit ? $("pinForm").requestSubmit() : $("pinForm").dispatchEvent(new Event("submit")); }); box.appendChild(b); });
+      return;
+    } if(e.message !== "pin") $("pinErr").textContent = e.data ? e.message : (e.message.startsWith("DJs") ? e.message : "Couldn't reach the server. Try again."); }
 });
 $("pin").addEventListener("input", () => $("pinErr").textContent = "");
 $("nextBtn").addEventListener("click", () => act("/api/kj/next"));
@@ -572,7 +582,7 @@ async function loadHosts(){
       });
       const rs = document.createElement("button"); rs.textContent = "Reset PIN";
       rs.addEventListener("click", async () => {
-        const np = prompt("New temporary PIN for " + h.name + " (4 to 8 digits). They'll have to change it before taking tips.");
+        const np = prompt("New starting PIN for " + h.name + " (4 to 8 digits). They'll make their own when they sign in.", (state && state.tempPin) || "");
         if(np === null) return;
         try{ await api("/api/kj/hosts/reset", { name: h.name, pin: np.trim() }); loadHosts(); alert(h.name + "'s PIN is reset. Their DJ session was closed."); }
         catch(err){ if(err.message !== "pin") alert(err.message); }
@@ -615,6 +625,8 @@ $("venueSave").addEventListener("click", () => {
 function paintMe(){
   if(!state || !state.me) return;
   $("meLine").textContent = "Signed in as " + state.me.name;
+  $("ownerLink").hidden = !state.me.admin;
+  $("hostPin").placeholder = state.tempPin ? "Start PIN " + state.tempPin : "PIN";
   $("hostsCard").hidden = state.me.role === "dj"; $("hostForm").hidden = !state.me.admin;
   $("myPinBtn").hidden = state.me.admin;
   $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "staff" ? " (staff)" : state.me.role === "dj" ? " (DJ)" : " (house)");
@@ -624,8 +636,8 @@ $("hostForm").addEventListener("submit", async e => {
   e.preventDefault(); $("hostErr").textContent = "";
   const name = $("hostName").value.trim(), pin = $("hostPin").value.trim();
   if(!name){ $("hostErr").textContent = "Enter the host's name."; return; }
-  if(!/^\d{4,8}$/.test(pin)){ $("hostErr").textContent = "PIN must be 4 to 8 digits."; return; }
-  try{ await api("/api/kj/hosts", { name, pin, role: $("hostRole").value }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
+  if(!(pin === "" && state && state.tempPin) && !/^\d{4,8}$/.test(pin)){ $("hostErr").textContent = "PIN must be 4 to 8 digits."; return; }
+  try{ await api("/api/kj/hosts", { name, pin: pin || (state && state.tempPin) || "", role: $("hostRole").value }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
   catch(err){ $("hostErr").textContent = err.message; }
 });
 $("fpForm").addEventListener("submit", async e => {

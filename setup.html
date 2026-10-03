@@ -154,7 +154,7 @@ function paint(j){
   $("price").textContent = j.price; $("payBtn").hidden = p.paid || !j.cardReady; $("portalBtn").hidden = !j.paid;
   if(!j.cardReady && !p.paid) $("planHint").textContent += " Card payments aren't turned on yet. Ask Stemo Enterprises for a code.";
   const L = $("links"); L.innerHTML = "";
-  [["Customer sign-up", j.links.app], ["Host page", j.links.kj], ["TV screen", j.links.tv], ["QR poster", j.links.poster], ["Staff list", j.links.staff]].forEach(([label, url]) => {
+  [["Customer sign-up", j.links.app], ["Host page", j.links.kj], ["TV screen", j.links.tv], ["QR poster", j.links.poster], ["Owner list", j.links.staff]].forEach(([label, url]) => {
     const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener";
     const b = document.createElement("b"); b.textContent = label; const s = document.createElement("span"); s.textContent = url.replace(/^https?:\/\//, "");
     a.append(b, s); L.appendChild(a);

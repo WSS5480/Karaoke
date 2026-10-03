@@ -79,7 +79,7 @@ app.use(async (req, res, next) => {
   if (/^\/(setup|api\/setup|api\/billing|terms|logo\.png|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|[\w-]*manifest\.json|m\/|healthz)/.test(req.path)) return next();
   if (planSummary(t).active) return next();
   if (req.path.startsWith("/api/")) return res.status(402).json({ error: "inactive", message: "This karaoke system isn't active right now. Ask the host." });
-  if (/^\/(kj|stats|ads|history|staff|wheel|tv|tent|poster)\b/.test(req.path)) return res.redirect(BASE() + "/setup");
+  if (/^\/(kj|stats|ads|history|staff|owner|links|wheel|tv|tent|poster)\b/.test(req.path)) return res.redirect(BASE() + "/setup");
   res.status(402).type("html").send(simplePage(t.name, `<img src="${BASE()}/logo.png" alt=""><h1>${esc(t.name)}</h1><p>Karaoke sign-up isn't open right now. Ask the host, or check back soon.</p>`));
 });
 /* =====================================================================
@@ -157,7 +157,7 @@ function refreshPlan(t) {
 }
 
 /* ---------- branding: other bars get The Dive's pages with their own name, logo and links ---------- */
-const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
+const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|owner\b|links\/|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
 function brand(html, t, base, host) {
   if (t.house) return html;
   const name = t.name, short = t.short || t.name, tagWord = (short || name).replace(/[^A-Za-z0-9]/g, ""), city = t.city || "";
@@ -615,10 +615,15 @@ app.post("/api/auth/logout", (req, res) => { res.append("Set-Cookie", "dive_user
 // hosts: the owner PIN (KJ_PIN) can add hosts, each with their own name + PIN
 async function getHosts() { try { return JSON.parse((await db.getSetting("hosts")) || "[]"); } catch (e) { return []; } }
 const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
-async function whoIs(pin) {
+// starting PIN the owner can give every new DJ/staff login (set HOST_TEMP_PIN in Render). Several logins may share it
+// until they make their own, so signing in with it asks "which one are you?"
+const TEMP_PIN = String(process.env.HOST_TEMP_PIN || "").replace(/\D/g, "");
+async function whoIs(pin, name) {
   if (!pin) return null;
   if (T() === "dive" ? same(pin, KJ_PIN) : pinMatches(pin, TEN().pinHash)) return { name: "Owner", admin: true, role: "house" };
-  const h = (await getHosts()).find(x => same(pin, x.pin));
+  const hs = (await getHosts()).filter(x => same(pin, x.pin));
+  let h = hs[0];
+  if (hs.length > 1) { h = name ? hs.find(x => x.name === name) : null; if (!h) return { pick: hs.map(x => x.name) }; }
   return h ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: h.role === "staff" ? "staff" : "dj" } : null;
 }
 const pinTries = new Map();
@@ -626,7 +631,9 @@ async function kjAuth(req, res, next) {
   try {
     const t = Date.now(), l = (pinTries.get(req.ip) || []).filter(x => t - x < 600000);
     if (l.length >= 20) return res.status(429).json({ error: "Too many wrong PINs. Wait 10 minutes." });
-    const who = await whoIs(String(req.headers["x-kj-pin"] || ""));
+    let nm = ""; try{ nm = decodeURIComponent(String(req.headers["x-kj-name"] || "")); }catch(e){}
+    const who = await whoIs(String(req.headers["x-kj-pin"] || ""), nm);
+    if (who && who.pick) return res.status(409).json({ error: "Tap your name.", pickName: true, names: who.pick });
     if (!who) { l.push(t); pinTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
     if (who.role === "dj") { const bad = await djGate(req, who); if (bad) return res.status(bad.status).json(bad.body); }
     // DJ and staff logins start with a PIN the owner made; they must set their own before doing anything else
@@ -705,7 +712,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ me: req.kj, hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
+  res.json({ me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -797,11 +804,12 @@ const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.stat
 const staffOnly = (req, res, next) => req.kj && req.kj.role !== "dj" ? next() : res.status(403).json({ error: "Only staff can do that." });
 app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj" })) }); }));
 app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
-  const name = clean(req.body.name, 30), pin = String(req.body.pin || "").replace(/\D/g, "");
+  const name = clean(req.body.name, 30), pin = String(req.body.pin || "").replace(/\D/g, "") || TEMP_PIN;
   if (!name) return res.status(400).json({ error: "Enter the host's name." });
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
   const hosts = await getHosts();
-  if ((await whoIs(pin)) || hosts.some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is already used. Pick another." });
+  const isTemp = !!TEMP_PIN && pin === TEMP_PIN;
+  if (isTemp ? (await whoIs(pin) || {}).admin : ((await whoIs(pin)) || hosts.some(h => h.pin === pin))) return res.status(409).json({ error: "That PIN is already used. Pick another." });
   if (T() !== "dive" && req.body.role !== "staff" && hosts.filter(h => h.role !== "staff").length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " DJ logins. Remove one to add another." });
   if (hosts.some(h => h.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: "There's already a host with that name." });
   hosts.push({ name, pin, own: false, role: req.body.role === "staff" ? "staff" : "dj" }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
@@ -817,17 +825,18 @@ app.post("/api/kj/my-pin", wrap(async (req, res) => {
   if (req.kj.admin) return res.status(400).json({ error: T() === "dive" ? "The owner PIN is changed in Render (KJ_PIN)." : "Change the owner PIN on the Setup page." });
   const pin = String(req.body.pin || "").replace(/\D/g, ""), hosts = await getHosts();
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
+  if (TEMP_PIN && pin === TEMP_PIN) return res.status(409).json({ error: "That's the starting PIN. Pick your own." });
   const taken = await whoIs(pin);
   if ((taken && taken.admin) || hosts.some(h => h.pin === pin && h.name !== req.kj.name)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
   const me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Host not found." });
   me.pin = pin; me.own = true; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
 app.post("/api/kj/hosts/reset", staffOnly, wrap(async (req, res) => {
-  const name = String(req.body.name || ""), pin = String(req.body.pin || "").replace(/\D/g, ""), hosts = await getHosts();
+  const name = String(req.body.name || ""), pin = String(req.body.pin || "").replace(/\D/g, "") || TEMP_PIN, hosts = await getHosts();
   const h = hosts.find(x => x.name === name); if (!h) return res.status(404).json({ error: "Login not found." });
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
-  const taken = await whoIs(pin);
-  if ((taken && taken.admin) || hosts.some(x => x.pin === pin && x.name !== name)) return res.status(409).json({ error: "That PIN is already used. Pick another." });
+  const taken = await whoIs(pin), isTemp = !!TEMP_PIN && pin === TEMP_PIN;
+  if ((taken && taken.admin) || (!isTemp && hosts.some(x => x.pin === pin && x.name !== name))) return res.status(409).json({ error: "That PIN is already used. Pick another." });
   h.pin = pin; h.own = false; await db.setSetting("hosts", JSON.stringify(hosts));
   await endDj(name, "Your PIN was reset. Sign in with the new PIN and change it.");
   res.json({ ok: true });
@@ -1162,7 +1171,7 @@ async function ownerAuth(req, res) {
 const ownerView = (t, req) => ({ slug: t.slug, type: t.type || "bar", name: t.name, short: t.short, city: t.city || "", address: t.address || "", email: t.email || "",
   lat: t.lat ?? null, lng: t.lng ?? null, radius: t.radius || 150, tz: t.tz || "America/Chicago", venue: t.venue || "", tags: t.tags || {}, logo: t.logo || "", hasLogo: !!t.logo,
   plan: planSummary(t), price: PRICE_TEXT, cardReady: !!(STRIPE.key && STRIPE.price), paid: !!(t.stripe && t.stripe.customer), hostLimit: HOST_LIMIT,
-  links: { app: siteUrl(req) + BASE() + "/", kj: siteUrl(req) + BASE() + "/kj", tv: siteUrl(req) + BASE() + "/tv", poster: siteUrl(req) + BASE() + "/poster", staff: siteUrl(req) + BASE() + "/staff" } });
+  links: { app: siteUrl(req) + BASE() + "/", kj: siteUrl(req) + BASE() + "/kj", tv: siteUrl(req) + BASE() + "/tv", poster: siteUrl(req) + BASE() + "/poster", staff: siteUrl(req) + BASE() + "/owner" } });
 app.post("/api/setup/me", wrap(async (req, res) => { const t = await ownerAuth(req, res); if (t) res.json(ownerView(t, req)); }));
 app.post("/api/setup/save", wrap(async (req, res) => {
   const t = await ownerAuth(req, res); if (!t) return;
@@ -1237,7 +1246,7 @@ app.post("/api/kj/venue", wrap(async (req, res) => {
 
 /* ---------- pages ---------- */
 // HTML pages: sent as-is for The Dive, re-branded for other bars and DJs
-const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tent": "tent.html", "/terms": "terms.html", "/staff": "staff.html", "/setup": "setup.html", "/start": "start.html" };
+const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tent": "tent.html", "/terms": "terms.html", "/owner": "staff.html", "/setup": "setup.html", "/start": "start.html" };
 // extra pages that each install as their own app (own name + icon)
 const APPS = {
   "/stats": { file: "stats.html", key: "stats", name: "The Dive Analytics", short: "Dive Stats" },
@@ -1258,6 +1267,10 @@ Object.entries(APPS).forEach(([route, a]) => {
   ["-icon-192.png", "-icon-512.png", "-apple-touch-icon.png"].forEach(sfx => app.get("/" + a.key + sfx, (req, res) => sendLogo(req, res, a.key + sfx)));
   app.get(route, (req, res) => sendPage(req, res, a.file, a));
 });
+// the owner's list lives at /owner; staff, DJs and guests only get the group links the owner sends (/links/dj ...)
+const LINK_GROUPS = ["customers", "dj", "staff"];
+app.get("/staff", (req, res) => { const g = String(req.query.for || ""); res.redirect(301, BASE() + (LINK_GROUPS.includes(g) ? "/links/" + g : "/owner")); });
+app.get("/links/:group", (req, res) => LINK_GROUPS.includes(req.params.group) ? sendPage(req, res, "staff.html") : res.redirect(BASE() + "/"));
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => {
   if (route === "/start" && !TEN().house) return res.redirect("/start");          // sign-up is only on the main site
   if (route === "/setup" && TEN().house) return res.redirect("/kj");             // The Dive is set up in Render

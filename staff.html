@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Dive Staff</title>
+<title>Dive Owner</title>
 <link rel="icon" href="/logo.png">
 <link rel="manifest" href="/staff-manifest.json">
 <link rel="apple-touch-icon" href="/staff-apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Dive Staff">
+<meta name="apple-mobile-web-app-title" content="Dive Owner">
 <meta name="theme-color" content="#0a0c0a">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700;800&family=Outfit:wght@400;500;600&display=swap">
 <style>
@@ -56,7 +56,7 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .cpt{background:none;border:0;color:var(--ink-2);font:inherit;font-size:12px;text-decoration:underline;cursor:pointer;padding:2px}
 /* a shared group link: just that group's links, no owner controls */
 body.shared .group{border-left:0;padding-left:0}
-body.shared .ghd p,body.shared .gbtns,body.shared .ownonly,body.shared #copyAll,body.shared #relock,body.shared #intro{display:none!important}
+body.shared #installBar,body.shared .ghd p,body.shared .gbtns,body.shared .ownonly,body.shared #copyAll,body.shared #relock,body.shared #intro{display:none!important}
 
 :root{--panel-2:#1b211b;--wall:#0a0c0a}
 .brand{display:flex;align-items:center;gap:12px}.brand img{width:52px}
@@ -86,7 +86,7 @@ body.shared .ghd p,body.shared .gbtns,body.shared .ownonly,body.shared #copyAll,
   <form class="lbox" id="lockForm" novalidate>
     <img src="/logo.png" alt="">
     <h1>Owner only</h1>
-    <p>Enter your list PIN to open the staff list.</p>
+    <p>Enter your list PIN to open the owner list.</p>
     <input id="lockPin" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password" aria-label="List PIN" placeholder="List PIN">
     <button type="submit" class="copyall">Open</button>
     <p class="err" id="lockErr" role="alert"></p>
@@ -95,12 +95,12 @@ body.shared .ghd p,body.shared .gbtns,body.shared .ownonly,body.shared #copyAll,
 <main id="main" hidden>
   <div class="install" id="installBar" hidden>
     <img src="/staff-icon-192.png" alt="">
-    <div class="tx"><b>Get the Dive Staff app</b><span id="installHow">Open the staff list in one tap.</span></div>
+    <div class="tx"><b>Get the Dive Owner app</b><span id="installHow">Open your owner list in one tap.</span></div>
     <button id="installBtn" type="button">Add</button>
     <button class="x" id="installX" type="button" aria-label="Hide">×</button>
   </div>
   <header>
-    <div class="brand"><img src="/logo.png" alt="The Dive on 495"><h1 id="pageTitle">Karaoke Staff List</h1></div>
+    <div class="brand"><img src="/logo.png" alt="The Dive on 495"><h1 id="pageTitle">Karaoke Owner List</h1></div>
     <button class="copyall" id="copyAll" type="button">Copy whole list</button>
     <button class="lockbtn" id="relock" type="button">🔒 Lock this list</button>
     <p class="msg" id="msg" role="status"></p>
@@ -193,10 +193,11 @@ async function isOwner(p){
 }
 function openList(){ $("lock").hidden = true; $("main").hidden = false; }
 function showLock(t){ $("main").hidden = true; $("lock").hidden = false; $("lockErr").textContent = t || ""; $("lockPin").value = ""; $("lockPin").focus(); }
-const SHARED = { customers: "Karaoke Links", dj: "DJ Links", staff: "Staff Links" }[new URLSearchParams(location.search).get("for")];
+const LINK_KEY = (location.pathname.match(/\/links\/(customers|dj|staff)\/?$/) || [])[1] || new URLSearchParams(location.search).get("for");
+const SHARED = { customers: "Karaoke Links", dj: "DJ Links", staff: "Staff Links" }[LINK_KEY];
 if(SHARED){
   // someone opened a group link the owner sent: show only that group, no PIN needed
-  const key = new URLSearchParams(location.search).get("for");
+  const key = LINK_KEY;
   document.body.classList.add("shared"); $("pageTitle").textContent = SHARED; document.title = SHARED + " · The Dive";
   document.querySelectorAll(".group").forEach(g => { g.hidden = g.dataset.key !== key; });
   openList();
@@ -246,7 +247,8 @@ async function copy(text, btn, label){
 }
 document.getElementById("copyAll").addEventListener("click", e => copy(plain(), e.currentTarget, "Whole list"));
 // Send: shares one link that opens just this group's links, same look as this page
-const groupUrl = g => location.origin + location.pathname + "?for=" + g.dataset.key;
+const BASE_PATH = (location.pathname.match(/^\/b\/[a-z0-9-]+/) || [""])[0];
+const groupUrl = g => location.origin + BASE_PATH + "/links/" + g.dataset.key;
 document.querySelectorAll(".cpg").forEach(b => b.addEventListener("click", async () => {
   const g = b.closest(".group"), url = groupUrl(g), title = "The Dive karaoke: " + g.querySelector("h3").textContent.replace(/^\W+/, "").trim();
   if(navigator.share){ try{ await navigator.share({ title, text: title, url }); msg.textContent = g.dataset.who + " link sent."; return; }catch(e){ if(e && e.name === "AbortError") return; } }
@@ -268,7 +270,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), iosChrome = ios && /CriOS/i.test(navigator.userAgent);
   if(iosChrome){ $("iosGuide").classList.add("top"); $("iosShareWhere").textContent = "at the top right"; }
   let promptEvt = null;
-  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEvt = e; $("installBar").hidden = false; $("installHow").textContent = "Open the staff list in one tap."; $("installBtn").hidden = false; });
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEvt = e; $("installBar").hidden = false; $("installHow").textContent = "Open your owner list in one tap."; $("installBtn").hidden = false; });
   if(ios){ $("installBar").hidden = false; }
   $("installBtn").addEventListener("click", async () => {
     if(ios){ $("iosGuide").hidden = false; return; }
