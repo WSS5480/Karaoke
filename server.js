@@ -745,7 +745,8 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     topSingers: singerList.sort((a, b) => b.songs - a.songs || b.nights - a.nights).slice(0, 15),
     topRated: singerList.filter(x => x.avg !== null && x.songs >= 2).sort((a, b) => b.avg - a.avg || b.songs - a.songs).slice(0, 10),
     topSongs: [...songs.values()].sort((a, b) => b.count - a.count).slice(0, 15),
-    topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10)
+    topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10),
+    tips: await tipStats(days)
   });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the owner can manage hosts." });
@@ -773,6 +774,109 @@ app.post("/api/kj/hosts/remove", ownerOnly, wrap(async (req, res) => {
   const name = String(req.body.name || ""), hosts = (await getHosts()).filter(h => h.name !== name);
   await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
+/* ---------- tip the DJ: each host links their own Cash App / Venmo / PayPal / Zelle / Apple Cash ----------
+   We never touch the money. A guest picks an amount + leaves a comment, we log it for the host,
+   then hand them off to the host's payment app. Totals = what guests tapped, not confirmed payments. */
+const TIP_KEYS = ["cashapp", "venmo", "paypal", "zelle", "apple"];
+function cleanTipLinks(b) {
+  b = b || {}; const o = {};
+  const cash = String(b.cashapp || "").trim().replace(/^\$/, "");
+  if (cash) { if (!/^[A-Za-z][A-Za-z0-9_-]{0,19}$/.test(cash)) throw new Error("Cash App tag looks wrong. Example: $DJSteve"); o.cashapp = cash; }
+  const ven = String(b.venmo || "").trim().replace(/^@/, "");
+  if (ven) { if (!/^[A-Za-z0-9_-]{2,30}$/.test(ven)) throw new Error("Venmo username looks wrong. Example: @DJ-Steve"); o.venmo = ven; }
+  const pp = String(b.paypal || "").trim().replace(/^https?:\/\/(www\.)?paypal\.me\//i, "").replace(/\/.*$/, "");
+  if (pp) { if (!/^[A-Za-z0-9]{1,20}$/.test(pp)) throw new Error("PayPal.me name looks wrong. Example: DJSteve"); o.paypal = pp; }
+  const contact = (v, label) => {
+    v = String(v || "").trim(); if (!v) return null;
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) && v.length <= 80) return v.toLowerCase();
+    const p = normPhone(v); if (p) return p;
+    throw new Error(label + " needs the phone number or email it's set up with.");
+  };
+  const z = contact(b.zelle, "Zelle"); if (z) o.zelle = z;
+  const a = contact(b.apple, "Apple Cash"); if (a) o.apple = a;
+  return o;
+}
+async function getTipLinks(name) { try { return JSON.parse((await db.getSetting("tiplinks:" + name)) || "{}"); } catch (e) { return {}; } }
+async function tipState() {
+  const host = await db.getSetting("tip_host");
+  if (!host) return { on: false };
+  const links = await getTipLinks(host);
+  return Object.keys(links).length ? { on: true, host, links } : { on: false };
+}
+async function getTipNights() { try { return JSON.parse((await db.getSetting("tip_nights")) || "[]"); } catch (e) { return []; } }
+async function getTips(night) { try { return JSON.parse((await db.getSetting("tips:" + night)) || "[]"); } catch (e) { return []; } }
+const tipHits = new Map();
+// guest side
+app.get("/api/tip", wrap(async (req, res) => {
+  const s = await tipState(); if (!s.on) return res.json({ on: false });
+  const p = await getProfile(device(req, res));
+  res.json({ on: true, host: s.host === "Owner" ? "the KJ" : s.host, links: s.links, name: (p && p.name) || "" });
+}));
+app.post("/api/tip", wrap(async (req, res) => {
+  const t = Date.now(), l = (tipHits.get(req.ip) || []).filter(x => t - x < 600000);
+  if (l.length >= 8) return res.status(429).json({ error: "That's a lot of tips! Wait a few minutes." });
+  const s = await tipState(); if (!s.on) return res.status(409).json({ error: "Tips aren't open right now." });
+  const b = req.body || {}, method = String(b.method || "");
+  if (!TIP_KEYS.includes(method) || !s.links[method]) return res.status(400).json({ error: "Pick how you want to pay." });
+  const amount = Math.round(Number(b.amount) * 100) / 100;
+  if (!(amount >= 1 && amount <= 500)) return res.status(400).json({ error: "Tip between $1 and $500." });
+  const name = cleanName(b.name, 30) || "Someone", comment = clean(b.comment, 140);
+  l.push(t); tipHits.set(req.ip, l);
+  const night = barDay().date, list = await getTips(night);
+  list.push({ at: t, who: owner(req, res), name, amount, method, comment, to: s.host });
+  await db.setSetting("tips:" + night, JSON.stringify(list.slice(-500)));
+  const nights = await getTipNights(); if (!nights.includes(night)) { nights.push(night); await db.setSetting("tip_nights", JSON.stringify(nights)); }
+  res.json({ ok: true });
+}));
+// host side
+app.get("/api/kj/tips", wrap(async (req, res) => {
+  const s = await tipState(), list = await getTips(barDay().date);
+  res.json({ mine: await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, tonight: list.slice().reverse(), total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
+}));
+app.post("/api/kj/tips/links", wrap(async (req, res) => {
+  let links; try { links = cleanTipLinks(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
+  await db.setSetting("tiplinks:" + req.kj.name, JSON.stringify(links));
+  if (!Object.keys(links).length && (await db.getSetting("tip_host")) === req.kj.name) await db.setSetting("tip_host", "");
+  res.json({ ok: true, links });
+}));
+app.post("/api/kj/tips/take", wrap(async (req, res) => {
+  if (!req.body.on) { await db.setSetting("tip_host", ""); return res.json({ ok: true }); }
+  if (!Object.keys(await getTipLinks(req.kj.name)).length) return res.status(400).json({ error: "Add at least one payment link first." });
+  await db.setSetting("tip_host", req.kj.name); res.json({ ok: true });
+}));
+// analytics: per night totals + top tipper, tipper ranking, lifetime totals
+async function tipStats(days) {
+  const nights = await getTipNights(), from = days ? nightOf(Date.now() - days * 864e5) : "";
+  const all = [], perNight = [], people = new Map(), hostsT = new Map();
+  let life = 0, lifeCount = 0;
+  for (const n of nights.sort()) {
+    const list = await getTips(n); if (!list.length) continue;
+    const sum = list.reduce((a, x) => a + x.amount, 0); life += sum; lifeCount += list.length;
+    const inRange = n >= from;
+    const byWho = new Map();
+    for (const x of list) {
+      const w = byWho.get(x.who) || { name: x.name, total: 0 }; w.name = x.name; w.total += x.amount; byWho.set(x.who, w);
+      if (inRange) {
+        const p = people.get(x.who) || { name: x.name, total: 0, count: 0, nights: new Set(), crowns: 0 };
+        p.name = x.name; p.total += x.amount; p.count++; p.nights.add(n); people.set(x.who, p);
+        hostsT.set(x.to, (hostsT.get(x.to) || 0) + x.amount); all.push(x);
+      }
+    }
+    if (!inRange) continue;
+    const [topWho, top] = [...byWho.entries()].sort((a, b) => b[1].total - a[1].total)[0];
+    if (people.has(topWho)) people.get(topWho).crowns++;
+    perNight.push({ night: n, total: Math.round(sum * 100) / 100, count: list.length, top: top.name, topAmount: Math.round(top.total * 100) / 100 });
+  }
+  const r2 = v => Math.round(v * 100) / 100, rangeSum = all.reduce((a, x) => a + x.amount, 0);
+  return {
+    lifetime: { total: r2(life), count: lifeCount, nights: nights.length },
+    range: { total: r2(rangeSum), count: all.length, avg: all.length ? r2(rangeSum / all.length) : 0, perNight: perNight.length ? r2(rangeSum / perNight.length) : 0 },
+    nights: perNight.slice(-30),
+    topTippers: [...people.values()].map(p => ({ name: p.name, total: r2(p.total), count: p.count, nights: p.nights.size, crowns: p.crowns })).sort((a, b) => b.total - a.total).slice(0, 15),
+    byHost: [...hostsT.entries()].map(([host, total]) => ({ host, total: r2(total) })).sort((a, b) => b.total - a.total)
+  };
+}
+
 app.post("/api/kj/next", wrap(async (req, res) => {
   const list = await db.active();
   const up = list.find(r => r.status === "up"); if (up) await db.setStatus(up.id, "done");

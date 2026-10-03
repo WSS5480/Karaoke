@@ -91,6 +91,13 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
       <section class="card"><h2>Top songs</h2><ol class="rank" id="topSongs"></ol></section>
       <section class="card"><h2>Top artists</h2><ol class="rank" id="topArtists"></ol></section>
     </div>
+    <div style="margin:8px 0 0"><h2 style="display:block">💵 Tips</h2><p style="margin:4px 0 0;color:var(--ink-2);font-size:14px">What guests tapped to send. Confirm in your payment apps.</p></div>
+    <div class="tiles" id="tipTiles"></div>
+    <div class="grid2">
+      <section class="card"><h2>Tips per night <span>👑 = night's top tipper</span></h2><div class="chart" id="tipNights" role="img" aria-label="Tip dollars each karaoke night"></div><ol class="rank" id="tipNightList"></ol></section>
+      <section class="card"><h2>Top tippers <span>👑 = nights as #1</span></h2><ol class="rank" id="topTippers"></ol></section>
+    </div>
+    <section class="card" id="tipHostsCard"><h2>Tips by host</h2><ol class="rank" id="tipHosts"></ol></section>
     <section class="card"><h2>Self-ratings <span id="ratedNote"></span></h2><div class="dist" id="dist"></div></section>
   </div>
 </main>
@@ -151,6 +158,17 @@ async function load(){
   rank($("topRated"), d.topRated, x => x.name, x => x.songs + " songs", x => starsText(x.avg), x => x.avg);
   rank($("topSongs"), d.topSongs, x => x.song, x => x.artist, x => x.count + "×", x => x.count);
   rank($("topArtists"), d.topArtists, x => x.artist, () => "", x => x.count + "×", x => x.count);
+
+  const TP = d.tips || { lifetime: { total: 0, count: 0, nights: 0 }, range: { total: 0, count: 0, avg: 0, perNight: 0 }, nights: [], topTippers: [], byHost: [] };
+  const usd = v => "$" + (Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  $("tipTiles").innerHTML = "";
+  [[usd(TP.lifetime.total), "lifetime tips"], [TP.lifetime.count, "lifetime tip count"], ...(range === "all" ? [] : [[usd(TP.range.total), "tips in this range"]]), [usd(TP.range.perNight), "tips per night"], [usd(TP.range.avg), "average tip"]]
+    .forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("tipTiles").appendChild(t); });
+  bars($("tipNights"), TP.nights.map(x => ({ v: x.total, l: fmtNight(x.night), tip: fmtNight(x.night) + ": " + usd(x.total) + " · 👑 " + x.top + " " + usd(x.topAmount) })), Math.max(1, Math.ceil(TP.nights.length / 6)));
+  rank($("tipNightList"), TP.nights.slice().reverse().slice(0, 10), x => fmtNight(x.night), x => "👑 " + x.top + " (" + usd(x.topAmount) + ") · " + x.count + (x.count === 1 ? " tip" : " tips"), x => usd(x.total), x => x.total);
+  rank($("topTippers"), TP.topTippers, x => (x.crowns ? "👑".repeat(Math.min(x.crowns, 3)) + (x.crowns > 3 ? "×" + x.crowns : "") + " " : "") + x.name, x => x.count + (x.count === 1 ? " tip" : " tips") + " · " + x.nights + (x.nights === 1 ? " night" : " nights"), x => usd(x.total), x => x.total);
+  $("tipHostsCard").hidden = TP.byHost.length < 2;
+  rank($("tipHosts"), TP.byHost, x => x.host, () => "", x => usd(x.total), x => x.total);
   const dist = $("dist"); dist.innerHTML = ""; const maxS = Math.max(...d.stars, 1);
   for(let i = 4; i >= 0; i--){
     const row = document.createElement("div"); const l = document.createElement("span"); l.className = "stars"; l.textContent = "★".repeat(i + 1);

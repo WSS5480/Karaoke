@@ -119,6 +119,14 @@ a{color:var(--green-hi)}
 .vidwork .bar{height:8px;border-radius:99px;background:var(--panel-2);overflow:hidden}
 .vidwork .bar span{display:block;height:100%;width:0;background:var(--green);transition:width .3s}
 #vidStage{position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:.01;pointer-events:none}
+.tipin{letter-spacing:0!important;font-size:16px!important;text-align:left!important}
+.tipgrid{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center}
+.tipgrid span{font-size:14px;color:var(--ink-2)}
+.tiptot{font-family:"Roboto Slab",serif;font-weight:800;font-size:28px;color:#ffc93c}
+#tipList li{display:block;padding:10px 12px}
+#tipList li b{font-weight:600}
+#tipList li q{display:block;color:var(--ink);margin-top:2px;quotes:"“" "”"}
+#tipList li small{color:var(--ink-2)}
 </style>
 <script src="/zoom.js" defer></script>
 </head>
@@ -186,6 +194,25 @@ a{color:var(--green-hi)}
     <section class="card">
       <h2>Waiting <span id="waitCount"></span></h2>
       <ol id="queue"></ol>
+    </section>
+
+    <section class="card" id="tipsCard">
+      <h2>Tips <span id="tipState"></span></h2>
+      <div class="row" style="justify-content:space-between"><div><div class="tiptot" id="tipTotal">$0</div><small style="color:var(--ink-2)">tapped tonight · check your apps to confirm</small></div>
+        <button id="tipTake"></button></div>
+      <ol id="tipList"></ol>
+      <button id="tipLinksBtn" type="button">My payment links</button>
+      <form id="tipLinksForm" hidden novalidate style="display:flex;flex-direction:column;gap:8px">
+        <div class="tipgrid">
+          <span>Cash App</span><input class="tipin" id="tlCash" placeholder="$YourTag" maxlength="21" autocomplete="off">
+          <span>Venmo</span><input class="tipin" id="tlVenmo" placeholder="@username" maxlength="31" autocomplete="off">
+          <span>PayPal.me</span><input class="tipin" id="tlPaypal" placeholder="name" maxlength="40" autocomplete="off">
+          <span>Zelle</span><input class="tipin" id="tlZelle" placeholder="phone or email" maxlength="80" autocomplete="off">
+          <span>Apple Cash</span><input class="tipin" id="tlApple" placeholder="iPhone number" maxlength="80" autocomplete="off">
+        </div>
+        <button type="submit" class="next">Save my links</button>
+        <p class="err" id="tipLinksErr" role="alert"></p>
+      </form>
     </section>
 
     <section class="card">
@@ -409,7 +436,7 @@ function render(){
   const wait = (state.queue || []).filter(x => x.photo && x.photoSt === "pending").length;
   $("togglePhotoReview").textContent = (state.photoReview ? "Approve photos first: on" : "Approve photos first: off") + (wait ? " (" + wait + " waiting)" : "");
 }
-function start(){ $("login").hidden = true; $("panel").hidden = false; load(); clearInterval(timer); timer = setInterval(load, 4000); }
+function start(){ $("login").hidden = true; $("panel").hidden = false; load(); setTimeout(loadTips, 600); clearInterval(timer); timer = setInterval(load, 4000); }
 
 $("pinForm").addEventListener("submit", async e => {
   e.preventDefault(); const v = $("pin").value.trim();
@@ -520,6 +547,51 @@ $("myPinForm").addEventListener("submit", async e => {
   catch(err){ $("myPinErr").textContent = err.message; }
 });
 $("signOut").addEventListener("click", () => { hostsLoaded = false; logout(""); });
+
+/* ---------- tips ---------- */
+let tips = null;
+const $$m = v => "$" + (Number.isInteger(v) ? v : v.toFixed(2));
+const TIPN = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
+async function loadTips(){
+  try{ tips = await api("/api/kj/tips"); }catch(e){ return; }
+  const me = state && state.me ? state.me.name : "", mineOn = tips.on && tips.host === me, has = Object.keys(tips.mine).length > 0;
+  $("tipState").textContent = tips.on ? "going to " + (tips.host === me ? "you" : tips.host) : "off";
+  $("tipTake").textContent = mineOn ? "Stop taking tips" : has ? "Send tips to me tonight" : "Add your links to take tips";
+  $("tipTake").className = mineOn ? "" : "next";
+  $("tipTotal").textContent = $$m(tips.total);
+  const by = {}; tips.tonight.forEach(t => by[t.who] = (by[t.who] || 0) + t.amount);
+  const topWho = Object.keys(by).sort((a, b) => by[b] - by[a])[0];
+  const ol = $("tipList"); ol.innerHTML = "";
+  if(!tips.tonight.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No tips yet tonight. Give a shout-out to the Tip the DJ button!"; ol.appendChild(li); }
+  tips.tonight.slice(0, 30).forEach(t => {
+    const li = document.createElement("li");
+    const b = document.createElement("b"); b.textContent = (t.who === topWho ? "👑 " : "") + t.name + " · " + $$m(t.amount);
+    const sm = document.createElement("small"); sm.textContent = "  " + TIPN[t.method] + " · " + new Date(t.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + (t.to !== me ? " · to " + t.to : "");
+    li.append(b, sm);
+    if(t.comment){ const q = document.createElement("q"); q.textContent = t.comment; li.appendChild(q); }
+    ol.appendChild(li);
+  });
+  if($("tipLinksForm").hidden){
+    $("tlCash").value = tips.mine.cashapp ? "$" + tips.mine.cashapp : ""; $("tlVenmo").value = tips.mine.venmo ? "@" + tips.mine.venmo : "";
+    $("tlPaypal").value = tips.mine.paypal || ""; $("tlZelle").value = tips.mine.zelle || ""; $("tlApple").value = tips.mine.apple || "";
+  }
+}
+$("tipTake").addEventListener("click", async () => {
+  if(!tips) return;
+  const me = state.me.name;
+  if(!Object.keys(tips.mine).length){ $("tipLinksForm").hidden = false; return; }
+  try{ await api("/api/kj/tips/take", { on: !(tips.on && tips.host === me) }); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
+  loadTips();
+});
+$("tipLinksBtn").addEventListener("click", () => { $("tipLinksForm").hidden = !$("tipLinksForm").hidden; $("tipLinksErr").textContent = ""; });
+$("tipLinksForm").addEventListener("submit", async e => {
+  e.preventDefault(); $("tipLinksErr").textContent = "";
+  try{
+    await api("/api/kj/tips/links", { cashapp: $("tlCash").value, venmo: $("tlVenmo").value, paypal: $("tlPaypal").value, zelle: $("tlZelle").value, apple: $("tlApple").value });
+    $("tipLinksForm").hidden = true; loadTips();
+  }catch(err){ if(err.message !== "pin") $("tipLinksErr").textContent = err.message; }
+});
+setInterval(() => { if(pin && !$("panel").hidden) loadTips(); }, 8000);
 if(pin) start();
 
 /* ---------- stay fresh when the app comes back ---------- */

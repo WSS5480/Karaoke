@@ -191,6 +191,17 @@ li.up .av{border-color:var(--green)}
 .vidwork .bar{height:8px;border-radius:99px;background:var(--panel-2);overflow:hidden}
 .vidwork .bar span{display:block;height:100%;width:0;background:var(--green);transition:width .3s}
 #vidStage{position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:.01;pointer-events:none}
+.tipcard{text-align:center;gap:10px}
+.tipcard .go{background:#ffc93c}
+.tamts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tamts button,.tpay button{font:inherit;font-weight:700;font-size:17px;border-radius:12px;padding:12px 6px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
+.tamts button[aria-pressed="true"]{border-color:var(--green);background:rgba(57,181,74,.2);color:var(--green-hi)}
+.tpay{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tpay button{font-size:15px}
+.tpay button[data-m="cashapp"]{border-color:#00d64f}.tpay button[data-m="venmo"]{border-color:#3d95ce}.tpay button[data-m="paypal"]{border-color:#2790c3}.tpay button[data-m="zelle"]{border-color:#a0f}.tpay button[data-m="apple"]{border-color:#eee}
+.tcopy{background:var(--wall);border:1px dashed var(--line);border-radius:12px;padding:12px;text-align:center}
+.tcopy b{display:block;font-size:19px;overflow-wrap:anywhere;margin:4px 0}
+textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px;resize:vertical}
 </style>
 </head>
 <body>
@@ -338,6 +349,12 @@ li.up .av{border-color:var(--green)}
     <p id="closedMsg">Sign-ups are closed right now. Ask the KJ.</p>
   </section>
 
+  <section class="card tipcard" id="tipCard" hidden>
+    <h2>Tip the DJ <span style="text-transform:none;letter-spacing:0">/ Propina al DJ</span></h2>
+    <p style="margin:0;color:var(--ink-2)" id="tipLead">Show some love and send a shout-out.</p>
+    <button class="go" id="tipOpen" type="button">💵 Tip <span id="tipHostName"></span></button>
+  </section>
+
   <section class="card" id="mySongs">
     <h2>My songs <span style="text-transform:none;letter-spacing:0">/ Mis canciones</span></h2>
     <div class="tabs" role="tablist">
@@ -385,6 +402,27 @@ li.up .av{border-color:var(--green)}
     <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
   </section>
 </main>
+<div class="tmodal" id="tipModal" hidden role="dialog" aria-modal="true" aria-labelledby="tipTitle">
+  <div class="tbox" style="overflow:auto">
+    <h2 id="tipTitle">Tip <span id="tipTo"></span></h2>
+    <div id="tipStep1" style="display:flex;flex-direction:column;gap:12px">
+      <div><label>Amount <span>/ Cantidad</span></label>
+        <div class="tamts" id="tipAmts"><button type="button" data-a="1">$1</button><button type="button" data-a="5" aria-pressed="true">$5</button><button type="button" data-a="10">$10</button><button type="button" data-a="20">$20</button></div>
+        <input id="tipOther" inputmode="decimal" placeholder="Other amount" aria-label="Other amount in dollars" style="margin-top:8px"></div>
+      <div><label for="tipName">Your name <span>/ Tu nombre</span></label><input id="tipName" maxlength="30" autocomplete="nickname"></div>
+      <div><label for="tipNote">Comment <span>/ Comentario (optional)</span></label><textarea id="tipNote" maxlength="140" rows="2" placeholder="Play some Selena next! 🎤"></textarea></div>
+      <div><label>Pay with <span>/ Pagar con</span></label><div class="tpay" id="tipPay"></div></div>
+      <p class="hint" style="color:var(--ink-2);margin:0">Your tip goes straight to the DJ through the app you pick. The Dive never sees your payment info.</p>
+    </div>
+    <div id="tipStep2" hidden style="display:flex;flex-direction:column;gap:12px">
+      <div class="tcopy"><span id="tipHow"></span><b id="tipWho"></b><button class="sm" id="tipCopy" type="button">Copy</button></div>
+      <button class="go" id="tipMsg" type="button" hidden>Open Messages</button>
+      <p class="ok" id="tipDone" role="status">Thanks! Your comment was sent to the DJ. 🎶</p>
+    </div>
+    <p class="err" id="tipErr" role="alert"></p>
+    <button class="linkbtn" id="tipClose" type="button">Close</button>
+  </div>
+</div>
 <div class="tmodal" id="cropModal" hidden role="dialog" aria-modal="true" aria-labelledby="cropTitle">
   <div class="tbox cropbox">
     <h2 id="cropTitle">Size your photo <span style="font-weight:400;color:var(--ink-2)">/ Ajusta tu foto</span></h2>
@@ -1246,6 +1284,67 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   $("iosGuide").addEventListener("click", e => { if(e.target.id === "iosGuide") $("iosGuide").hidden = true; });
   $("installX").addEventListener("click", () => { $("installBar").hidden = true; try{ sessionStorage.setItem("dive_install_x", "1"); }catch(e){} $("getApp").hidden = false; });
   window.addEventListener("appinstalled", () => { $("installBar").hidden = true; });
+})();
+
+/* ---------- tip the DJ ---------- */
+(function(){
+  const NAMES = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let tipInfo = null, amt = 5;
+  async function loadTip(){
+    try{ tipInfo = await (await fetch("/api/tip", { cache: "no-store" })).json(); }catch(e){ return; }
+    $("tipCard").hidden = !tipInfo.on;
+    if(tipInfo.on){ $("tipHostName").textContent = tipInfo.host; $("tipTo").textContent = tipInfo.host; }
+  }
+  function money(v){ return "$" + (Number.isInteger(v) ? v : v.toFixed(2)); }
+  $("tipAmts").addEventListener("click", e => {
+    const b = e.target.closest("button"); if(!b) return;
+    amt = Number(b.dataset.a); $("tipOther").value = "";
+    $("tipAmts").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  });
+  $("tipOther").addEventListener("input", () => {
+    const v = Number($("tipOther").value.replace(/[^0-9.]/g, ""));
+    $("tipAmts").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false"));
+    amt = v || 0;
+  });
+  $("tipOpen").addEventListener("click", () => {
+    if(!tipInfo || !tipInfo.on) return;
+    $("tipStep1").hidden = false; $("tipStep2").hidden = true; $("tipErr").textContent = "";
+    if(!$("tipName").value) $("tipName").value = tipInfo.name || $("name").value || "";
+    const pay = $("tipPay"); pay.innerHTML = "";
+    Object.keys(NAMES).filter(k => tipInfo.links[k]).forEach(k => {
+      const b = document.createElement("button"); b.type = "button"; b.dataset.m = k; b.textContent = NAMES[k];
+      b.addEventListener("click", () => send(k)); pay.appendChild(b);
+    });
+    $("tipModal").hidden = false;
+  });
+  async function send(m){
+    $("tipErr").textContent = "";
+    if(!(amt >= 1 && amt <= 500)){ $("tipErr").textContent = "Pick an amount from $1 to $500."; return; }
+    const name = $("tipName").value.trim(), note = $("tipNote").value.trim(), to = tipInfo.links[m];
+    try{
+      const r = await fetch("/api/tip", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: amt, method: m, name, comment: note }) });
+      const d = await r.json(); if(!r.ok) throw new Error(d.error || "Couldn't send. Try again.");
+    }catch(e){ $("tipErr").textContent = e.message; return; }
+    $("tipNote").value = "";
+    const memo = "Tip for " + tipInfo.host + (note ? ": " + note : "");
+    if(m === "cashapp"){ location.href = "https://cash.app/$" + encodeURIComponent(to) + "/" + amt; return; }
+    if(m === "venmo"){ location.href = "https://venmo.com/?txn=pay&recipients=" + encodeURIComponent(to) + "&amount=" + amt + "&note=" + encodeURIComponent(memo); return; }
+    if(m === "paypal"){ location.href = "https://www.paypal.me/" + encodeURIComponent(to) + "/" + amt + "USD"; return; }
+    // Zelle and Apple Cash have no web pay link: show who to send to
+    $("tipStep1").hidden = true; $("tipStep2").hidden = false;
+    $("tipWho").textContent = /^\+1\d{10}$/.test(to) ? "(" + to.slice(2, 5) + ") " + to.slice(5, 8) + "-" + to.slice(8) : to;
+    $("tipHow").textContent = m === "zelle" ? "Open your bank app → Zelle → send " + money(amt) + " to" : "Send " + money(amt) + " with Apple Cash in Messages to";
+    $("tipMsg").hidden = !(m === "apple" && ios && /^\+/.test(to));
+    $("tipMsg").onclick = () => { location.href = "sms:" + to + "&body=" + encodeURIComponent("🎤 " + memo); };
+  }
+  $("tipCopy").addEventListener("click", async () => {
+    try{ await navigator.clipboard.writeText($("tipWho").textContent); $("tipCopy").textContent = "Copied ✓"; }catch(e){ $("tipCopy").textContent = "Press and hold to copy"; }
+    setTimeout(() => $("tipCopy").textContent = "Copy", 1800);
+  });
+  $("tipClose").addEventListener("click", () => $("tipModal").hidden = true);
+  $("tipModal").addEventListener("click", e => { if(e.target.id === "tipModal") $("tipModal").hidden = true; });
+  loadTip(); setInterval(loadTip, 30000);
 })();
 async function refresh(){
   try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
