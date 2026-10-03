@@ -157,7 +157,7 @@ function refreshPlan(t) {
 }
 
 /* ---------- branding: other bars get The Dive's pages with their own name, logo and links ---------- */
-const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
+const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
 function brand(html, t, base, host) {
   if (t.house) return html;
   const name = t.name, short = t.short || t.name, tagWord = (short || name).replace(/[^A-Za-z0-9]/g, ""), city = t.city || "";
@@ -181,6 +181,8 @@ function brand(html, t, base, host) {
 const pageCache = new Map();
 function rawPage(file, appMeta) {
   let html = fs.readFileSync(path.join(__dirname, file), "utf8");
+  // every page keeps its installed app up to date by itself
+  if (file.endsWith(".html") && !html.includes("/update.js")) html = html.replace("</head>", '<script src="/update.js" defer></script>\n</head>');
   if (appMeta) {
     html = html.replace(/<link rel="(manifest|apple-touch-icon)"[^>]*>\s*/g, "").replace(/<meta name="apple-mobile-web-app-(title|capable)"[^>]*>\s*/g, "");
     const tags = `<link rel="manifest" href="/m/${appMeta.key}.json">\n<link rel="apple-touch-icon" href="/${appMeta.key}-apple-touch-icon.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="${appMeta.short}">\n<script src="/install.js" defer></script>\n`;
@@ -946,6 +948,7 @@ Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => {
   res.type("application/manifest+json").json(j);
 }));
 app.get("/sw.js", (req, res) => sendPage(req, res, "sw.js", null, "application/javascript"));
+app.get("/update.js", (req, res) => res.type("application/javascript").set("Cache-Control", "no-cache").sendFile(path.join(__dirname, "update.js")));
 app.get("/zoom.js", (req, res) => res.type("application/javascript").sendFile(path.join(__dirname, "zoom.js")));
 app.get("/install.js", (req, res) => res.type("application/javascript").sendFile(path.join(__dirname, "install.js")));
 app.get("/default-logo.png", (req, res) => res.sendFile(path.join(__dirname, "default-logo.png")));
