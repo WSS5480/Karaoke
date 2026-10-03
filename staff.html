@@ -52,6 +52,11 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .cpg{flex:none;background:var(--green);color:#041206;border:0;border-radius:999px;padding:10px 14px;font:inherit;font-weight:700;font-size:14px;cursor:pointer}
 .group[data-who="DJ"] .cpg{background:#4da3ff}.group[data-who="Staff"] .cpg{background:#ffc93c}
 .cpg.done{outline:2px solid var(--ink)}
+.gbtns{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.cpt{background:none;border:0;color:var(--ink-2);font:inherit;font-size:12px;text-decoration:underline;cursor:pointer;padding:2px}
+/* a shared group link: just that group's links, no owner controls */
+body.shared .group{border-left:0;padding-left:0}
+body.shared .ghd p,body.shared .gbtns,body.shared .ownonly,body.shared #copyAll,body.shared #relock,body.shared #intro{display:none!important}
 
 :root{--panel-2:#1b211b;--wall:#0a0c0a}
 .brand{display:flex;align-items:center;gap:12px}.brand img{width:52px}
@@ -95,15 +100,15 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     <button class="x" id="installX" type="button" aria-label="Hide">×</button>
   </div>
   <header>
-    <div class="brand"><img src="/logo.png" alt="The Dive on 495"><h1>Karaoke Staff List</h1></div>
+    <div class="brand"><img src="/logo.png" alt="The Dive on 495"><h1 id="pageTitle">Karaoke Staff List</h1></div>
     <button class="copyall" id="copyAll" type="button">Copy whole list</button>
     <button class="lockbtn" id="relock" type="button">🔒 Lock this list</button>
     <p class="msg" id="msg" role="status"></p>
-    <p style="margin:0;font-size:14px;color:var(--ink-2)">Each group has its own copy button, so you only send people what they need. Every link is its own app: open it and tap <b>Add</b> to put it on the home screen.</p>
+    <p id="intro" style="margin:0;font-size:14px;color:var(--ink-2)">Each group has its own send button, so you only send people what they need. Every link is its own app: open it and tap <b>Add</b> to put it on the home screen.</p>
   </header>
 
-  <div class="group" data-who="Customer">
-    <div class="ghd"><div><h3>👥 Customers</h3><p>Share with guests</p></div><button class="cpg" type="button">Copy customer list</button></div>
+  <div class="group" data-who="Customer" data-key="customers">
+    <div class="ghd"><div><h3>👥 Customers</h3><p>Share with guests</p></div><span class="gbtns"><button class="cpg" type="button">Send customer link</button><button class="cpt" type="button">Copy as text</button></span></div>
   <section>
     <h2>Links</h2>
     <div class="ln"><div class="t"><b>Sign up</b><a href="/">the-dive-karaoke.onrender.com</a></div><button class="cp" type="button">Copy</button></div>
@@ -112,8 +117,8 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
   </section>
   </div>
 
-  <div class="group" data-who="DJ">
-    <div class="ghd"><div><h3>🎧 DJs</h3><p>Send to DJs only</p></div><button class="cpg" type="button">Copy DJ list</button></div>
+  <div class="group" data-who="DJ" data-key="dj">
+    <div class="ghd"><div><h3>🎧 DJs</h3><p>Send to DJs only</p></div><span class="gbtns"><button class="cpg" type="button">Send DJ link</button><button class="cpt" type="button">Copy as text</button></span></div>
   <section>
     <h2>Links <span>· sign in with your own PIN</span></h2>
     <div class="ln"><div class="t"><b>Queue</b><a href="/kj">the-dive-karaoke.onrender.com/kj</a></div><button class="cp" type="button">Copy</button></div>
@@ -134,8 +139,8 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
   </section>
   </div>
 
-  <div class="group" data-who="Staff">
-    <div class="ghd"><div><h3>🍺 House staff</h3><p>Bar staff and managers only</p></div><button class="cpg" type="button">Copy staff list</button></div>
+  <div class="group" data-who="Staff" data-key="staff">
+    <div class="ghd"><div><h3>🍺 House staff</h3><p>Bar staff and managers only</p></div><span class="gbtns"><button class="cpg" type="button">Send staff link</button><button class="cpt" type="button">Copy as text</button></span></div>
   <section>
     <h2>Links <span>· sign in with your own PIN</span></h2>
     <div class="ln"><div class="t"><b>Queue</b><a href="/kj">the-dive-karaoke.onrender.com/kj</a></div><button class="cp" type="button">Copy</button></div>
@@ -163,7 +168,7 @@ ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     <h2>End of night</h2>
     <ul><li><b>Start a new night</b>. History stays saved.</li></ul>
   </section>
-  <section>
+  <section class="ownonly">
     <h2>Owner only <span>· house PIN</span></h2>
     <ul><li>Add DJs and staff in the <b>Hosts</b> card with a starting PIN. Pick DJ or Staff. They must make their own PIN the first time they sign in.</li><li><b>Make DJ / Make staff</b> switches someone's login type.</li><li>Never share the house PIN. Give everyone their own login. Customers never need a PIN: they use the QR code or the link.</li><li>Tip money (all DJs) shows only for the house PIN. Each DJ sees only their own tips. Staff don't see tips.</li></ul>
   </section>
@@ -188,7 +193,16 @@ async function isOwner(p){
 }
 function openList(){ $("lock").hidden = true; $("main").hidden = false; }
 function showLock(t){ $("main").hidden = true; $("lock").hidden = false; $("lockErr").textContent = t || ""; $("lockPin").value = ""; $("lockPin").focus(); }
+const SHARED = { customers: "Karaoke Links", dj: "DJ Links", staff: "Staff Links" }[new URLSearchParams(location.search).get("for")];
+if(SHARED){
+  // someone opened a group link the owner sent: show only that group, no PIN needed
+  const key = new URLSearchParams(location.search).get("for");
+  document.body.classList.add("shared"); $("pageTitle").textContent = SHARED; document.title = SHARED + " · The Dive";
+  document.querySelectorAll(".group").forEach(g => { g.hidden = g.dataset.key !== key; });
+  openList();
+}
 (async () => {
+  if(SHARED) return;
   let saved = ""; try{ saved = localStorage.getItem(OWN_KEY) || ""; }catch(e){}
   if(saved && await isOwner(saved)) openList(); else { try{ localStorage.removeItem(OWN_KEY); }catch(e){} showLock(saved ? "The list PIN changed. Enter the new one." : ""); }
 })();
@@ -208,7 +222,8 @@ function sectionText(s){
   const items = [...s.querySelectorAll("li")].map((li, i) => (s.querySelector("ol") ? (i + 1) + ". " : "- ") + li.textContent.trim());
   return h + "\n" + lines.concat(items).join("\n");
 }
-function groupText(g){ return "THE DIVE KARAOKE – " + g.querySelector("h3").textContent.replace(/^\W+/, "").trim().toUpperCase() + "\n\n" + [...g.querySelectorAll("section")].map(sectionText).join("\n\n"); }
+function groupText(g){
+  if(document.body.classList.contains("shared")) g = document.querySelector(".group:not([hidden])") || g; return "THE DIVE KARAOKE – " + g.querySelector("h3").textContent.replace(/^\W+/, "").trim().toUpperCase() + "\n\n" + [...g.querySelectorAll("section")].map(sectionText).join("\n\n"); }
 function plain(){
   return "THE DIVE KARAOKE – QUICK LIST\n\n" + [...document.querySelectorAll(".group")].map(g => "== " + g.querySelector("h3").textContent.replace(/^\W+/, "").trim().toUpperCase() + " ==\n\n" + [...g.querySelectorAll("section")].map(sectionText).join("\n\n")).join("\n\n\n");
 }
@@ -230,7 +245,14 @@ async function copy(text, btn, label){
   msg.textContent = ok ? label + " copied. Paste it into a text." : "Couldn't copy here. Press and hold a link to copy it.";
 }
 document.getElementById("copyAll").addEventListener("click", e => copy(plain(), e.currentTarget, "Whole list"));
-document.querySelectorAll(".cpg").forEach(b => b.addEventListener("click", () => { const g = b.closest(".group"); copy(groupText(g), b, g.dataset.who + " list"); }));
+// Send: shares one link that opens just this group's links, same look as this page
+const groupUrl = g => location.origin + location.pathname + "?for=" + g.dataset.key;
+document.querySelectorAll(".cpg").forEach(b => b.addEventListener("click", async () => {
+  const g = b.closest(".group"), url = groupUrl(g), title = "The Dive karaoke: " + g.querySelector("h3").textContent.replace(/^\W+/, "").trim();
+  if(navigator.share){ try{ await navigator.share({ title, text: title, url }); msg.textContent = g.dataset.who + " link sent."; return; }catch(e){ if(e && e.name === "AbortError") return; } }
+  copy(url, b, g.dataset.who + " link");
+}));
+document.querySelectorAll(".cpt").forEach(b => b.addEventListener("click", () => { const g = b.closest(".group"); copy(groupText(g), b, g.dataset.who + " list"); }));
 document.querySelectorAll(".cp").forEach(b => b.addEventListener("click", () => {
   const l = b.closest(".ln"); copy(new URL(l.querySelector("a").getAttribute("href"), location.origin).href.replace(/\/$/, ""), b, l.querySelector("b").textContent + " link");
 }));
