@@ -1270,7 +1270,25 @@ Object.entries(APPS).forEach(([route, a]) => {
 // the owner's list lives at /owner; staff, DJs and guests only get the group links the owner sends (/links/dj ...)
 const LINK_GROUPS = ["customers", "dj", "staff"];
 app.get("/staff", (req, res) => { const g = String(req.query.for || ""); res.redirect(301, BASE() + (LINK_GROUPS.includes(g) ? "/links/" + g : "/owner")); });
-app.get("/links/:group", (req, res) => LINK_GROUPS.includes(req.params.group) ? sendPage(req, res, "staff.html") : res.redirect(BASE() + "/"));
+// group pages get their own title + link preview (iMessage etc.), never the owner's name or app
+const LINK_META = { customers: ["Karaoke Links", "Sign up to sing, the Wall of Fame, and our terms."], dj: ["DJ Links", "Links and how-to for DJs."], staff: ["Staff Links", "Links and how-to for bar staff."] };
+app.get("/links/:group", (req, res) => {
+  const g = req.params.group; if (!LINK_GROUPS.includes(g)) return res.redirect(BASE() + "/");
+  const t = TEN(), key = t.slug + "|links/" + g + "|" + (t.v || 0) + "|" + req.get("host");
+  let h = pageCache.get(key);
+  if (h == null) {
+    const [title, desc] = LINK_META[g], short = t.short || t.name || "The Dive", full = esc(short + " " + title), site = siteUrl(req) + BASE();
+    h = rawPage("staff.html")
+      .replace(/<title>[^<]*<\/title>/, "<title>" + full + "</title>")
+      .replace(/<link rel="manifest"[^>]*>\s*/, "").replace(/<link rel="apple-touch-icon"[^>]*>\s*/, '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n')
+      .replace(/<meta name="apple-mobile-web-app-title"[^>]*>/, '<meta name="apple-mobile-web-app-title" content="' + full + '">')
+      .replace('<h1 id="pageTitle">Karaoke Owner List</h1>', '<h1 id="pageTitle">' + esc(title) + '</h1>')
+      .replace("</head>", '<meta property="og:title" content="' + full + '">\n<meta property="og:description" content="' + esc(desc) + '">\n<meta property="og:image" content="' + site + '/logo.png">\n<meta property="og:url" content="' + site + '/links/' + g + '">\n<meta name="description" content="' + esc(desc) + '">\n</head>');
+    if (!t.house) h = brand(h, t, BASE(), req.get("host"));
+    pageCache.set(key, h);
+  }
+  res.type("html").set("Cache-Control", "no-cache").send(h);
+});
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => {
   if (route === "/start" && !TEN().house) return res.redirect("/start");          // sign-up is only on the main site
   if (route === "/setup" && TEN().house) return res.redirect("/kj");             // The Dive is set up in Render
