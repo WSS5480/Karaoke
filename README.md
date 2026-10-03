@@ -127,7 +127,7 @@ Both directions are signed with **the same secret**: My Apps calls it `APP_SECRE
 | Variable | Needed | What it is |
 |---|---|---|
 | `DATABASE_URL` | yes | Internal Database URL of `karaoke-db` (starts with `postgresql://`) |
-| `KJ_PIN` | yes | The Dive's owner PIN (1116) |
+| `KJ_PIN` | yes | The Dive's house PIN (set in Render only; never write it here) |
 | `SESSION_SECRET` | no | Signs login cookies. Made automatically and saved if blank. |
 | `PUBLIC_URL` | no | Custom domain for QR codes and links, for example `https://karaoke.example.com` |
 | `BAR_LAT`, `BAR_LNG`, `GEOFENCE_M` | no | The Dive's location check (defaults: 26.2183801, -98.2287714, 150) |
@@ -179,9 +179,9 @@ The Stripe connection uses plain HTTPS calls, so no extra npm package is needed.
 ### Run on your computer
 ```
 npm install
-KJ_PIN=1116 npm start          # http://localhost:3000 — keeps data in memory
+KJ_PIN=1234 npm start          # http://localhost:3000 — keeps data in memory
 ```
-To use a local Postgres: `DATABASE_URL=postgresql://user@localhost/karaoke PGSSL=off KJ_PIN=1116 npm start`.
+To use a local Postgres: `DATABASE_URL=postgresql://user@localhost/karaoke PGSSL=off KJ_PIN=1234 npm start`.
 
 ---
 
