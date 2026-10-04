@@ -632,7 +632,7 @@ async function doSignup(name, song, artist, errEl){
   try{
     let spot = {};
     if(geofenceOn && !qrToken){ try{ spot = await getSpot(); }catch(ge){ spot = {}; } }
-    const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, ...spot }) });
+    const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, app: !!(matchMedia("(display-mode: standalone)").matches || navigator.standalone), ...spot }) });
     const j = await r.json();
     if(!r.ok){
       if(j.error === "far") errEl.textContent = "You need to be at The Dive to sign up. You're about " + j.miles + " miles away.";
@@ -1560,7 +1560,8 @@ repaintLyr();
 $("singLyr").addEventListener("click", () => setTimeout(() => $("singModal").hidden = true, 300));
 $("singModal").addEventListener("click", e => { if(e.target.id === "singModal") $("singModal").hidden = true; });
 async function refresh(){
-  try{ const r = await fetch("/api/queue", { cache: "no-store" }); render(await r.json()); }catch(e){}
+  try{ const inApp = (matchMedia("(display-mode: standalone)").matches || navigator.standalone) ? 1 : 0;
+    const r = await fetch("/api/queue?g=1&app=" + inApp, { cache: "no-store" }); render(await r.json()); }catch(e){}
   loadMine();
 }
 try{ const n = localStorage.getItem("dive_name"); if(n) $("name").value = n; }catch(e){}

@@ -35,6 +35,10 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .sgrid b{display:block;font-family:var(--slab);font-size:20px;font-variant-numeric:tabular-nums}
 .sgrid span{font-size:11px;color:var(--ink-2);line-height:1.2;display:block}
 .singer .note{font-size:14px;margin:0}
+.crowd{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ctile{background:var(--panel-2,#1b211b);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.ctile b{display:block;font-family:var(--slab);font-size:22px;color:var(--green-hi)}
+.ctile span{font-size:12px;color:var(--ink-2)}
 .addform{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .addform input{font-size:16px;letter-spacing:0;text-align:left}
 .addform #addName,.addform .addspot,.addform button,.addform .err{grid-column:1/-1}
@@ -208,6 +212,11 @@ a{color:var(--green-hi)}
         <button id="pOn" data-m="-1">Until I resume</button>
         <button id="pOff" data-m="0" class="next" hidden>Resume now</button>
       </div>
+    </section>
+
+    <section class="card" id="crowdCard" hidden>
+      <h2>Tonight's crowd <span>owner &amp; managers</span></h2>
+      <div class="crowd" id="crowd"></div>
     </section>
 
     <section class="card">
@@ -486,6 +495,12 @@ function showForcePin(){
   $("forcePin").hidden = false; $("fpErr").textContent = ""; $("fpPin").value = ""; $("fpPin2").value = ""; $("fpAgree").checked = false;
   setTimeout(() => (n.pin ? $("fpPin") : $("fpAgree")).focus(), 50);
 }
+function paintCrowd(box, su, ph){
+  if(!box) return; box.innerHTML = "";
+  const tile = (v, l) => { const d = document.createElement("div"); d.className = "ctile"; const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(b, sp); box.appendChild(d); };
+  if(ph){ tile(ph.now, "phones open now"); tile(ph.tonight, "phones tonight"); tile(ph.app, "installed the app"); }
+  if(su){ tile(su.total, "sign-ups tonight"); tile(su.qr, "scanned the QR"); tile(su.app, "from the app"); tile(su.link, "from the link"); tile(su.dj, "added by the DJ"); if(su.untracked) tile(su.untracked, "before tracking"); }
+}
 function render(){
   if(state && state.me && !state.me.admin && (!state.me.own || !state.me.agreed)) showForcePin();
   paintMe(); paintBiz();
@@ -662,6 +677,7 @@ function paintMe(){
   if(!state || !state.me) return;
   $("meLine").textContent = "Signed in as " + state.me.name;
   $("ownerLink").hidden = !state.me.admin;
+  $("crowdCard").hidden = !(state.signups || state.phones); paintCrowd($("crowd"), state.signups, state.phones);
   $("hostPin").placeholder = state.tempPin ? "Start PIN " + state.tempPin : "PIN";
   $("hostsCard").hidden = state.me.role === "dj"; $("hostForm").hidden = !state.me.admin;
   $("myPinBtn").hidden = state.me.admin;

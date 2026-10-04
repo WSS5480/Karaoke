@@ -55,6 +55,10 @@ li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywher
 .lbox button{font:inherit;font-weight:700;font-size:16px;border:0;border-radius:999px;padding:12px;background:var(--green);color:#041206;cursor:pointer}
 .err{color:var(--warn);font-size:14px;min-height:18px;margin:0}
 a{color:var(--green-hi)}
+.crowd{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ctile{background:var(--panel-2,#1b211b);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.ctile b{display:block;font-family:var(--slab);font-size:22px;color:var(--green-hi)}
+.ctile span{font-size:12px;color:var(--ink-2)}
 .posted{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
 .net{font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 5px;color:#fff;display:inline-block}
 .net.fb{background:#1877f2}.net.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.net.tt{background:#000;border:1px solid #444}
@@ -87,6 +91,11 @@ a{color:var(--green-hi)}
       <div class="chips" id="byDj"></div>
       <ol id="tipList"></ol>
       <p class="sub" style="margin:0">What guests tapped to send. Confirm in the DJ's payment apps. Past nights: <a href="/stats">Analytics</a>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Tonight's crowd</h2>
+      <div class="crowd" id="crowd"></div>
     </section>
 
     <section class="card">
@@ -181,6 +190,12 @@ function paintQueue(st){
   const box = $("status"); box.innerHTML = "";
   chips.forEach(([t, on]) => { const s = document.createElement("span"); s.className = "pill" + (on ? " on" : ""); s.textContent = t; box.appendChild(s); });
 }
+function paintCrowd(box, su, ph){
+  if(!box) return; box.innerHTML = "";
+  const tile = (v, l) => { const d = document.createElement("div"); d.className = "ctile"; const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(b, sp); box.appendChild(d); };
+  if(ph){ tile(ph.now, "phones open now"); tile(ph.tonight, "phones tonight"); tile(ph.app, "installed the app"); }
+  if(su){ tile(su.total, "sign-ups tonight"); tile(su.qr, "scanned the QR"); tile(su.app, "from the app"); tile(su.link, "from the link"); tile(su.dj, "added by the DJ"); if(su.untracked) tile(su.untracked, "before tracking"); }
+}
 function paintTips(t){
   $("tipState").textContent = t.on ? "going to " + t.host : "tips off";
   const list = t.tonight || [], total = t.total || 0, count = list.length;
@@ -206,7 +221,7 @@ let timer = null;
 async function refresh(){
   try{
     const j = await get("/api/watch");
-    paintQueue(j.state); paintTips(j.tips);
+    paintQueue(j.state); paintTips(j.tips); paintCrowd($("crowd"), j.signups, j.phones);
   }catch(e){}
 }
 async function open(){

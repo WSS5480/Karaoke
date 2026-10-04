@@ -271,6 +271,7 @@ if (DB_OK) {
       await Q(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS rating INT`);
       await Q(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS public BOOLEAN NOT NULL DEFAULT false`);
       await Q(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS posted_to TEXT NOT NULL DEFAULT ''`);
+      await Q(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS via TEXT NOT NULL DEFAULT ''`);   // how they signed up: qr, app, link, dj
       // multi-bar: every sign-up belongs to one bar or DJ ("dive" = The Dive on 495, the original)
       await Q(`ALTER TABLE signups ADD COLUMN IF NOT EXISTS tenant TEXT NOT NULL DEFAULT 'dive'`);
       await Q(`CREATE INDEX IF NOT EXISTS signups_tenant_status ON signups (tenant, status)`);
@@ -299,7 +300,7 @@ if (DB_OK) {
     async active() { return (await Q(`SELECT * FROM signups WHERE tenant=$1 AND status IN ('up','queued') ORDER BY (status='up') DESC, position`, [T()])).rows; },
     async done(limit) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND status='done' ORDER BY done_at DESC LIMIT $1`, [limit, T()])).rows; },
     async byDevice(d) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND device=$1 AND status IN ('up','queued') LIMIT 1`, [d, T()])).rows[0]; },
-    async add(r) { return (await Q(`INSERT INTO signups (name,song,artist,device,tenant,position) VALUES ($1,$2,$3,$4,$5,(SELECT COALESCE(MAX(position),0)+1 FROM signups WHERE tenant=$5)) RETURNING *`, [r.name, r.song, r.artist, r.device, T()])).rows[0]; },
+    async add(r) { return (await Q(`INSERT INTO signups (name,song,artist,device,tenant,via,position) VALUES ($1,$2,$3,$4,$5,$6,(SELECT COALESCE(MAX(position),0)+1 FROM signups WHERE tenant=$5)) RETURNING *`, [r.name, r.song, r.artist, r.device, T(), r.via || ""])).rows[0]; },
     async setStatus(id, s) { await Q(`UPDATE signups SET status=$2, done_at=CASE WHEN $2='done' THEN now() ELSE done_at END WHERE id=$1 AND tenant=$3`, [id, s, T()]); },
     async rename(id, n) { await Q(`UPDATE signups SET name=$2 WHERE id=$1 AND tenant=$3`, [id, n, T()]); },
     async setPos(id, p) { await Q(`UPDATE signups SET position=$2 WHERE id=$1 AND tenant=$3`, [id, p, T()]); },
@@ -360,7 +361,38 @@ const clean = (s, max) => String(s || "").replace(/[\u0000-\u001f\u007f]/g, " ")
 const publicRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, status: r.status });
 const NETS = ["Facebook", "Instagram", "TikTok"];
 const postedList = r => String((r && r.posted_to) || "").split(",").filter(x => NETS.includes(x));
-const kjRow = r => ({ ...publicRow(r), rating: r.rating || null, posted: postedList(r) });
+const viaOf = r => String(r.device || "").startsWith("kj-") ? "dj" : (r.via || "");
+const kjRow = r => ({ ...publicRow(r), rating: r.rating || null, posted: postedList(r), via: viaOf(r) });
+// customer phones with the app open tonight: counted from the guest page's live updates.
+// Kept in memory and saved every minute so a restart doesn't lose the count.
+const phones = new Map();   // tenant -> { night, list: { device: [firstSeen, lastSeen, installedApp] } }
+async function phoneBook() {
+  const t = T(), night = barDay().date; let b = phones.get(t);
+  if (!b || b.night !== night) {
+    let list = {}; try { list = JSON.parse((await db.getSetting("phones:" + night)) || "{}"); } catch (e) {}
+    b = { night, list, dirty: false }; phones.set(t, b);
+  }
+  return b;
+}
+async function seenPhone(dev, app) {
+  try { const b = await phoneBook(), now = Date.now(), p = b.list[dev]; b.list[dev] = [p ? p[0] : now, now, (p && p[2]) || !!app]; b.dirty = true; } catch (e) {}
+}
+async function phoneStats() {
+  const b = await phoneBook(), now = Date.now(), v = Object.values(b.list);
+  return { tonight: v.length, now: v.filter(p => now - p[1] < 120000).length, app: v.filter(p => p[2]).length };
+}
+setInterval(() => {
+  for (const [t, b] of phones) if (b.dirty) { b.dirty = false; ctx.run({ t }, () => db.setSetting("phones:" + b.night, JSON.stringify(b.list)).catch(() => {})); }
+}, 60000);
+// tonight's sign-ups by how they came in (QR scan, installed app, link/browser, added by the DJ)
+async function signupStats() {
+  const night = barDay().date, seen = new Set(), c = { total: 0, qr: 0, app: 0, link: 0, dj: 0, untracked: 0 };
+  for (const r of [...await db.active(), ...await db.done(400)]) {
+    if (seen.has(r.id) || nightOf(r.created_at) !== night) continue; seen.add(r.id);
+    const v = viaOf(r); c.total++; c[v && v in c ? v : "untracked"]++;
+  }
+  return c;
+}
 
 /* ---------- singer photos: a guest's own picture, shown on the TV when they're up (logo when none) ---------- */
 // a photo is "ok" (shows everywhere), "hidden" (host blurred it) or "pending" (approve-first mode, waiting on a host)
@@ -447,6 +479,7 @@ async function pauseState() {
 /* ---------- singer API ---------- */
 app.get("/api/queue", wrap(async (req, res) => {
   const d = owner(req, res);
+  if (req.query.g === "1") seenPhone(device(req, res), req.query.app === "1");
   const list = await db.active();
   const open = (await db.getSetting("open")) !== "no";
   const mine = list.find(r => r.device === d);
@@ -478,7 +511,8 @@ app.post("/api/signup", wrap(async (req, res) => {
   const multi = (await db.getSetting("multi")) === "on";
   if (!multi && await db.byDevice(d)) return res.status(409).json({ error: "already", message: "You're already on the list. Cancel your song to pick a different one." });
   if (multi && (await db.active()).some(r => r.device === d && r.song.toLowerCase() === song.toLowerCase())) return res.status(409).json({ error: "already", message: "That song is already on the list for you." });
-  const row = await db.add({ name, song, artist, device: d });
+  const via = req.body.qr && req.body.qr === TEN().qr ? "qr" : req.body.app ? "app" : "link";
+  const row = await db.add({ name, song, artist, device: d, via });
   res.json({ ok: true, id: row.id });
 }));
 
@@ -713,7 +747,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
+  res.json({ signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(50)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -1043,7 +1077,7 @@ app.post("/api/kj/add", wrap(async (req, res) => {
   const name = cleanName(req.body.name, 30), song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!name) return res.status(400).json({ error: "Enter the singer's name." });
   if (!song) return res.status(400).json({ error: "Enter the song." });
-  const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex") });
+  const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex"), via: "dj" });
   if (req.body.spot) await placeAt(row.id, req.body.spot);
   res.json({ ok: true, id: row.id });
 }));
@@ -1100,6 +1134,7 @@ app.get("/api/watch", wrap(async (req, res) => {
   res.json({
     state: { djOn: djNow ? djNow.name : null, lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await withPhotosKJ(act.map(kjRow), act), done: (await db.done(50)).map(kjRow) },
+    signups: await signupStats(), phones: await phoneStats(),
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 }
   });
 }));
