@@ -272,7 +272,7 @@ function paintBump(b){
   if(!b) return; bumpOn = !!b.on; $("bumpPrice").textContent = b.price;
   $("bumpState").textContent = b.on ? "on" : "off";
   const k = $("bumpKill"); k.className = "kill " + (b.on ? "on" : "off"); k.textContent = b.on ? "⛔ Turn off move-ups" : "▶ Turn move-ups back on";
-  const list = b.list || [], ok = list.filter(x => x.status === "approved"), wait = list.filter(x => x.status === "pending");
+  const list = b.list || [], ok = list.filter(x => x.status === "approved" && !x.manual), wait = list.filter(x => x.status === "pending");
   const tb = $("bumpTiles"); tb.innerHTML = "";
   [[money(ok.reduce((a, x) => a + x.amount, 0)), "approved tonight"], [ok.length, ok.length === 1 ? "move-up" : "move-ups"], [wait.length, "waiting on DJ"]].forEach(([v, l]) => { const d = document.createElement("div"); d.className = "tile"; const bb = document.createElement("b"); bb.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(bb, sp); tb.appendChild(d); });
   const LBL = { approved: "approved", pending: "waiting on DJ", denied: "not paid", expired: "left the line", canceled: "canceled" };
@@ -280,6 +280,7 @@ function paintBump(b){
   if(!list.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No move-ups yet tonight."; ol.appendChild(li); }
   list.slice(0, 50).forEach(x => {
     const li = document.createElement("li"); li.className = "tip"; li.style.display = "block";
+    if(x.manual){ const li2 = document.createElement("li"); li2.className = "tip"; li2.style.display = "block"; const b2 = document.createElement("b"); b2.textContent = "🔒 " + x.name; const s2 = document.createElement("span"); s2.className = "sub"; s2.textContent = "  " + (x.status === "unlocked" ? "unlocked by " : "spot locked by DJ ") + x.by + " · no charge · " + new Date(x.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); li2.append(b2, s2); ol.appendChild(li2); return; }
     const bb = document.createElement("b"); bb.textContent = x.name + " · " + money(x.amount);
     const st = document.createElement("i"); st.className = "bst " + x.status; st.textContent = LBL[x.status] || x.status; bb.appendChild(st);
     const sp = document.createElement("span"); sp.className = "sub";

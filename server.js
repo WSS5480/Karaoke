@@ -828,7 +828,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -1106,7 +1106,7 @@ async function bumpInfo(list, mine) {
     { const paid = await paidIds(), up = list.some(r => r.status === "up") ? 1 : 0, q = list.filter(r => r.status === "queued"), me = q.findIndex(r => r.id === mine.id);
       out.locked = q.map((r, k) => k < me && paid.has(r.id) ? k + 1 + up : 0).filter(Boolean); }
     const req = (await getBumps()).filter(b => b.sid === mine.id).pop();
-    if (req) out.req = { status: req.status, spots: req.spots, amount: req.amount };
+    if (req) out.req = { status: req.status, spots: req.spots, amount: req.amount, manual: !!req.manual };
   }
   return out;
 }
@@ -1270,6 +1270,13 @@ app.post("/api/kj/:id/rename", wrap(async (req, res) => {
 // put a queued singer at a spot in line (1 = next up)
 // paid move-ups are locked in: first paid is first. Nobody (DJ moves, DJ adds, put-backs, or a later
 // paid move-up) can land ahead of a paid singer and push them down. A paid singer can still be moved up.
+// the DJ can lock a spot by hand (no payment): it works exactly like a paid lock
+async function djLock(row, on, who) {
+  const all = await getBumps();
+  if (on) { if (!all.some(b => b.sid === row.id && b.status === "approved")) all.push({ id: crypto.randomBytes(5).toString("hex"), at: Date.now(), sid: row.id, name: row.name, spots: 0, amount: 0, method: "dj", to: who, status: "approved", by: who, manual: true }); }
+  else all.forEach(b => { if (b.sid === row.id && b.status === "approved" && b.manual) { b.status = "unlocked"; b.by = who; } });
+  await saveBumps(all);
+}
 async function paidIds() { return new Set((await getBumps()).filter(b => b.status === "approved").map(b => b.sid)); }
 async function placeAt(id, spot, fresh) {
   // locked spots: a singer who paid keeps their spot number. Anyone moved, added, or paid in ahead of
@@ -1296,11 +1303,17 @@ app.post("/api/kj/add", wrap(async (req, res) => {
   if (!song) return res.status(400).json({ error: "Enter the song." });
   const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex"), via: "dj" });
   if (req.body.spot) await placeAt(row.id, req.body.spot, true);
+  if (req.body.lock) await djLock(row, true, req.kj.name);
   res.json({ ok: true, id: row.id });
 }));
 app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), action = req.params.action, row = await db.get(id);
   if (!row) return res.status(404).json({ error: "That singer isn't on the list anymore." });
+  if (action === "lock" || action === "unlock") {
+    if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be locked." });
+    if (action === "unlock" && !(await getBumps()).some(b => b.sid === id && b.status === "approved" && b.manual)) return res.status(409).json({ error: row.name + " paid for this spot, so it stays locked." });
+    await djLock(row, action === "lock", req.kj.name); return res.json({ ok: true });
+  }
   if (action === "remove") await db.setStatus(id, "removed");
   else if (action === "done") await db.setStatus(id, "done");
   else if (action === "up") {

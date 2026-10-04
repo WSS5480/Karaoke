@@ -494,7 +494,7 @@ function item(r, i, waiting){
   if(r.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(r.rating); b.appendChild(st); }
   if(r.posted && r.posted.length) b.appendChild(chips(r.posted));
   if(r.nosong){ const ns = document.createElement("span"); ns.className = "nosongtag"; ns.textContent = "✗ NO SONG · waiting for a new pick"; b.appendChild(ns); }
-  if(r.paid && waiting){ const pd = document.createElement("span"); pd.className = "paidtag"; pd.textContent = "PAID"; pd.title = "Paid to lock this spot. Others flow around them; it can't be moved down."; b.appendChild(pd); }
+  if(r.paid && waiting){ const pd = document.createElement("span"); pd.className = "paidtag"; pd.textContent = r.djLock ? "DJ LOCK" : "PAID"; pd.title = "Paid to lock this spot. Others flow around them; it can't be moved down."; b.appendChild(pd); }
   t.append(b, s); li.append(n);
   if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av" + (r.photoSt === "pending" ? " blur pend" : r.photoSt === "hidden" ? " blur hid" : ""); av.alt = "Photo of " + r.name + (r.photoSt === "pending" ? ", waiting for your OK" : r.photoSt === "hidden" ? ", blurred" : "") + ". Tap to check it."; kjPic(av, r); av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
   li.append(t);
@@ -514,12 +514,18 @@ function item(r, i, waiting){
     const fs = document.createElement("button"); fs.textContent = "Edit song";
     fs.addEventListener("click", () => { const so = prompt("Song for " + r.name + ":", r.song); if(so === null || !so.trim()) return; const ar = prompt("Artist (optional):", r.artist || ""); if(ar === null) return; act(`/api/kj/${r.id}/song`, { song: so.trim(), artist: ar.trim() }); });
     const mv = document.createElement("button"); mv.textContent = "Move to #";
-    mv.addEventListener("click", () => { const n = prompt("Move " + r.name + " to which spot in line? (1 = next up)", String(i + 1)); if(n === null) return; const v = parseInt(n, 10); if(!(v >= 1)) return; act(`/api/kj/${r.id}/move`, { spot: v }); });
+    mv.addEventListener("click", async () => {
+      const n = prompt("Move " + r.name + " to which spot in line? (1 = next up)", String(i + 1)); if(n === null) return; const v = parseInt(n, 10); if(!(v >= 1)) return;
+      const lock = !r.paid && confirm("🔒 Lock " + r.name + "'s spot at #" + v + "?\n\nOK = lock it (nobody can push them down)\nCancel = just move them");
+      try{ const j = await api(`/api/kj/${r.id}/move`, { spot: v }); if(lock) await api(`/api/kj/${r.id}/lock`, {}); if(j && j.note){ $("err").textContent = j.note; errUntil = Date.now() + 6000; } }catch(e){ if(e.message !== "pin"){ $("err").textContent = e.message; errUntil = Date.now() + 6000; } }
+      load();
+    });
     const nsb = r.nosong ? mk("↩ Have it", "hassong") : mk("✗ Don't have it", "nosong", "danger");
     nsb.title = r.nosong ? "Undo: you have this song" : "Tell the singer you don't have this song. They keep their spot and pick another.";
     a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mv, fix, fs, info, mk("Remove", "remove", "danger"));
     a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
     a.appendChild(nsb);
+    if(r.djLock) a.appendChild(mk("🔓 Unlock", "unlock")); else if(!r.paid) a.appendChild(mk("🔒 Lock", "lock"));
     li.appendChild(a);
   }
   return li;
@@ -636,6 +642,7 @@ $("addForm").addEventListener("submit", async e => {
   const body = { name: $("addName").value.trim(), song: $("addSong").value.trim(), artist: $("addArtist").value.trim(), spot: $("addSpot").value };
   if(!body.name){ $("addErr").textContent = "Enter the singer's name."; return; }
   if(!body.song){ $("addErr").textContent = "Enter the song."; return; }
+  if(body.spot) body.lock = confirm("🔒 Lock " + body.name + "'s spot at #" + body.spot + "?\n\nOK = lock it (nobody can push them down)\nCancel = just add them there");
   try{ await api("/api/kj/add", body); $("addName").value = ""; $("addSong").value = ""; $("addArtist").value = ""; $("addSpot").value = ""; load(); }
   catch(err){ if(err.message !== "pin") $("addErr").textContent = err.message; }
 });
