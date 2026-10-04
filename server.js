@@ -360,6 +360,9 @@ if (DB_OK) {
 
 /* ---------- helpers ---------- */
 const clean = (s, max) => String(s || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+// songs the DJ doesn't have: the singer keeps their spot and is asked to pick another
+async function noSongs() { try { return new Set(JSON.parse((await db.getSetting("nosong")) || "[]")); } catch (e) { return new Set(); } }
+async function setNoSong(id, on) { const s = await noSongs(); if (on) s.add(id); else s.delete(id); await db.setSetting("nosong", JSON.stringify([...s].slice(-300))); }
 const publicRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, status: r.status });
 const NETS = ["Facebook", "Instagram", "TikTok"];
 const postedList = r => String((r && r.posted_to) || "").split(",").filter(x => NETS.includes(x));
@@ -487,7 +490,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await withPhotos(list.map(publicRow), list), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
+  res.json({ venue: TEN().venue || "", lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await withPhotos(list.map(publicRow), list), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id) } : null,
     last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null, bump: await bumpInfo(list, mine) });
 }));
 
@@ -539,7 +542,7 @@ app.post("/api/mysong", wrap(async (req, res) => {
   if (mine.status === "up") return res.status(409).json({ error: "You're up! Ask the DJ to change it." });
   const song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!song) return res.status(400).json({ error: "Enter the song." });
-  await db.setSong(mine.id, song, artist); res.json({ ok: true });
+  await db.setSong(mine.id, song, artist); await setNoSong(mine.id, false); res.json({ ok: true });
 }));
 app.post("/api/cancel", wrap(async (req, res) => {
   const d = owner(req, res), mine = await db.byDevice(d);
@@ -758,7 +761,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(); return (await withPhotosKJ(l.map(kjRow), l)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -1168,7 +1171,7 @@ app.post("/api/kj/:id/song", wrap(async (req, res) => {
   if (!row) return res.status(404).json({ error: "That singer isn't on the list anymore." });
   const song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!song) return res.status(400).json({ error: "Enter the song." });
-  await db.setSong(id, song, artist); res.json({ ok: true });
+  await db.setSong(id, song, artist); await setNoSong(id, false); res.json({ ok: true });
 }));
 app.post("/api/kj/:id/rename", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), row = await db.get(id), n = clean(req.body.name, 30);
@@ -1228,6 +1231,9 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
     const paid = await paidIds();
     if (i > -1 && paid.has(id) && action === "lower") return res.status(409).json({ error: row.name + " paid to lock their spot. It can't be moved down." });
     if (i > -1) { let k = j; while (k >= 0 && k < q.length && paid.has(q[k].id) && !paid.has(id)) k += action === "raise" ? -1 : 1; if (k >= 0 && k < q.length) await placeAt(id, k + 1); }
+  } else if (action === "nosong" || action === "hassong") {
+    if (row.status !== "queued" && row.status !== "up") return res.status(400).json({ error: "They're not in line." });
+    await setNoSong(id, action === "nosong");
   } else if (action === "readd") {
     // undo an accidental skip: back into line (next up by default)
     if (row.status === "up" || row.status === "queued") return res.status(400).json({ error: "They're already in line." });

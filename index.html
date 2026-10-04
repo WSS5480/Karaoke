@@ -205,6 +205,7 @@ li.up .av{border-color:var(--green)}
 .tpay{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tpay button{font-size:15px}
 .tpay button[data-m="cashapp"]{border-color:#00d64f}.tpay button[data-m="venmo"]{border-color:#3d95ce}.tpay button[data-m="paypal"]{border-color:#2790c3}.tpay button[data-m="zelle"]{border-color:#a0f}.tpay button[data-m="apple"]{border-color:#eee}
+.nosong{margin:0;padding:12px;border-radius:12px;background:rgba(220,60,60,.15);border:2px solid #e05555;color:#ffb3b3;font-weight:700;text-align:center}
 .bumpbox{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .bumpbox .go{background:#ffc93c;color:#111}
 .bumpbox .go .bsub{display:block;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;margin-top:2px}
@@ -325,6 +326,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
           <label for="song">Song <span>/ Canción</span></label>
           <input id="song" name="song" maxlength="80" autocomplete="off" placeholder="" required>
           <div class="sugg" id="sugg" hidden></div>
+          <p class="hint" style="color:var(--ink-2);margin:4px 0 0">Not in the list? Just type it in. / ¿No aparece? Escríbela.</p>
         </div>
         <div class="field">
           <label for="artist">Artist <span>/ Artista</span></label>
@@ -344,6 +346,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
   <section class="card spot" id="mineCard" hidden>
     <div class="num" id="mineNum"></div>
     <p id="mineLine"></p>
+    <p class="nosong" id="noSongMsg" hidden role="alert">🎵 The DJ doesn't have that song. Pick another one. You keep your spot. / El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.</p>
     <div class="song" id="mineSong"></div>
     <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics / Letra</a>
     <div class="bumpbox" id="bumpBox" hidden>
@@ -826,6 +829,8 @@ function render(data){
     setLyr($("mineLyr"), mine);
     if(window.paintBump) window.paintBump(data.bump || { on: false }, mine);
     $("editSong").hidden = mine.status === "up"; if(mine.status === "up") $("editForm").hidden = true;
+    $("noSongMsg").hidden = !mine.nosong;
+    if(mine.nosong && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; $("editForm").hidden = false; $("editSongIn").value = ""; $("editArtistIn").value = ""; $("editErr").textContent = ""; try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
     // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
     { const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
       if(mine.status === "queued" && upNow && ahead - 1 === 0) alertOnce("deck", mine.id); }
