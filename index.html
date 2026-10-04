@@ -358,6 +358,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
         <p class="hint" id="netStatus" style="color:var(--ink-2);margin:0">Getting it ready…</p>
         <label class="chk" for="showStars" style="justify-content:flex-start"><input type="checkbox" id="showStars" checked> Show my stars</label>
         <label class="chk" for="tagDive" style="justify-content:flex-start"><input type="checkbox" id="tagDive" checked> Tag The Dive</label>
+        <label class="chk" for="followDive" id="followRow" style="justify-content:flex-start"><input type="checkbox" id="followDive" checked> Follow The Dive</label>
         <button class="linkbtn" id="ownPhoto" type="button" style="align-self:flex-start;padding-left:0">📷 Use my own photo</button>
         <button class="linkbtn" id="divePhoto" type="button" style="align-self:flex-start;padding-left:0" hidden>Use The Dive picture</button>
         <input type="file" id="photoIn" accept="image/*" hidden>
@@ -372,6 +373,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     </div>
     <div id="vidStage" aria-hidden="true"></div>
     <p class="ok" id="shareMsg" role="status"></p>
+    <a class="go" id="followBtn" target="_blank" rel="noopener" hidden style="text-decoration:none;display:block;text-align:center"></a>
     <div class="row" style="justify-content:space-between">
       <button class="linkbtn" id="dl" type="button">TikTok? Save to Photos first</button>
       <button class="linkbtn" id="postClose" type="button">Close</button>
@@ -834,6 +836,18 @@ async function openPost(item){
 }
 // The Dive's accounts, added to the caption unless they uncheck "Tag The Dive"
 const DIVE_TAGS = { Facebook: "@The Dive on 495", Instagram: "@thediveon4954", TikTok: "@thediveon495" };
+// "Follow The Dive" (checked unless they uncheck it): after posting, one tap opens our page there to follow.
+// No app can follow for someone, so it's one tap on our profile, and we stop asking once they've tapped it.
+const DIVE_FOLLOW = { Facebook: "https://www.facebook.com/p/The-Dive-on-495-100084276042867/", Instagram: "https://www.instagram.com/thediveon4954/", TikTok: "https://www.tiktok.com/@thediveon495" };
+if(!Object.keys(DIVE_FOLLOW).length) $("followRow").hidden = true;
+const followed = net => { try{ return localStorage.getItem("dive_followed_" + net) === "1"; }catch(e){ return false; } };
+function offerFollow(net){
+  const b = $("followBtn"), url = DIVE_FOLLOW[net];
+  if(!url || !$("followDive").checked || followed(net)){ b.hidden = true; return; }
+  b.href = url; b.textContent = "➕ Follow The Dive on " + net; b.dataset.net = net; b.hidden = false;
+}
+$("followBtn").addEventListener("click", () => { try{ localStorage.setItem("dive_followed_" + $("followBtn").dataset.net, "1"); }catch(e){} setTimeout(() => { $("followBtn").hidden = true; }, 500); });
+$("followDive").addEventListener("change", () => { if(!$("followDive").checked) $("followBtn").hidden = true; });
 const caption = (item, net) => {
   const tag = $("tagDive").checked ? (DIVE_TAGS[net] || DIVE_TAGS.Facebook) : "";
   return "I just sang " + item.song + " at The Dive on 495!" + (tag ? " " + tag : "") + " #TheDiveOn495 #Karaoke #McAllen";
@@ -861,9 +875,9 @@ function sharePic(net){
   if(navigator.canShare && navigator.canShare({ files: [postPic.file] })){
     $("shareMsg").textContent = "Pick " + net + " on the next screen.";
     navigator.share({ files: [postPic.file] })
-      .then(() => { markPosted(net); $("shareMsg").textContent = "✓ Sent to " + net + "! Caption is copied, paste it in. Tap another icon to post there too."; })
+      .then(() => { markPosted(net); offerFollow(net); $("shareMsg").textContent = "✓ Sent to " + net + "! Caption is copied, paste it in. Tap another icon to post there too."; })
       .catch(e => { if(e.name === "AbortError") $("shareMsg").textContent = "Not posted. Tap an icon to try again."; else { savePic(postPic); $("shareMsg").textContent = "Saved to your phone. Open " + net + " and pick it from your photos."; } });
-  } else { savePic(postPic); $("shareMsg").textContent = "Saved to your phone. Open " + net + " and pick it from your photos. Caption copied."; }
+  } else { savePic(postPic); offerFollow(net); $("shareMsg").textContent = "Saved to your phone. Open " + net + " and pick it from your photos. Caption copied."; }
 }
 netBtns.forEach(btn => btn.addEventListener("click", () => {
   if(!postPic || !postItem) return;
@@ -873,7 +887,7 @@ netBtns.forEach(btn => btn.addEventListener("click", () => {
   if(net === "Facebook" && postMode === "dive" && postItem.public && postItem.id && ($("showStars").checked || !postItem.rating)){
     const u = location.origin + "/s/" + postItem.id;
     window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(u), "_blank");
-    markPosted(net); $("shareMsg").textContent = "✓ Facebook opened. Tap Post to finish.";
+    markPosted(net); offerFollow(net); $("shareMsg").textContent = "✓ Facebook opened. Tap Post to finish.";
     return;
   }
   sharePic(net);

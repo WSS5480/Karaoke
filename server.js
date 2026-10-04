@@ -166,6 +166,7 @@ function brand(html, t, base, host) {
   h = h.replace(/const LOGO_SRC = "[^"]*"/, `const LOGO_SRC = "${base}/logo.png"`)
        .replace(/(<div class="qrcorner"[^>]*>)<svg[\s\S]*?<\/svg>/, `$1<img src="${base}/qr.svg" alt="QR code to sign up" style="display:block;width:100%">`)
        .replace(/const DIVE_TAGS = \{[^}]*\};/, "const DIVE_TAGS = " + JSON.stringify(tags) + ";")
+       .replace(/const DIVE_FOLLOW = \{[^}]*\};/, "const DIVE_FOLLOW = {};")
        .replace(/<a href="https:\/\/www\.facebook\.com\/[^"]*"[^>]*>Facebook<\/a>/g, "Facebook").replace(/<a href="https:\/\/www\.instagram\.com\/[^"]*"[^>]*>Instagram<\/a>/g, "Instagram")
        .replace(/"kj_pin"/g, `"kj_pin_${t.slug}"`).replace(/(["'])dive_/g, `$1dive_${t.slug}_`)
        .replace(/the-dive-karaoke\.onrender\.com/g, (host || "") + base)
