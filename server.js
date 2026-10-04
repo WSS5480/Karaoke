@@ -625,7 +625,7 @@ async function whoIs(pin, name) {
   const hs = (await getHosts()).filter(x => same(pin, x.pin));
   let h = hs[0];
   if (hs.length > 1) { h = name ? hs.find(x => x.name === name) : null; if (!h) return { pick: hs.map(x => x.name) }; }
-  return h ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: h.role === "staff" ? "staff" : "dj" } : null;
+  return h ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: h.role === "staff" ? "staff" : "dj", manager: h.role === "staff" && h.manager === true } : null;
 }
 const pinTries = new Map();
 async function kjAuth(req, res, next) {
@@ -798,12 +798,19 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     topRated: singerList.filter(x => x.avg !== null && x.songs >= 2).sort((a, b) => b.avg - a.avg || b.songs - a.songs).slice(0, 10),
     topSongs: [...songs.values()].sort((a, b) => b.count - a.count).slice(0, 15),
     topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10),
-    tips: req.kj.admin ? await tipStats(days) : req.kj.role === "dj" ? await tipStats(days, req.kj.name) : null
+    tips: (req.kj.admin || req.kj.manager) ? await tipStats(days) : req.kj.role === "dj" ? await tipStats(days, req.kj.name) : null
   });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
 const staffOnly = (req, res, next) => req.kj && req.kj.role !== "dj" ? next() : res.status(403).json({ error: "Only staff can do that." });
-app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj" })) }); }));
+app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj", manager: h.role === "staff" && h.manager === true })) }); }));
+// house PIN can make a staff login a bar manager: sees all tips and tip totals like the owner
+app.post("/api/kj/hosts/manager", ownerOnly, wrap(async (req, res) => {
+  const hosts = await getHosts(), h = hosts.find(x => x.name === String(req.body.name || ""));
+  if (!h) return res.status(404).json({ error: "Login not found." });
+  if (h.role !== "staff") return res.status(400).json({ error: "Only staff logins can be managers. Tap Make staff first." });
+  h.manager = !!req.body.on; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+}));
 app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   const name = clean(req.body.name, 30), pin = String(req.body.pin || "").replace(/\D/g, "") || TEMP_PIN;
   if (!name) return res.status(400).json({ error: "Enter the host's name." });
@@ -922,7 +929,7 @@ app.post("/api/tip", wrap(async (req, res) => {
 // host side
 app.get("/api/kj/tips", wrap(async (req, res) => {
   // tip money: the owner (house PIN) sees every DJ's tips with a per-DJ total, a DJ sees only their own, staff see none
-  const s = await tipState(), all = await getTips(barDay().date), dj = req.kj.role === "dj", owner = !!req.kj.admin;
+  const s = await tipState(), all = await getTips(barDay().date), dj = req.kj.role === "dj", owner = !!req.kj.admin || !!req.kj.manager;
   const list = owner ? all : dj ? all.filter(x => x.to === req.kj.name) : [];
   const byDj = {}; if (owner) all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   const ds = await djSession(), off = await tipsOff();

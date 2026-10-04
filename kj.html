@@ -604,7 +604,7 @@ async function loadHosts(){
     if(!j.hosts.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No hosts yet. Add one below."; ol.appendChild(li); }
     j.hosts.forEach(h => {
       const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
-      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? "Staff" : "DJ") + " · PIN " + h.pin;
+      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? (h.manager ? "Manager · sees tips" : "Staff") : "DJ") + " · PIN " + h.pin;
       t.append(b, sp); const x = document.createElement("button"); x.className = "danger"; x.textContent = "Remove";
       x.addEventListener("click", async () => {
         if(x.dataset.armed !== "1"){ x.dataset.armed = "1"; x.textContent = "Tap to confirm"; setTimeout(() => { x.dataset.armed = ""; x.textContent = "Remove"; }, 4000); return; }
@@ -626,6 +626,12 @@ async function loadHosts(){
           catch(err){ if(err.message !== "pin") alert(err.message); }
         });
         acts.prepend(sw);
+        if(h.role === "staff"){
+          const mg = document.createElement("button"); mg.textContent = h.manager ? "Hide tips" : "Make manager";
+          mg.title = h.manager ? "Stop this login from seeing tip money" : "Let this login see all tips and tip totals";
+          mg.addEventListener("click", async () => { try{ await api("/api/kj/hosts/manager", { name: h.name, on: !h.manager }); loadHosts(); }catch(err){ if(err.message !== "pin") alert(err.message); } });
+          acts.prepend(mg);
+        }
       }
       li.append(t, acts); ol.appendChild(li);
     });
