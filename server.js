@@ -1261,6 +1261,23 @@ app.get("/api/applesong", wrap(async (req, res) => {
 }));
 // song search for the sign-up box: every song Apple Music knows (our own list only has the karaoke favorites)
 const songSearchCache = new Map(), songHits = new Map();
+// MusicBrainz asks for at most one request a second and a real user agent
+let mbNext = 0;
+async function mbSearch(query) {
+  const wait = mbNext - Date.now(); mbNext = Math.max(Date.now(), mbNext) + 1100;
+  if (wait > 4000) return [];
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  try {
+    const r = await fetch("https://musicbrainz.org/ws/2/recording?fmt=json&limit=40&query=" + encodeURIComponent(query), { headers: { "User-Agent": "DiveKaraoke/1.0 ( https://the-dive-karaoke.onrender.com )", Accept: "application/json" }, signal: AbortSignal.timeout(4000) });
+    if (!r.ok) return [];
+    const j = await r.json(), out = [];
+    (j.recordings || []).sort((x, y) => (y.score || 0) - (x.score || 0)).forEach(x => {
+      const a = (x["artist-credit"] || []).map(c => (c.name || (c.artist && c.artist.name) || "") + (c.joinphrase || "")).join("").trim();
+      if (x.title && a && !/\b(karaoke|tribute|made famous|in the style of|instrumental)\b/i.test(x.title + " " + a)) out.push({ t: x.title, a });
+    });
+    return out;
+  } catch (e) { return []; }
+}
 app.get("/api/songsearch", wrap(async (req, res) => {
   const q = String(req.query.q || "").replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 80);
   const by = req.query.by === "artist", ck = (by ? "a:" : "s:") + q;
@@ -1268,19 +1285,21 @@ app.get("/api/songsearch", wrap(async (req, res) => {
   if (songSearchCache.has(ck)) return res.json({ songs: songSearchCache.get(ck) });
   const t = Date.now(), l = (songHits.get(req.ip) || []).filter(x => t - x < 60000);
   if (l.length >= 240) return res.json({ songs: [] }); l.push(t); songHits.set(req.ip, l);
-  let out = [];
-  try {
-    const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=" + (by ? "50&attribute=artistTerm" : "15") + "&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
-    if (r.ok) {
-      const j = await r.json(), seen = new Set();
-      (j.results || []).forEach(x => {
-        const title = String(x.trackName || "").replace(/\s*[\(\[](feat\.?|ft\.?|remaster|live|radio edit)[^\)\]]*[\)\]]/gi, "").trim().slice(0, 80);
-        const artist = String(x.artistName || "").trim().slice(0, 60), k = (title + "|" + artist).toLowerCase();
-        if (title && artist && !seen.has(k)) { seen.add(k); out.push({ t: title, a: artist }); }
-      });
-      out = out.slice(0, by ? 40 : 8);
-    }
-  } catch (e) {}
+  const clean = v => String(v || "").replace(/\s*[\(\[](feat\.?|ft\.?|remaster[^\)\]]*|live[^\)\]]*|radio edit|single version|album version)[^\)\]]*[\)\]]/gi, "").replace(/\s*-\s*(remaster(ed)?|live|single version|radio edit).*$/i, "").trim();
+  const out = [], seen = new Set();
+  const add = (t, a) => { t = clean(t).slice(0, 80); a = String(a || "").trim().slice(0, 60); const k = (t + "|" + a).toLowerCase(); if (t && a && !seen.has(k)) { seen.add(k); out.push({ t, a }); } };
+  // Apple Music's catalog + MusicBrainz (the open music database) for artists who aren't on Apple Music, like Garth Brooks
+  const junk = x => /\b(karaoke|tribute|made famous|in the style of|instrumental|originally performed)\b/i.test(x.t + " " + x.a);
+  const apple = (async () => {
+    try {
+      const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=" + (by ? "50&attribute=artistTerm" : "15") + "&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
+      return r.ok ? ((await r.json()).results || []).map(x => ({ t: x.trackName, a: x.artistName })).filter(x => !junk(x)) : [];
+    } catch (e) { return []; }
+  })();
+  const open = mbSearch(by ? 'artist:"' + q.replace(/"/g, "") + '"' : q.replace(/[:"()\[\]{}^~*?\\/!+-]/g, " "));
+  const [A, M] = await Promise.all([apple, open]);
+  A.slice(0, 5).forEach(x => add(x.t, x.a)); M.slice(0, 15).forEach(x => add(x.t, x.a)); A.slice(5).forEach(x => add(x.t, x.a));
+  out.splice(by ? 40 : 10);
   if (songSearchCache.size > 5000) songSearchCache.clear();
   songSearchCache.set(ck, out);
   res.set("Cache-Control", "public, max-age=86400").json({ songs: out });
