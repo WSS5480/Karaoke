@@ -55,6 +55,9 @@ li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywher
 .lbox button{font:inherit;font-weight:700;font-size:16px;border:0;border-radius:999px;padding:12px;background:var(--green);color:#041206;cursor:pointer}
 .err{color:var(--warn);font-size:14px;min-height:18px;margin:0}
 a{color:var(--green-hi)}
+.posted{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
+.net{font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 5px;color:#fff;display:inline-block}
+.net.fb{background:#1877f2}.net.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.net.tt{background:#000;border:1px solid #444}
 @media (min-width:560px){.tiles{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
@@ -84,6 +87,13 @@ a{color:var(--green-hi)}
       <div class="chips" id="byDj"></div>
       <ol id="tipList"></ol>
       <p class="sub" style="margin:0">What guests tapped to send. Confirm in the DJ's payment apps. Past nights: <a href="/stats">Analytics</a>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Posted to social media <span id="postCount"></span></h2>
+      <div class="tiles" id="postTiles" style="grid-template-columns:repeat(3,1fr)"></div>
+      <ol id="postList"></ol>
+      <p class="sub" style="margin:0">Counts when a singer taps a Facebook, Instagram or TikTok icon and finishes sharing.</p>
     </section>
 
     <section class="card">
@@ -132,8 +142,14 @@ function row(r, n){
   const t = document.createElement("div"); t.className = "t";
   const b = document.createElement("b"); b.textContent = r.name + (r.rating ? "  " + "★".repeat(r.rating) : "");
   const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
+  if(r.posted && r.posted.length){
+    const c = document.createElement("span"); c.className = "posted";
+    r.posted.forEach(n => { const x = document.createElement("i"); x.className = "net " + (NETC[n] || ""); x.textContent = NETL[n] || n; x.title = "Posted to " + n; c.appendChild(x); });
+    b.appendChild(c);
+  }
   t.append(b, s); li.append(a, pic(r), t); return li;
 }
+const NETL = { Facebook: "f", Instagram: "IG", TikTok: "TT" }, NETC = { Facebook: "fb", Instagram: "ig", TikTok: "tt" };
 function paintQueue(st){
   const up = st.queue.find(r => r.status === "up"), wait = st.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
@@ -147,6 +163,15 @@ function paintQueue(st){
   const d = $("done"); d.innerHTML = ""; $("doneCount").textContent = st.done.length ? st.done.length + " songs" : "";
   if(!st.done.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No songs yet."; d.appendChild(li); }
   st.done.forEach(r => d.appendChild(row(r, "✓")));
+  // who posted their song, and where
+  const cnt = { Facebook: 0, Instagram: 0, TikTok: 0 }, people = [];
+  st.done.concat(st.queue).forEach(r => { if(r.posted && r.posted.length){ people.push(r); r.posted.forEach(n => { if(n in cnt) cnt[n]++; }); } });
+  $("postCount").textContent = people.length ? people.length + (people.length === 1 ? " singer posted" : " singers posted") : "";
+  const pt = $("postTiles"); pt.innerHTML = "";
+  [["Facebook", "fb"], ["Instagram", "ig"], ["TikTok", "tt"]].forEach(([n, c]) => { const d2 = document.createElement("div"); d2.className = "tile"; const b = document.createElement("b"); b.textContent = cnt[n]; const sp = document.createElement("span"); sp.innerHTML = '<i class="net ' + c + '">' + NETL[n] + "</i> " + n; d2.append(b, sp); pt.appendChild(d2); });
+  const pl = $("postList"); pl.innerHTML = "";
+  if(!people.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No posts yet tonight."; pl.appendChild(li); }
+  people.forEach(r => pl.appendChild(row(r, "📣")));
   const p = st.pause || {}, chips = [
     [st.open ? (p.paused ? "Sign-ups paused" : "Sign-ups open") : "Sign-ups closed", st.open && !p.paused],
     ["Location check " + (st.geofence ? "on" : "off"), st.geofence],
