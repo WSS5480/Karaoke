@@ -1004,7 +1004,10 @@ function cleanTipLinks(b) {
   return o;
 }
 async function getTipLinks(name) { try { return JSON.parse((await db.getSetting("tiplinks:" + name)) || "{}"); } catch (e) { return {}; } }
+// the owner's master switch: tips + lock-your-spot off for everyone until turned back on
+async function moneyOff() { return (await db.getSetting("money_off")) === "on"; }
 async function tipState() {
+  if (await moneyOff()) return { on: false, killed: true };
   let host = await db.getSetting("tip_host");
   // tips are on automatically for the DJ signed in (once they've saved payment links), unless the DJ
   // stopped them or staff turned them off tonight
@@ -1086,7 +1089,7 @@ app.post("/api/kj/tips/staff", wrap(async (req, res) => {
    DJ (or the owner / a manager) checks their payment app and taps Approve. The owner can turn it off from the live view. */
 const BUMP_PRICE = 1;   // default; the DJ sets their own price per spot
 async function bumpPrice() { const v = parseInt(await db.getSetting("bump_price"), 10); return v >= 1 && v <= 50 ? v : BUMP_PRICE; }
-async function bumpOn() { return (await db.getSetting("bump")) !== "off"; }
+async function bumpOn() { return (await db.getSetting("bump")) !== "off" && !(await moneyOff()); }
 const BUMP_WAIT = 10 * 60e3;   // a request the DJ never answers drops after 10 minutes so the singer can try again
 async function getBumps(night) {
   let l; try { l = JSON.parse((await db.getSetting("bumps:" + (night || barDay().date))) || "[]"); } catch (e) { return []; }
@@ -1432,11 +1435,11 @@ app.get("/api/bar", wrap(async (req, res) => {
   const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active(), off = await tipsOff();
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   res.json({
-    who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
+    moneyOff: await moneyOff(), who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
     dj: djNow ? { name: djNow.name, since: djNow.since || null } : null, tipsStopped: !!(djNow && off && off.name === djNow.name && off.night === barDay().date),
     state: { lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
-    signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
+    moneyOff: await moneyOff(), signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 },
     history: await tipStats(30)
   });
@@ -1533,6 +1536,18 @@ app.post("/api/kj/my-phone", wrap(async (req, res) => {
   const hosts = await getHosts(), me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Login not found." });
   me.phone = ph; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true, phone: maskPhone(ph) });
 }));
+// one button (Bar Owner app or the app owner's live view): kill tips and lock-your-spot now, or turn them back on.
+// Spots people already paid for stay locked.
+async function setMoney(on, who) {
+  await db.setSetting("money_off", on ? "" : "on");
+  if (!on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = who + " turned tips & move-ups off"; } }); await saveBumps(all); }
+  else { await setTipsOff(null); await db.setSetting("bump", "on"); }
+}
+app.post("/api/bar/money", wrap(async (req, res) => { const who = await barAuth(req, res); if (!who) return; await setMoney(!!req.body.on, who.name); res.json({ ok: true, off: !req.body.on }); }));
+app.post("/api/watch/money", wrap(async (req, res) => {
+  if (!(await pinIs("list", req.headers["x-watch-pin"]))) return res.status(401).json({ error: "Wrong PIN." });
+  await setMoney(!!req.body.on, "App owner"); res.json({ ok: true, off: !req.body.on });
+}));
 // owner's live view (/watch): opens with the owner list PIN, never the house PIN
 app.get("/api/watch", wrap(async (req, res) => {
   const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
@@ -1544,7 +1559,7 @@ app.get("/api/watch", wrap(async (req, res) => {
   res.json({
     state: { djOn: djNow ? djNow.name : null, lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
-    signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
+    moneyOff: await moneyOff(), signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 }
   });
 }));

@@ -92,6 +92,12 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <span class="live"><i></i>Live</span>
     </header>
 
+    <section class="card" id="moneyCard">
+      <h2>Tips &amp; lock-your-spot <span id="moneyState"></span></h2>
+      <button type="button" class="kill on" id="moneyKill">⛔ Kill all tips &amp; lock-your-spot now</button>
+      <p class="sub" style="margin:0" id="moneyHelp">Stops every tip button and new paid move-ups for every DJ until you turn them back on. Spots people already paid for stay locked.</p>
+    </section>
+
     <section class="card">
       <h2>Tonight's tips <span id="tipState"></span></h2>
       <div class="tiles" id="tiles"></div>
@@ -261,12 +267,20 @@ $("bumpKill").addEventListener("click", async () => {
   }catch(e){}
   $("bumpKill").disabled = false; refresh();
 });
+let moneyIsOff = false;
+function paintMoney(off){ moneyIsOff = !!off; $("moneyState").textContent = off ? "OFF" : "on"; const k = $("moneyKill"); k.className = "kill " + (off ? "off" : "on"); k.textContent = off ? "▶ Turn tips & lock-your-spot back on" : "⛔ Kill all tips & lock-your-spot now"; }
+$("moneyKill").addEventListener("click", async () => {
+  const k = $("moneyKill"); if(!moneyIsOff && k.dataset.armed !== "1"){ k.dataset.armed = "1"; k.textContent = "Tap again to kill tips & lock-your-spot"; setTimeout(() => { k.dataset.armed = ""; paintMoney(moneyIsOff); }, 4000); return; }
+  k.dataset.armed = "";
+  try{ const r = await fetch("/api/watch/money", { method: "POST", headers: { "Content-Type": "application/json", "x-watch-pin": pin }, body: JSON.stringify({ on: moneyIsOff }) }); if(r.status === 401){ showLock("Wrong PIN."); return; } }catch(e){}
+  refresh();
+});
 let timer = null;
 window.diveRefresh = () => !$("view").hidden ? refresh() : location.reload();
 async function refresh(){
   try{
     const j = await get("/api/watch");
-    paintQueue(j.state); paintTips(j.tips); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
+    paintQueue(j.state); paintTips(j.tips); paintMoney(j.moneyOff); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
   }catch(e){}
 }
 async function open(){
