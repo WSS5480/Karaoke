@@ -68,6 +68,7 @@ a{color:var(--green-hi)}
 .net{font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 5px;color:#fff;display:inline-block}
 .net.fb{background:#1877f2}.net.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.net.tt{background:#000;border:1px solid #444}
 @media (min-width:560px){.tiles{grid-template-columns:repeat(4,1fr)}}
+li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 </style>
 <script src="/forgot.js"></script>
 </head>
@@ -160,7 +161,7 @@ function pic(r, big){
   return im;
 }
 function row(r, n){
-  const li = document.createElement("li");
+  const li = document.createElement("li"); if(r.paid && r.status === "queued") li.classList.add("locked");
   const a = document.createElement("span"); a.className = "n"; a.textContent = n;
   const t = document.createElement("div"); t.className = "t";
   const b = document.createElement("b"); b.textContent = r.name + (r.rating ? "  " + "★".repeat(r.rating) : "");

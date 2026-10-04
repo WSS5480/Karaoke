@@ -363,6 +363,53 @@ const clean = (s, max) => String(s || "").replace(/[\u0000-\u001f\u007f]/g, " ")
 // songs the DJ doesn't have: the singer keeps their spot and is asked to pick another
 async function noSongs() { try { return new Set(JSON.parse((await db.getSetting("nosong")) || "[]")); } catch (e) { return new Set(); } }
 async function setNoSong(id, on) { const s = await noSongs(); if (on) s.add(id); else s.delete(id); await db.setSetting("nosong", JSON.stringify([...s].slice(-300))); }
+/* ---------- estimated time to sing: song lengths + tonight's DJ rhythm ----------
+   Song lengths come from Apple Music's catalog (cached). Rhythm = the average time between songs tonight beyond
+   the song itself (talking, changeovers, breaks under 20 min). Until there's enough data: 3:45 songs, 1.5 min between. */
+const DEF_SONG = 225, DEF_GAP = 90, durCache = new Map(), durWaiting = new Set();
+const durKey = (song, artist) => (String(song || "") + "|" + String(artist || "")).toLowerCase().replace(/[^a-z0-9|]+/g, " ").trim();
+function songSecs(song, artist) {
+  const k = durKey(song, artist); if (durCache.has(k)) return durCache.get(k);
+  if (!durWaiting.has(k) && durWaiting.size < 40) {
+    durWaiting.add(k);
+    (async () => {
+      let secs = 0;
+      try {
+        const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=5&term=" + encodeURIComponent((song + " " + (artist || "")).trim()), { signal: AbortSignal.timeout(4000) });
+        if (r.ok) { const j = await r.json(), want = String(song).toLowerCase().slice(0, 12); const hit = (j.results || []).find(x => String(x.trackName || "").toLowerCase().includes(want)) || (j.results || [])[0]; if (hit && hit.trackTimeMillis) secs = Math.round(hit.trackTimeMillis / 1000); }
+      } catch (e) {}
+      durCache.set(k, secs >= 60 && secs <= 900 ? secs : DEF_SONG); durWaiting.delete(k);
+      if (durCache.size > 5000) durCache.clear();
+    })();
+  }
+  return DEF_SONG;
+}
+async function upAt() { try { return JSON.parse((await db.getSetting("up_at")) || "null"); } catch (e) { return null; } }
+async function markUp(id) { await db.setSetting("up_at", JSON.stringify({ id, at: Date.now() })); }
+const gapCache = new Map();
+async function rhythmGap() {
+  const c = gapCache.get(T()); if (c && Date.now() - c.t < 30000) return c.v;
+  const v = await rhythmGapNow(); gapCache.set(T(), { t: Date.now(), v }); return v;
+}
+async function rhythmGapNow() {
+  const done = (await db.done(500)).filter(r => r.done_at).map(r => ({ t: Date.parse(r.done_at), r })).sort((a, b) => a.t - b.t);
+  const gaps = [];
+  for (let i = 1; i < done.length; i++) {
+    const g = (done[i].t - done[i - 1].t) / 1000; if (g <= 0 || g > 1200) continue;   // a longer gap is a break, not the rhythm
+    gaps.push(g - songSecs(done[i].r.song, done[i].r.artist));
+  }
+  const last = gaps.slice(-8); if (last.length < 2) return DEF_GAP;
+  return Math.min(360, Math.max(20, last.reduce((a, x) => a + x, 0) / last.length));
+}
+async function etaFor(list, mine) {
+  if (!mine || mine.status !== "queued") return null;
+  const gap = await rhythmGap(), now = Date.now(), up = list.find(r => r.status === "up");
+  let secs = 0;
+  if (up) { const u = await upAt(), len = songSecs(up.song, up.artist), el = u && u.id === up.id ? (now - u.at) / 1000 : len / 2; secs += Math.max(30, len - el) + gap; }
+  for (const r of list) { if (r.id === mine.id) break; if (r.status === "queued") secs += songSecs(r.song, r.artist) + gap; }
+  songSecs(mine.song, mine.artist);
+  return { at: now + Math.round(secs) * 1000, min: Math.max(1, Math.round(secs / 60)), gap: Math.round(gap) };
+}
 const publicRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, status: r.status });
 const NETS = ["Facebook", "Instagram", "TikTok"];
 const postedList = r => String((r && r.posted_to) || "").split(",").filter(x => NETS.includes(x));
@@ -510,7 +557,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await withPhotos(list.map(publicRow), list), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id) } : null,
+  res.json({ venue: TEN().venue || "", lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), eta: await etaFor(list, mine) } : null,
     last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null, bump: await bumpInfo(list, mine) });
 }));
 
@@ -1189,7 +1236,7 @@ async function saveUndo(steps) { await db.setSetting("next_undo", JSON.stringify
 app.post("/api/kj/next", wrap(async (req, res) => {
   const list = await db.active();
   const up = list.find(r => r.status === "up"); if (up) await db.setStatus(up.id, "done");
-  const nxt = list.find(r => r.status === "queued"); if (nxt) await db.setStatus(nxt.id, "up");
+  const nxt = list.find(r => r.status === "queued"); if (nxt) { await db.setStatus(nxt.id, "up"); await markUp(nxt.id); }
   if (up || nxt) { const st = await nextUndo(); st.push({ done: up ? up.id : null, up: nxt ? nxt.id : null }); await saveUndo(st); }
   res.json({ ok: true });
 }));
@@ -1261,7 +1308,7 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
     { const paid = await paidIds(), q = list.filter(r => r.status === "queued"), at = q.findIndex(r => r.id === id), first = q.findIndex(r => paid.has(r.id));
       if (!paid.has(id) && first > -1 && (at < 0 || first < at)) return res.status(409).json({ error: q[first].name + " paid to lock their spot and is ahead. Locked spots sing in order." }); }
     if (cur && cur.id !== id) await db.setStatus(cur.id, "queued");
-    await db.setStatus(id, "up");
+    await db.setStatus(id, "up"); await markUp(id);
   } else if (action === "raise" || action === "lower") {
     const q = (await db.active()).filter(r => r.status === "queued"), i = q.findIndex(r => r.id === id);
     const j = action === "raise" ? i - 1 : i + 1;
@@ -1375,7 +1422,7 @@ app.get("/api/bar", wrap(async (req, res) => {
     who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
     dj: djNow ? { name: djNow.name, since: djNow.since || null } : null, tipsStopped: !!(djNow && off && off.name === djNow.name && off.night === barDay().date),
     state: { lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
-      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await withPhotosKJ(act.map(kjRow), act), done: (await db.done(500)).map(kjRow) },
+      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
     signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 },
     history: await tipStats(30)
@@ -1483,7 +1530,7 @@ app.get("/api/watch", wrap(async (req, res) => {
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   res.json({
     state: { djOn: djNow ? djNow.name : null, lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
-      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await withPhotosKJ(act.map(kjRow), act), done: (await db.done(500)).map(kjRow) },
+      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
     signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 }
   });

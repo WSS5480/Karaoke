@@ -7,7 +7,8 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Dive Wheel">
-<style>*{box-sizing:border-box}[hidden]{display:none!important}img{max-width:100%}</style>
+<style>*{box-sizing:border-box}[hidden]{display:none!important}img{max-width:100%}li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
+</style>
 </head>
 <body>
 <title>Karaoke Spin Wheel</title>
@@ -489,7 +490,7 @@ function luRender(d){
   const show = matchMedia("(max-aspect-ratio:5/4)").matches ? 2 : 5;
   wait.slice(0, show).forEach((r, i) => {
     const li = document.createElement("li"), n = document.createElement("span"), t = document.createElement("div"), nb = document.createElement("b"), s2 = document.createElement("span");
-    n.className = "n"; n.textContent = i + 1; t.className = "t";
+    n.className = "n"; n.textContent = i + 1; t.className = "t"; if(r.paid) li.classList.add("locked");
     nb.textContent = r.name;
     if(i === 0){ const em = document.createElement("em"); em.textContent = "On deck"; nb.appendChild(em); }
     s2.textContent = r.song + (r.artist ? " – " + r.artist : "");

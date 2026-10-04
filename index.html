@@ -205,6 +205,7 @@ li.up .av{border-color:var(--green)}
 .tpay{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tpay button{font-size:15px}
 .tpay button[data-m="cashapp"]{border-color:#00d64f}.tpay button[data-m="venmo"]{border-color:#3d95ce}.tpay button[data-m="paypal"]{border-color:#2790c3}.tpay button[data-m="zelle"]{border-color:#a0f}.tpay button[data-m="apple"]{border-color:#eee}
+.eta{margin:0;font-size:17px;font-weight:700;color:#5fd36e}.eta small{display:block;font-size:12px;font-weight:400;color:var(--ink-2)}
 .nosong{margin:0;padding:12px;border-radius:12px;background:rgba(220,60,60,.15);border:2px solid #e05555;color:#ffb3b3;font-weight:700;text-align:center}
 .bumpbox{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .bumpbox .go{background:#ffc93c;color:#111}
@@ -248,6 +249,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 .lyrapps button i{font-style:normal;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:18px;flex:none}
 .lyrapps button small{display:block;font-weight:400;font-size:12px;color:var(--ink-2)}
 .lyrapps button.on{border-color:var(--green)}
+li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 </style>
 </head>
 <body class="booting">
@@ -346,6 +348,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
   <section class="card spot" id="mineCard" hidden>
     <div class="num" id="mineNum"></div>
     <p id="mineLine"></p>
+    <p class="eta" id="mineEta" hidden></p>
     <p class="nosong" id="noSongMsg" hidden role="alert">🎵 The DJ doesn't have that song. Pick another one. You keep your spot. / El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.</p>
     <div class="song" id="mineSong"></div>
     <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics / Letra</a>
@@ -826,6 +829,8 @@ function render(data){
     $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + (ahead + 1);
     $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
     $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
+    { const e = mine.eta, el = $("mineEta"); el.hidden = !(e && mine.status === "queued");
+      if(e && mine.status === "queued"){ el.textContent = "⏱ Est. time to sing: ~" + new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " (about " + e.min + " min)"; const sm = document.createElement("small"); sm.textContent = "Estimate from song lengths and tonight's pace. It can change. / Hora aproximada."; el.appendChild(sm); } }
     setLyr($("mineLyr"), mine);
     if(window.paintBump) window.paintBump(data.bump || { on: false }, mine);
     $("editSong").hidden = mine.status === "up"; if(mine.status === "up") $("editForm").hidden = true;
@@ -848,7 +853,7 @@ function render(data){
   const ol = $("queue"); ol.innerHTML = "";
   if(!data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
   data.queue.forEach((r, i) => {
-    const li = document.createElement("li"); if(r.status === "up") li.classList.add("up"); if(mine && r.id === mine.id) li.classList.add("me");
+    const li = document.createElement("li"); if(r.status === "up") li.classList.add("up"); if(mine && r.id === mine.id) li.classList.add("me"); if(r.paid && r.status === "queued") li.classList.add("locked");
     const n = document.createElement("span"); n.className = "n"; n.textContent = r.status === "up" ? "▶" : i + 1;
     const t = document.createElement("div"); t.className = "t";
     const b = document.createElement("b"); b.textContent = r.name;
