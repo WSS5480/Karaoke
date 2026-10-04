@@ -476,9 +476,11 @@ function item(r, i, waiting){
     const mk = (label, action, cls) => { const x = document.createElement("button"); x.textContent = label; if(cls) x.className = cls; x.addEventListener("click", () => act(`/api/kj/${r.id}/${action}`)); return x; };
     const fix = document.createElement("button"); fix.textContent = "Fix name";
     fix.addEventListener("click", () => { const n = window.prompt("Correct name for this singer (also fixes their phone):", r.name); if(n && n.trim()) act(`/api/kj/${r.id}/rename`, { name: n.trim() }); });
+    const fs = document.createElement("button"); fs.textContent = "Edit song";
+    fs.addEventListener("click", () => { const so = prompt("Song for " + r.name + ":", r.song); if(so === null || !so.trim()) return; const ar = prompt("Artist (optional):", r.artist || ""); if(ar === null) return; act(`/api/kj/${r.id}/song`, { song: so.trim(), artist: ar.trim() }); });
     const mv = document.createElement("button"); mv.textContent = "Move to #";
     mv.addEventListener("click", () => { const n = prompt("Move " + r.name + " to which spot in line? (1 = next up)", String(i + 1)); if(n === null) return; const v = parseInt(n, 10); if(!(v >= 1)) return; act(`/api/kj/${r.id}/move`, { spot: v }); });
-    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mv, fix, info, mk("Remove", "remove", "danger"));
+    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mv, fix, fs, info, mk("Remove", "remove", "danger"));
     a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
     li.appendChild(a);
   }
