@@ -64,8 +64,8 @@ a{color:var(--green-hi)}
     <form class="lbox" id="lockForm" novalidate>
       <img src="/logo.png" alt="" style="width:64px;margin:0 auto">
       <h1>Live view</h1>
-      <p class="sub" style="margin:0">Owner only. Enter the house PIN.</p>
-      <input id="pin" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password" aria-label="House PIN" placeholder="House PIN">
+      <p class="sub" style="margin:0">Owner only. Enter your owner list PIN.</p>
+      <input id="pin" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password" aria-label="Owner PIN" placeholder="Owner PIN">
       <button type="submit">Open</button>
       <p class="err" id="err" role="alert"></p>
     </form>
@@ -113,7 +113,7 @@ let pin = ""; try{ pin = sessionStorage.getItem("watch_pin") || ""; }catch(e){}
 const money = v => "$" + (Number.isInteger(v) ? v : Number(v).toFixed(2));
 const NAMES = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
 async function get(path){
-  const r = await fetch(path, { headers: { "x-kj-pin": pin }, cache: "no-store" });
+  const r = await fetch(path, { headers: { "x-watch-pin": pin }, cache: "no-store" });
   const j = await r.json().catch(() => ({}));
   if(r.status === 401){ showLock("Wrong PIN."); throw new Error("pin"); }
   if(!r.ok) throw new Error(j.error || "Couldn't load.");
@@ -180,16 +180,13 @@ function paintTips(t){
 let timer = null;
 async function refresh(){
   try{
-    const st = await get("/api/kj/state");
-    if(!st.me || !st.me.admin){ showLock("Live view is for the owner's house PIN only."); return; }
-    paintQueue(st);
-    paintTips(await get("/api/kj/tips"));
+    const j = await get("/api/watch");
+    paintQueue(j.state); paintTips(j.tips);
   }catch(e){}
 }
 async function open(){
   try{
-    const st = await get("/api/kj/state");
-    if(!st.me || !st.me.admin){ showLock("Live view is for the owner's house PIN only."); return; }
+    await get("/api/watch");
     try{ sessionStorage.setItem("watch_pin", pin); }catch(e){}
     $("lock").hidden = true; $("view").hidden = false;
     await refresh(); clearInterval(timer); timer = setInterval(refresh, 5000);

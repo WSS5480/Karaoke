@@ -247,7 +247,6 @@ a{color:var(--green-hi)}
         <a href="/history">Customer history</a>
         <a href="/ads">Daily ads</a>
         <a href="/owner" id="ownerLink" hidden>Owner list</a>
-        <a href="/watch" id="watchLink" hidden>Live view</a>
         <a href="/wheel" target="_blank" rel="noopener">Spin wheel</a>
         <a href="/wall" target="_blank" rel="noopener">Wall of fame</a>
         <a href="/tv" target="_blank" rel="noopener">TV screen to cast</a>
@@ -626,7 +625,7 @@ $("venueSave").addEventListener("click", () => {
 function paintMe(){
   if(!state || !state.me) return;
   $("meLine").textContent = "Signed in as " + state.me.name;
-  $("ownerLink").hidden = !state.me.admin; $("watchLink").hidden = !state.me.admin;
+  $("ownerLink").hidden = !state.me.admin;
   $("hostPin").placeholder = state.tempPin ? "Start PIN " + state.tempPin : "PIN";
   $("hostsCard").hidden = state.me.role === "dj"; $("hostForm").hidden = !state.me.admin;
   $("myPinBtn").hidden = state.me.admin;

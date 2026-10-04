@@ -1043,6 +1043,21 @@ app.get("/api/applesong", wrap(async (req, res) => {
 // the staff list page is owner-only: The Dive uses its own list PIN (STAFF_LIST_PIN in Render, never in code);
 // other bars and DJs use their owner PIN
 const listTries = new Map();
+// owner's live view (/watch): opens with the owner list PIN, never the house PIN
+app.get("/api/watch", wrap(async (req, res) => {
+  const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
+  if (l.length >= 10) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." });
+  const pin = String(req.headers["x-watch-pin"] || "").replace(/\D/g, ""), LIST_PIN = process.env.STAFF_LIST_PIN || KJ_PIN;
+  const ok = !!pin && (T() === "dive" ? same(pin, LIST_PIN) : pinMatches(pin, TEN().pinHash));
+  if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
+  const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active();
+  const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
+  res.json({
+    state: { djOn: djNow ? djNow.name : null, lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
+      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await withPhotosKJ(act.map(kjRow), act), done: (await db.done(50)).map(kjRow) },
+    tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 }
+  });
+}));
 app.post("/api/staff-list", wrap(async (req, res) => {
   const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
   if (l.length >= 10) return res.status(429).json({ ok: false, error: "Too many tries. Wait 10 minutes." });
