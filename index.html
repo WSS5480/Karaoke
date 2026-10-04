@@ -21,6 +21,10 @@
 body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
 main{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:18px;padding-top:18px}
 .logo{display:block;width:150px;max-width:50%;margin:0 auto;filter:drop-shadow(0 0 22px rgba(57,181,74,.55))}
+/* fresh scan, not in line yet: sign-up form first, small header, nothing to scroll past */
+.fresh .logo{width:72px}
+.fresh h1{font-size:23px}.fresh h1 small{font-size:13px;margin-top:2px}
+.fresh #installBar,.fresh #nowOpt,.fresh #lyrWhere{display:none!important}
 h1{font-family:var(--slab);font-weight:800;font-size:30px;line-height:1.1;margin:0;text-align:center;text-wrap:balance}
 h1 small{display:block;font-family:var(--body);font-weight:500;font-size:15px;color:var(--ink-2);margin-top:6px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:14px}
@@ -678,6 +682,8 @@ $("editForm").addEventListener("submit", async e => {
     if(!r.ok) throw new Error(j.error || "Couldn't save. Try again."); $("editForm").hidden = true; refresh(); }
   catch(err){ $("editErr").textContent = err.message; }
 });
+// sign-up form sits right under the title so a fresh scan can sign up without scrolling
+(function(){ const v = $("venueLine"), f = $("formCard"), pc = $("picCard"); const mc = $("mineCard"); if(v && f){ v.after(f); if(mc) f.after(mc); if(pc) (mc || f).after(pc); } })();
 $("cancel").addEventListener("click", async () => {
   if($("cancel").dataset.armed !== "1"){ $("cancel").dataset.armed = "1"; $("cancel").textContent = "Tap again to cancel"; setTimeout(() => { $("cancel").dataset.armed = ""; $("cancel").textContent = "Cancel my song"; }, 4000); return; }
   await fetch("/api/cancel", { method: "POST" }).catch(() => {});
@@ -727,8 +733,10 @@ function render(data){
   $("closedCard").hidden = !blocked || !!mine;
   $("closedMsg").textContent = !data.open ? "Sign-ups are closed right now. Ask the KJ." : data.pausedUntil ? "Sign-ups are paused. Back at " + new Date(data.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + "." : "Sign-ups are paused for a bit. Check back soon.";
   $("picCard").hidden = !!(authOn && (!me || !me.name));
+  // (layout) form first for a fresh scan
   $("formCard").hidden = (!!mine && !multiOn) || !data.open || data.paused || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
+  document.body.classList.toggle("fresh", !mine && !$("formCard").hidden);
   if(mine){
     const ahead = mine.spot;
     $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + (ahead + 1);
