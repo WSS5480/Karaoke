@@ -1020,7 +1020,8 @@ async function getBumps(night) {
   return l;
 }
 async function saveBumps(list) { await db.setSetting("bumps:" + barDay().date, JSON.stringify(list.slice(-300))); }
-function queuedAhead(list, row) { return list.filter(r => r.status === "queued" && (r.position < row.position)).length; }
+// count by the line order everyone sees (positions can tie after hand edits, so don't compare numbers)
+function queuedAhead(list, row) { const i = list.findIndex(r => r.id === row.id); return i < 0 ? 0 : list.slice(0, i).filter(r => r.status === "queued").length; }
 async function bumpInfo(list, mine) {
   const s = await tipState(), on = (await bumpOn()) && s.on;
   if (!on) return { on: false };
