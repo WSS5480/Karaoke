@@ -18,6 +18,7 @@
 --slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+body.booting #formCard,body.booting #mineCard,body.booting #closedCard{display:none!important}
 body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
 main{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:18px;padding-top:18px}
 .logo{display:block;width:150px;max-width:50%;margin:0 auto;filter:drop-shadow(0 0 22px rgba(57,181,74,.55))}
@@ -243,7 +244,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 .lyrapps button.on{border-color:var(--green)}
 </style>
 </head>
-<body>
+<body class="booting">
 <main>
   <div class="install" id="installBar" hidden>
     <img src="/icon-192.png?v=2" alt="">
@@ -754,6 +755,7 @@ document.addEventListener("click", e => {
   e.preventDefault(); openLyrPick(a.dataset.lq);   // first time: ask which app
 }, true);
 function render(data){
+  document.body.classList.remove("booting");
   mine = data.mine; multiOn = !!data.multi;
   lyricsOn = data.lyrics !== false; document.body.classList.toggle("nolyr", !lyricsOn);
   if(!lyricsOn){ $("lyrModal").hidden = true; $("singModal").hidden = true; }
@@ -807,6 +809,7 @@ function render(data){
   });
 }
 
+setTimeout(() => document.body.classList.remove("booting"), 3500);   // never hide the form if the line can't load
 /* ---------- rate and share ---------- */
 let last = null, picked = 0;
 $("formCard").before($("rateCard"));
