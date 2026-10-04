@@ -1282,6 +1282,18 @@ async function djLock(row, on, who) {
   await saveBumps(all);
 }
 async function paidIds() { return new Set((await getBumps()).filter(b => b.status === "approved").map(b => b.sid)); }
+// DJ moves and adds go to any spot, locked or not. Taking a locked singer's spot locks the new singer too,
+// so the locked group stays locked (the locked singers behind them each move down one).
+async function djPlace(id, spot, kjName) {
+  const act = await db.active(), all = act.filter(r => r.status === "queued"), me = all.find(r => r.id === id);
+  if (!me) return { locked: false };
+  const q = all.filter(r => r.id !== id), i = Math.min(Math.max((parseInt(spot, 10) || q.length + 1) - 1, 0), q.length);
+  const paid = await paidIds(), wasLocked = !!(q[i] && paid.has(q[i].id));
+  q.splice(i, 0, me);
+  for (let k = 0; k < q.length; k++) await db.setPos(q[k].id, k + 1);
+  if (wasLocked && !paid.has(id)) { await djLock(me, true, kjName); return { locked: true }; }
+  return { locked: false };
+}
 async function placeAt(id, spot, fresh) {
   // locked spots: a singer who paid keeps their spot number. Anyone moved, added, or paid in ahead of
   // them flows around them (the singer just above slides to just below); a paid spot never changes
@@ -1308,9 +1320,10 @@ app.post("/api/kj/add", wrap(async (req, res) => {
   if (!name) return res.status(400).json({ error: "Enter the singer's name." });
   if (!song) return res.status(400).json({ error: "Enter the song." });
   const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex"), via: "dj" });
-  if (req.body.spot) await placeAt(row.id, req.body.spot, true);
-  if (req.body.lock) await djLock(row, true, req.kj.name);
-  res.json({ ok: true, id: row.id });
+  let auto = false;
+  if (req.body.spot) auto = (await djPlace(row.id, req.body.spot, req.kj.name)).locked;
+  if (req.body.lock && !auto) await djLock(row, true, req.kj.name);
+  res.json({ ok: true, id: row.id, autoLocked: auto });
 }));
 app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), action = req.params.action, row = await db.get(id);
@@ -1324,29 +1337,23 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   else if (action === "done") await db.setStatus(id, "done");
   else if (action === "up") {
     const list = await db.active(), cur = list.find(r => r.status === "up");
-    { const paid = await paidIds(), q = list.filter(r => r.status === "queued"), at = q.findIndex(r => r.id === id), first = q.findIndex(r => paid.has(r.id));
-      if (!paid.has(id) && first > -1 && (at < 0 || first < at)) return res.status(409).json({ error: q[first].name + " paid to lock their spot and is ahead. Locked spots sing in order." }); }
     if (cur && cur.id !== id) await db.setStatus(cur.id, "queued");
     await db.setStatus(id, "up"); await markUp(id);
   } else if (action === "raise" || action === "lower") {
     const q = (await db.active()).filter(r => r.status === "queued"), i = q.findIndex(r => r.id === id);
     const j = action === "raise" ? i - 1 : i + 1;
-    // step over locked (paid) spots instead of swapping with them
-    const paid = await paidIds();
-    if (i > -1 && paid.has(id) && action === "lower") return res.status(409).json({ error: row.name + " paid to lock their spot. It can't be moved down." });
-    if (i > -1) { let k = j; while (k >= 0 && k < q.length && paid.has(q[k].id) && !paid.has(id)) k += action === "raise" ? -1 : 1; if (k >= 0 && k < q.length) await placeAt(id, k + 1); }
+    if (i > -1 && j >= 0 && j < q.length) { const r = await djPlace(id, j + 1, req.kj.name); if (r.locked) return res.json({ ok: true, autoLocked: true, note: row.name + " moved into the locked group, so their spot is locked too." }); }
   } else if (action === "nosong" || action === "hassong") {
     if (row.status !== "queued" && row.status !== "up") return res.status(400).json({ error: "They're not in line." });
     await setNoSong(id, action === "nosong");
   } else if (action === "readd") {
     // undo an accidental skip: back into line (next up by default)
     if (row.status === "up" || row.status === "queued") return res.status(400).json({ error: "They're already in line." });
-    await db.setStatus(id, "queued"); await placeAt(id, req.body.spot || 1, true);
+    await db.setStatus(id, "queued"); await djPlace(id, req.body.spot || 1, req.kj.name);
   } else if (action === "move") {
     if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be moved." });
-    await placeAt(id, req.body.spot);
-    const q2 = (await db.active()).filter(r => r.status === "queued"), got = q2.findIndex(r => r.id === id) + 1, want = parseInt(req.body.spot, 10);
-    if (want && got !== want && got) return res.json({ ok: true, note: "Placed at #" + got + ". Nobody can jump a locked spot." });
+    const r = await djPlace(id, req.body.spot, req.kj.name);
+    if (r.locked) return res.json({ ok: true, autoLocked: true, note: row.name + " took a locked spot, so their spot is locked too." });
   } else return res.status(400).json({ error: "Unknown action." });
   res.json({ ok: true });
 }));
