@@ -1023,6 +1023,23 @@ app.post("/api/kj/:id/rename", wrap(async (req, res) => {
   else { const p = await getProfile(row.device); await setProfile(row.device, { ...(p || {}), name: n }); }
   res.json({ ok: true });
 }));
+// put a queued singer at a spot in line (1 = next up)
+async function placeAt(id, spot) {
+  const q = (await db.active()).filter(r => r.status === "queued" && r.id !== id), me = (await db.active()).find(r => r.id === id);
+  if (!me) return;
+  const i = Math.min(Math.max((parseInt(spot, 10) || q.length + 1) - 1, 0), q.length);
+  q.splice(i, 0, me);
+  for (let k = 0; k < q.length; k++) await db.setPos(q[k].id, k + 1);
+}
+// DJ/staff add a singer by hand (for guests without the app), optionally at a spot in line
+app.post("/api/kj/add", wrap(async (req, res) => {
+  const name = cleanName(req.body.name, 30), song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
+  if (!name) return res.status(400).json({ error: "Enter the singer's name." });
+  if (!song) return res.status(400).json({ error: "Enter the song." });
+  const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex") });
+  if (req.body.spot) await placeAt(row.id, req.body.spot);
+  res.json({ ok: true, id: row.id });
+}));
 app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), action = req.params.action, row = await db.get(id);
   if (!row) return res.status(404).json({ error: "That singer isn't on the list anymore." });
@@ -1036,6 +1053,9 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
     const q = (await db.active()).filter(r => r.status === "queued"), i = q.findIndex(r => r.id === id);
     const j = action === "raise" ? i - 1 : i + 1;
     if (i > -1 && j >= 0 && j < q.length) { await db.setPos(q[i].id, q[j].position); await db.setPos(q[j].id, q[i].position); }
+  } else if (action === "move") {
+    if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be moved." });
+    await placeAt(id, req.body.spot);
   } else return res.status(400).json({ error: "Unknown action." });
   res.json({ ok: true });
 }));

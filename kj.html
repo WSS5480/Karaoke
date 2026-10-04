@@ -35,6 +35,11 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .sgrid b{display:block;font-family:var(--slab);font-size:20px;font-variant-numeric:tabular-nums}
 .sgrid span{font-size:11px;color:var(--ink-2);line-height:1.2;display:block}
 .singer .note{font-size:14px;margin:0}
+.addform{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.addform input{font-size:16px;letter-spacing:0;text-align:left}
+.addform #addName,.addform .addspot,.addform button,.addform .err{grid-column:1/-1}
+.addspot{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);text-transform:none;letter-spacing:0}
+.addspot select{flex:1;font:inherit;font-size:16px;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px}
 .namepick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 .namepick p{width:100%;margin:0;color:var(--ink-2);font-size:14px}
 .forcepin{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.9);display:grid;place-items:center;padding:16px}
@@ -203,6 +208,18 @@ a{color:var(--green-hi)}
         <button id="pOn" data-m="-1">Until I resume</button>
         <button id="pOff" data-m="0" class="next" hidden>Resume now</button>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>Add a singer <span>for guests without the app</span></h2>
+      <form id="addForm" class="addform" novalidate>
+        <input id="addName" maxlength="30" placeholder="Name" aria-label="Singer name" autocomplete="off">
+        <input id="addSong" maxlength="80" placeholder="Song" aria-label="Song" autocomplete="off">
+        <input id="addArtist" maxlength="60" placeholder="Artist (optional)" aria-label="Artist" autocomplete="off">
+        <label class="addspot">Spot in line <select id="addSpot" aria-label="Spot in line"></select></label>
+        <button type="submit" class="next">Add to line</button>
+        <p class="err" id="addErr" role="alert" style="margin:0"></p>
+      </form>
     </section>
 
     <section class="card">
@@ -450,7 +467,9 @@ function item(r, i, waiting){
     const mk = (label, action, cls) => { const x = document.createElement("button"); x.textContent = label; if(cls) x.className = cls; x.addEventListener("click", () => act(`/api/kj/${r.id}/${action}`)); return x; };
     const fix = document.createElement("button"); fix.textContent = "Fix name";
     fix.addEventListener("click", () => { const n = window.prompt("Correct name for this singer (also fixes their phone):", r.name); if(n && n.trim()) act(`/api/kj/${r.id}/rename`, { name: n.trim() }); });
-    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), fix, info, mk("Remove", "remove", "danger"));
+    const mv = document.createElement("button"); mv.textContent = "Move to #";
+    mv.addEventListener("click", () => { const n = prompt("Move " + r.name + " to which spot in line? (1 = next up)", String(i + 1)); if(n === null) return; const v = parseInt(n, 10); if(!(v >= 1)) return; act(`/api/kj/${r.id}/move`, { spot: v }); });
+    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mv, fix, info, mk("Remove", "remove", "danger"));
     a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
     li.appendChild(a);
   }
@@ -479,6 +498,9 @@ function render(){
   if(!up){ lastUp = null; if(!singerPinned){ $("singer").hidden = true; singerFor = null; } }
   $("nextBtn").textContent = up ? "Done, next singer" : "Start first singer";
   $("waitCount").textContent = waiting.length + " waiting";
+  { const sel = $("addSpot"), keep = sel.value; sel.innerHTML = ""; const o = new Option("End of line (#" + (waiting.length + 1) + ")", ""); sel.add(o);
+    for(let k = 1; k <= waiting.length; k++) sel.add(new Option("#" + k + (k === 1 ? " (next up)" : ""), String(k)));
+    if([...sel.options].some(x => x.value === keep)) sel.value = keep; }
   const q = $("queue"); q.innerHTML = "";
   if(!waiting.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No one waiting. Put the QR poster where people can see it."; q.appendChild(li); }
   waiting.forEach((r, i) => q.appendChild(item(r, i, true)));
@@ -535,6 +557,14 @@ $("refreshBtn").addEventListener("click", async () => {
 });
 $("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !state.open }));
 $("toggleGeo").addEventListener("click", () => act("/api/kj-geofence", { on: !state.geofence }));
+$("addForm").addEventListener("submit", async e => {
+  e.preventDefault(); $("addErr").textContent = "";
+  const body = { name: $("addName").value.trim(), song: $("addSong").value.trim(), artist: $("addArtist").value.trim(), spot: $("addSpot").value };
+  if(!body.name){ $("addErr").textContent = "Enter the singer's name."; return; }
+  if(!body.song){ $("addErr").textContent = "Enter the song."; return; }
+  try{ await api("/api/kj/add", body); $("addName").value = ""; $("addSong").value = ""; $("addArtist").value = ""; $("addSpot").value = ""; load(); }
+  catch(err){ if(err.message !== "pin") $("addErr").textContent = err.message; }
+});
 $("toggleLyrics").addEventListener("click", () => act("/api/kj-lyrics", { on: state.lyrics === false }));
 $("multiChk").addEventListener("change", () => act("/api/kj-multi", { on: !$("multiChk").checked }));
 $("togglePhone").addEventListener("click", () => act("/api/kj-phone", { on: !state.phoneSignin }));
