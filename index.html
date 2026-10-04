@@ -342,7 +342,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <div class="bumpbox" id="bumpBox" hidden>
       <button class="go" id="bumpOpen" type="button">⏫ Move up · $<span id="bumpPrice">1</span> a spot</button>
       <p class="bumpmsg" id="bumpMsg" role="status"></p>
-      <button class="linkbtn" id="bumpCancel" type="button" hidden>Cancel my request</button>
+      <button class="ghost" id="bumpCancel" type="button" hidden>Didn't pay? Cancel move-up request</button>
     </div>
     <p>Keep this page open. It updates on its own.</p>
     <button class="ghost" id="editSong" type="button">Change my song</button>
@@ -1518,9 +1518,11 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     $("bumpPrice").textContent = b.price; $("bumpPrice2").textContent = b.price;
     $("bumpOpen").hidden = pending || !b.max; $("bumpCancel").hidden = !pending;
     const m = $("bumpMsg"); m.className = "bumpmsg";
-    if(pending) m.textContent = "⏳ Waiting for the DJ to see your $" + r.amount + " and move you up " + r.spots + (r.spots === 1 ? " spot." : " spots.");
+    if(pending) m.textContent = "⏳ Waiting for the DJ to see your $" + r.amount + " and move you up " + r.spots + (r.spots === 1 ? " spot." : " spots.") + " (Your song is still in line.)";
     else if(r && r.status === "approved"){ m.textContent = "✅ You moved up " + r.spots + (r.spots === 1 ? " spot!" : " spots!"); m.classList.add("ok"); }
     else if(r && r.status === "denied") m.textContent = "The DJ couldn't find your payment. Ask the DJ.";
+    else if(r && r.status === "canceled") m.textContent = "Move-up canceled. Your song is still in line.";
+    else if(r && r.status === "expired") m.textContent = "The DJ didn't confirm in time. You can try again.";
     else m.textContent = "";
   };
   function paintSpots(){

@@ -1013,7 +1013,12 @@ app.post("/api/kj/tips/staff", wrap(async (req, res) => {
 const BUMP_PRICE = 1;   // default; the DJ sets their own price per spot
 async function bumpPrice() { const v = parseInt(await db.getSetting("bump_price"), 10); return v >= 1 && v <= 50 ? v : BUMP_PRICE; }
 async function bumpOn() { return (await db.getSetting("bump")) !== "off"; }
-async function getBumps(night) { try { return JSON.parse((await db.getSetting("bumps:" + (night || barDay().date))) || "[]"); } catch (e) { return []; } }
+const BUMP_WAIT = 10 * 60e3;   // a request the DJ never answers drops after 10 minutes so the singer can try again
+async function getBumps(night) {
+  let l; try { l = JSON.parse((await db.getSetting("bumps:" + (night || barDay().date))) || "[]"); } catch (e) { return []; }
+  const t = Date.now(); l.forEach(b => { if (b.status === "pending" && t - b.at > BUMP_WAIT) b.status = "expired"; });
+  return l;
+}
 async function saveBumps(list) { await db.setSetting("bumps:" + barDay().date, JSON.stringify(list.slice(-300))); }
 function queuedAhead(list, row) { return list.filter(r => r.status === "queued" && (r.position < row.position)).length; }
 async function bumpInfo(list, mine) {
