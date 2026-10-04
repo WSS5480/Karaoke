@@ -541,6 +541,27 @@ function getSpot(){
   });
 }
 let songs = [], mine = null, buzzed = false;
+/* ---------- phone alerts: buzz + chime. Vibration works on Android; iPhones only get the chime and the pop-up ---------- */
+let audioCtx = null, fobTimer = null;
+document.addEventListener("pointerdown", () => { try{ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if(audioCtx.state === "suspended") audioCtx.resume(); }catch(e){} }, { capture: true });
+function chime(notes){
+  try{ if(!audioCtx) return; let t = audioCtx.currentTime;
+    notes.forEach(f => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + 0.4); t += 0.18; }); }catch(e){}
+}
+function buzz(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+function stopFob(){ clearInterval(fobTimer); fobTimer = null; buzz(0); }
+function alertOnce(kind, id){
+  const key = "dive_alert_" + kind; let seen = null; try{ seen = sessionStorage.getItem(key); }catch(e){}
+  if(seen === String(id)) return; try{ sessionStorage.setItem(key, String(id)); }catch(e){}
+  if(kind === "deck"){ buzz([300, 150, 300]); chime([660, 880]); return; }
+  // you're up: pager-style buzzing every few seconds until they tap the screen (max ~30 s)
+  stopFob(); let n = 0; const go = () => { buzz([700, 250, 700, 250, 700]); chime([880, 660, 880]); if(++n >= 10) stopFob(); };
+  go(); fobTimer = setInterval(go, 3000);
+  const stop = () => { stopFob(); document.removeEventListener("pointerdown", stop, true); };
+  setTimeout(() => document.addEventListener("pointerdown", stop, true), 500);
+}
 fetch("/songs.json").then(r => r.json()).then(s => { songs = s; if(typeof paintFor === "function") paintFor(); }).catch(() => {});
 
 const norm = s => s.trim().toLowerCase();
@@ -696,7 +717,10 @@ function render(data){
     $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
     $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
     setLyr($("mineLyr"), mine);
-    if(mine.status === "up" && !buzzed && navigator.vibrate){ navigator.vibrate([200, 100, 200]); buzzed = true; }
+    // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
+    { const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
+      if(mine.status === "queued" && upNow && ahead - 1 === 0) alertOnce("deck", mine.id); }
+    if(mine.status === "up") alertOnce("up", mine.id);
     if(mine.status === "up"){
       let seen = null; try{ seen = sessionStorage.getItem("dive_up_seen"); }catch(e){}
       if(seen !== String(mine.id)){
