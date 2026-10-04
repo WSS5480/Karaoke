@@ -207,6 +207,8 @@ li.up .av{border-color:var(--green)}
 .tpay button[data-m="cashapp"]{border-color:#00d64f}.tpay button[data-m="venmo"]{border-color:#3d95ce}.tpay button[data-m="paypal"]{border-color:#2790c3}.tpay button[data-m="zelle"]{border-color:#a0f}.tpay button[data-m="apple"]{border-color:#eee}
 .bumpbox{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .bumpbox .go{background:#ffc93c;color:#111}
+.bumpterms{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:15px;line-height:1.35}
+#bumpAgree{background:#ffc93c;color:#111}
 .bigbtn{width:100%;align-self:stretch;border-radius:999px;padding:15px;font-family:var(--slab);font-weight:800;font-size:19px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;background:transparent;color:var(--ink);border:2px solid #ffc93c}
 .bumpmsg{margin:0;font-size:14px;color:var(--ink-2)}.bumpmsg.ok{color:var(--green-hi)}
 .bspots{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
@@ -507,7 +509,19 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 <div class="tmodal" id="bumpModal" hidden role="dialog" aria-modal="true" aria-labelledby="bumpTitle">
   <div class="tbox" style="overflow:auto">
     <h2 id="bumpTitle">⏫ Move up in line</h2>
-    <div id="bumpStep1" style="display:flex;flex-direction:column;gap:12px">
+    <div id="bumpStep0" style="display:flex;flex-direction:column;gap:12px">
+      <p style="margin:0;font-weight:700">Before you pay / Antes de pagar</p>
+      <ul class="bumpterms">
+        <li>$<span class="bpr">1</span> a spot goes <b>straight to the DJ</b>, not The Dive.</li>
+        <li>You move up <b>only after the DJ sees your payment</b> and taps OK.</li>
+        <li><b>First paid is first.</b> You can't jump ahead of someone who already paid, and once you've paid nobody can push you down.</li>
+        <li>The DJ can still skip or remove a singer for conduct or time, and the night may end before your turn.</li>
+        <li><b>No refunds</b> through the app or The Dive. Ask the DJ.</li>
+      </ul>
+      <button class="go" id="bumpAgree" type="button">I agree / Acepto</button>
+      <a href="/terms" target="_blank" rel="noopener" style="text-align:center;color:var(--ink-2);font-size:14px">Full terms</a>
+    </div>
+    <div id="bumpStep1" hidden style="display:flex;flex-direction:column;gap:12px">
       <div><label>How many spots up? <span>/ ¿Cuántos lugares?</span></label><div class="bspots" id="bumpSpots"></div></div>
       <div><label>Pay <span id="bumpHost"></span> with <span>/ Pagar con</span></label><div class="tpay" id="bumpPay"></div></div>
       <p class="hint" style="color:var(--ink-2);margin:0">$<span id="bumpPrice2">1</span> a spot goes straight to the DJ. You move up as soon as the DJ sees your payment and taps OK. If they can't find it, you stay where you are. Ask the DJ about refunds.</p>
@@ -1546,7 +1560,8 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   }
   $("bumpOpen").addEventListener("click", () => {
     if(!info || !info.on || !info.max) return;
-    spots = 1; $("bumpStep1").hidden = false; $("bumpStep2").hidden = true; $("bumpErr").textContent = "";
+    spots = 1; $("bumpStep0").hidden = false; $("bumpStep1").hidden = true; $("bumpStep2").hidden = true; $("bumpErr").textContent = "";
+    document.querySelectorAll("#bumpModal .bpr").forEach(x => x.textContent = info.price);
     $("bumpHost").textContent = info.host; paintSpots();
     const pay = $("bumpPay"); pay.innerHTML = "";
     Object.keys(NAMES).filter(k => info.links[k]).forEach(k => {
@@ -1579,6 +1594,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   });
   $("bumpCancel").addEventListener("click", async () => { try{ await fetch("/api/bump/cancel", { method: "POST" }); }catch(e){} try{ refresh(); }catch(e){} });
   $("bumpClose").addEventListener("click", () => $("bumpModal").hidden = true);
+  $("bumpAgree").addEventListener("click", () => { $("bumpStep0").hidden = true; $("bumpStep1").hidden = false; });
   $("bumpModal").addEventListener("click", e => { if(e.target.id === "bumpModal") $("bumpModal").hidden = true; });
 })();
 /* ---------- tip the DJ ---------- */

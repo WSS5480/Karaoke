@@ -105,6 +105,7 @@ li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
 .bumplist .bt span{display:block;font-size:14px;color:var(--ink-2)}
 .bumplist button{font:inherit;font-weight:700;border-radius:10px;padding:10px 14px;cursor:pointer;border:1px solid var(--line)}
 .bumplist .yes{background:var(--green,#39b54a);color:#fff;border-color:transparent}.bumplist .no{background:transparent;color:var(--ink)}
+.paidtag{display:inline-block;margin-left:8px;font-size:12px;font-weight:800;color:#111;background:#ffc93c;border-radius:6px;padding:1px 6px;vertical-align:middle}
 #queue li .t b{font-size:21px;font-weight:700;color:#ffc93c;line-height:1.2}
 li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
 li .acts{display:flex;gap:6px;flex-wrap:wrap}
@@ -376,11 +377,12 @@ async function api(path, body){
 function logout(msg){ stopDjWatch(); pin = ""; pinName = ""; try{ sessionStorage.removeItem("kj_name"); }catch(e){} $("forcePin").hidden = true; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
 window.diveRefresh = () => pin && !$("panel").hidden ? Promise.all([load(), typeof loadTips === "function" ? loadTips() : null]) : location.reload();
 async function load(){
-  try{ state = await api("/api/kj/state"); render(); startDjWatch(); $("err").textContent = ""; }
+  try{ state = await api("/api/kj/state"); render(); startDjWatch(); if(Date.now() > errUntil) $("err").textContent = ""; }
   catch(e){ if(e.message !== "pin") $("err").textContent = "Lost connection. Retrying…"; }
 }
+var errUntil = 0;
 async function act(path, body){
-  try{ await api(path, body || {}); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
+  try{ const j = await api(path, body || {}); if(j && j.note){ $("err").textContent = j.note; errUntil = Date.now() + 6000; } }catch(e){ if(e.message !== "pin"){ $("err").textContent = e.message; errUntil = Date.now() + 6000; } }
   load();
 }
 /* ---------- singer card: pops up with their past data when they're up ---------- */
@@ -485,6 +487,7 @@ function item(r, i, waiting){
   const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
   if(r.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(r.rating); b.appendChild(st); }
   if(r.posted && r.posted.length) b.appendChild(chips(r.posted));
+  if(r.paid && waiting){ const pd = document.createElement("span"); pd.className = "paidtag"; pd.textContent = "⏫ PAID"; pd.title = "Paid to move up. Locked: can't be pushed down."; b.appendChild(pd); }
   t.append(b, s); li.append(n);
   if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av" + (r.photoSt === "pending" ? " blur pend" : r.photoSt === "hidden" ? " blur hid" : ""); av.alt = "Photo of " + r.name + (r.photoSt === "pending" ? ", waiting for your OK" : r.photoSt === "hidden" ? ", blurred" : "") + ". Tap to check it."; kjPic(av, r); av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
   li.append(t);

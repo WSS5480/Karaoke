@@ -758,7 +758,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(); return (await withPhotosKJ(l.map(kjRow), l)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -1028,6 +1028,9 @@ async function bumpInfo(list, mine) {
   const out = { on: true, price: await bumpPrice(), host: s.host, links: s.links };
   if (mine && mine.status === "queued") {
     out.max = queuedAhead(list, mine);
+    // can't jump ahead of anyone who already paid
+    { const paid = await paidIds(), q = list.filter(r => r.status === "queued"), me = q.findIndex(r => r.id === mine.id);
+      let f = 0; q.forEach((r, k) => { if (k < me && paid.has(r.id)) f = k + 1; }); out.max = Math.max(0, me - f); out.locked = f > 0 && out.max === 0; }
     const req = (await getBumps()).filter(b => b.sid === mine.id).pop();
     if (req) out.req = { status: req.status, spots: req.spots, amount: req.amount };
   }
@@ -1072,8 +1075,9 @@ app.post("/api/kj/bump/:id", wrap(async (req, res) => {
   if (!req.body.ok) { b.status = "denied"; b.by = req.kj.name; await saveBumps(all); return res.json({ ok: true }); }
   const act = await db.active(), row = act.find(r => r.id === b.sid);
   if (!row || row.status !== "queued") { b.status = "expired"; await saveBumps(all); return res.status(409).json({ error: b.name + " isn't waiting anymore." }); }
-  const now = queuedAhead(act, row) + 1, to = Math.max(1, now - b.spots);
-  await placeAt(row.id, to);
+  const now = queuedAhead(act, row) + 1, want = Math.max(1, now - b.spots);
+  await placeAt(row.id, want);
+  const to = queuedAhead(await db.active(), row) + 1;
   b.status = "approved"; b.by = req.kj.name; b.from = now; b.toSpot = to; await saveBumps(all);
   // count it with the DJ's tips so totals match their payment app
   const night = barDay().date, tips = await getTips(night);
@@ -1176,10 +1180,18 @@ app.post("/api/kj/:id/rename", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 // put a queued singer at a spot in line (1 = next up)
-async function placeAt(id, spot) {
-  const q = (await db.active()).filter(r => r.status === "queued" && r.id !== id), me = (await db.active()).find(r => r.id === id);
+// paid move-ups are locked in: first paid is first. Nobody (DJ moves, DJ adds, put-backs, or a later
+// paid move-up) can land ahead of a paid singer and push them down. A paid singer can still be moved up.
+async function paidIds() { return new Set((await getBumps()).filter(b => b.status === "approved").map(b => b.sid)); }
+async function placeAt(id, spot, fresh) {
+  const act = await db.active(), all = act.filter(r => r.status === "queued"), me = act.find(r => r.id === id);
   if (!me) return;
-  const i = Math.min(Math.max((parseInt(spot, 10) || q.length + 1) - 1, 0), q.length);
+  const q = all.filter(r => r.id !== id), at = all.findIndex(r => r.id === id), orig = fresh || at < 0 ? q.length : at;
+  let i = Math.min(Math.max((parseInt(spot, 10) || q.length + 1) - 1, 0), q.length);
+  const paid = await paidIds();
+  // anyone who paid and is ahead of this singer stays ahead of them
+  q.forEach((r, k) => { if (k < orig && paid.has(r.id)) i = Math.max(i, k + 1); });
+  if (paid.has(id) && !fresh) i = Math.min(i, orig);   // and a paid singer never gets moved down
   q.splice(i, 0, me);
   for (let k = 0; k < q.length; k++) await db.setPos(q[k].id, k + 1);
 }
@@ -1189,7 +1201,7 @@ app.post("/api/kj/add", wrap(async (req, res) => {
   if (!name) return res.status(400).json({ error: "Enter the singer's name." });
   if (!song) return res.status(400).json({ error: "Enter the song." });
   const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex"), via: "dj" });
-  if (req.body.spot) await placeAt(row.id, req.body.spot);
+  if (req.body.spot) await placeAt(row.id, req.body.spot, true);
   res.json({ ok: true, id: row.id });
 }));
 app.post("/api/kj/:id/:action", wrap(async (req, res) => {
@@ -1199,19 +1211,24 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   else if (action === "done") await db.setStatus(id, "done");
   else if (action === "up") {
     const list = await db.active(), cur = list.find(r => r.status === "up");
+    { const paid = await paidIds(), q = list.filter(r => r.status === "queued"), at = q.findIndex(r => r.id === id), first = q.findIndex(r => paid.has(r.id));
+      if (!paid.has(id) && first > -1 && (at < 0 || first < at)) return res.status(409).json({ error: q[first].name + " paid to move up and is ahead. Paid spots go first." }); }
     if (cur && cur.id !== id) await db.setStatus(cur.id, "queued");
     await db.setStatus(id, "up");
   } else if (action === "raise" || action === "lower") {
     const q = (await db.active()).filter(r => r.status === "queued"), i = q.findIndex(r => r.id === id);
     const j = action === "raise" ? i - 1 : i + 1;
+    if (i > -1 && j >= 0 && j < q.length) { const goesDown = action === "lower" ? q[i] : q[j]; if ((await paidIds()).has(goesDown.id)) return res.status(409).json({ error: goesDown.name + " paid to move up. Paid spots can't be moved down." }); }
     if (i > -1 && j >= 0 && j < q.length) { await db.setPos(q[i].id, q[j].position); await db.setPos(q[j].id, q[i].position); }
   } else if (action === "readd") {
     // undo an accidental skip: back into line (next up by default)
     if (row.status === "up" || row.status === "queued") return res.status(400).json({ error: "They're already in line." });
-    await db.setStatus(id, "queued"); await placeAt(id, req.body.spot || 1);
+    await db.setStatus(id, "queued"); await placeAt(id, req.body.spot || 1, true);
   } else if (action === "move") {
     if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be moved." });
     await placeAt(id, req.body.spot);
+    const q2 = (await db.active()).filter(r => r.status === "queued"), got = q2.findIndex(r => r.id === id) + 1, want = parseInt(req.body.spot, 10);
+    if (want && got !== want && got) return res.json({ ok: true, note: "Placed at #" + got + ". Paid spots can't be pushed down." });
   } else return res.status(400).json({ error: "Unknown action." });
   res.json({ ok: true });
 }));
