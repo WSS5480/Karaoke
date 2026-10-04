@@ -212,6 +212,7 @@ li.up .av{border-color:var(--green)}
 .bigbtn{width:100%;align-self:stretch;border-radius:999px;padding:15px;font-family:var(--slab);font-weight:800;font-size:19px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;background:transparent;color:var(--ink);border:2px solid #ffc93c}
 .bumpmsg{margin:0;font-size:14px;color:var(--ink-2)}.bumpmsg.ok{color:var(--green-hi)}
 .bspots{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.bspots button.lk{opacity:.45;cursor:not-allowed}
 .bspots .front{grid-column:1/-1;font-size:17px;padding:12px}
 .bspots button{font:inherit;font-weight:700;font-size:14px;border-radius:12px;padding:8px 4px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer;line-height:1.25}
 .bspots button small{display:block;font-weight:500;font-size:12px;color:var(--ink-2)}
@@ -345,7 +346,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <div class="song" id="mineSong"></div>
     <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics / Letra</a>
     <div class="bumpbox" id="bumpBox" hidden>
-      <button class="go" id="bumpOpen" type="button">⏫ Move up · $<span id="bumpPrice">1</span> a spot</button>
+      <button class="go" id="bumpOpen" type="button">🔒 Move up &amp; lock your spot · $<span id="bumpPrice">1</span> a spot</button>
       <p class="bumpmsg" id="bumpMsg" role="status"></p>
       <button class="bigbtn" id="bumpCancel" type="button" hidden>Didn't pay? Cancel move-up request</button>
     </div>
@@ -508,13 +509,14 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 </div>
 <div class="tmodal" id="bumpModal" hidden role="dialog" aria-modal="true" aria-labelledby="bumpTitle">
   <div class="tbox" style="overflow:auto">
-    <h2 id="bumpTitle">⏫ Move up in line</h2>
+    <h2 id="bumpTitle">🔒 Lock your spot</h2>
     <div id="bumpStep0" style="display:flex;flex-direction:column;gap:12px">
       <p style="margin:0;font-weight:700">Before you pay / Antes de pagar</p>
       <ul class="bumpterms">
         <li>$<span class="bpr">1</span> a spot goes <b>straight to the DJ</b>, not The Dive.</li>
         <li>You move up <b>only after the DJ sees your payment</b> and taps OK.</li>
-        <li><b>First paid is first.</b> You can't jump ahead of someone who already paid, and once you've paid nobody can push you down.</li>
+        <li><b>Your spot is locked.</b> Pay for #14 and you stay #14. Nobody can push you down, even if someone else pays later. You only move up as people ahead of you sing.</li>
+        <li>Spots other people already locked can't be bought (they show 🔒).</li>
         <li>The DJ can still skip or remove a singer for conduct or time, and the night may end before your turn.</li>
         <li><b>No refunds</b> through the app or The Dive. Ask the DJ.</li>
       </ul>
@@ -522,7 +524,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
       <a href="/terms" target="_blank" rel="noopener" style="text-align:center;color:var(--ink-2);font-size:14px">Full terms</a>
     </div>
     <div id="bumpStep1" hidden style="display:flex;flex-direction:column;gap:12px">
-      <div><label>How many spots up? <span>/ ¿Cuántos lugares?</span></label><div class="bspots" id="bumpSpots"></div></div>
+      <div><label>Pick your spot <span>/ Escoge tu lugar</span></label><div class="bspots" id="bumpSpots"></div></div>
       <div><label>Pay <span id="bumpHost"></span> with <span>/ Pagar con</span></label><div class="tpay" id="bumpPay"></div></div>
       <p class="hint" style="color:var(--ink-2);margin:0">$<span id="bumpPrice2">1</span> a spot goes straight to the DJ. You move up as soon as the DJ sees your payment and taps OK. If they can't find it, you stay where you are. Ask the DJ about refunds.</p>
     </div>
@@ -1538,7 +1540,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     $("bumpOpen").hidden = pending || !b.max; $("bumpCancel").hidden = !pending;
     const m = $("bumpMsg"); m.className = "bumpmsg";
     if(pending) m.textContent = "⏳ Waiting for the DJ to see your $" + r.amount + " and move you up " + r.spots + (r.spots === 1 ? " spot." : " spots.") + " (Your song is still in line.)";
-    else if(r && r.status === "approved"){ m.textContent = "✅ You moved up " + r.spots + (r.spots === 1 ? " spot!" : " spots!"); m.classList.add("ok"); }
+    else if(r && r.status === "approved"){ m.textContent = "🔒 Spot locked! You moved up " + r.spots + (r.spots === 1 ? " spot" : " spots") + " and nobody can push you down."; m.classList.add("ok"); }
     else if(r && r.status === "denied") m.textContent = "The DJ couldn't find your payment. Ask the DJ.";
     else if(r && r.status === "canceled") m.textContent = "Move-up canceled. Your song is still in line.";
     else if(r && r.status === "expired") m.textContent = "The DJ didn't confirm in time. You can try again.";
@@ -1546,18 +1548,24 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   };
   function paintSpots(){
     const box = $("bumpSpots"); box.innerHTML = "";
-    const place = (cur.spot || 0) + 1;   // the number they see on their card
-    if(info.max > 1){   // one tap to the front, so nobody has to hunt for it
-      const f = document.createElement("button"); f.type = "button"; f.className = "front"; f.setAttribute("aria-pressed", spots === info.max);
-      f.innerHTML = "⏫ Next up · " + info.max + " spots<small>$" + (info.max * info.price) + " → " + ord(place - info.max) + "</small>";
-      f.addEventListener("click", () => { spots = info.max; paintSpots(); }); box.appendChild(f);
+    const place = (cur.spot || 0) + 1, locked = new Set(info.locked || []);   // numbers as they see them on their card
+    const open = k => !locked.has(place - k);
+    let best = 0; for(let k = info.max; k >= 1; k--) if(open(k)){ best = k; break; }
+    if(!open(spots)) spots = best || 1;
+    if(best > 1){   // one tap to the best open spot
+      const f = document.createElement("button"); f.type = "button"; f.className = "front"; f.setAttribute("aria-pressed", spots === best);
+      f.innerHTML = "⏫ Best open spot: " + ord(place - best) + "<small>" + best + " spots · $" + (best * info.price) + "</small>";
+      f.addEventListener("click", () => { spots = best; paintSpots(); }); box.appendChild(f);
     }
     for(let k = 1; k <= info.max; k++){
-      const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-pressed", k === spots);
-      b.innerHTML = k + "<small>$" + (k * info.price) + " → " + ord(place - k) + "</small>";
+      const b = document.createElement("button"); b.type = "button";
+      if(!open(k)){ b.disabled = true; b.className = "lk"; b.innerHTML = "🔒<small>" + ord(place - k) + " taken</small>"; box.appendChild(b); continue; }
+      b.setAttribute("aria-pressed", k === spots);
+      b.innerHTML = ord(place - k) + "<small>$" + (k * info.price) + "</small>";
       b.addEventListener("click", () => { spots = k; paintSpots(); }); box.appendChild(b);
     }
   }
+
   $("bumpOpen").addEventListener("click", () => {
     if(!info || !info.on || !info.max) return;
     spots = 1; $("bumpStep0").hidden = false; $("bumpStep1").hidden = true; $("bumpStep2").hidden = true; $("bumpErr").textContent = "";

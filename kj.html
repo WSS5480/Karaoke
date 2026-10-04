@@ -241,7 +241,7 @@ a{color:var(--green-hi)}
     </section>
 
     <section class="card bumpcard" id="bumpCard" hidden>
-      <h2>⏫ Paid to move up</h2>
+      <h2>🔒 Paid to lock a spot</h2>
       <p class="sub" style="margin:0">Check your payment app. Tap ✓ when you see the money and they move up right away.</p>
       <ul id="bumpList" class="bumplist"></ul>
     </section>
@@ -487,7 +487,7 @@ function item(r, i, waiting){
   const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
   if(r.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(r.rating); b.appendChild(st); }
   if(r.posted && r.posted.length) b.appendChild(chips(r.posted));
-  if(r.paid && waiting){ const pd = document.createElement("span"); pd.className = "paidtag"; pd.textContent = "⏫ PAID"; pd.title = "Paid to move up. Locked: can't be pushed down."; b.appendChild(pd); }
+  if(r.paid && waiting){ const pd = document.createElement("span"); pd.className = "paidtag"; pd.textContent = "🔒 PAID"; pd.title = "Paid to lock this spot. Others flow around them; it can't be moved down."; b.appendChild(pd); }
   t.append(b, s); li.append(n);
   if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av" + (r.photoSt === "pending" ? " blur pend" : r.photoSt === "hidden" ? " blur hid" : ""); av.alt = "Photo of " + r.name + (r.photoSt === "pending" ? ", waiting for your OK" : r.photoSt === "hidden" ? ", blurred" : "") + ". Tap to check it."; kjPic(av, r); av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
   li.append(t);
@@ -554,7 +554,7 @@ function render(){
       const nb = document.createElement("b"); nb.textContent = b.name;
       const sp = document.createElement("span"); sp.textContent = "$" + b.amount + " by " + (PAY[b.method] || b.method) + (state.me && state.me.role !== "dj" ? " to " + b.to : "") + " · up " + b.spots + (b.spots === 1 ? " spot" : " spots") + (at ? " (#" + at + " → #" + to + ")" : "");
       t.append(nb, sp);
-      const y = document.createElement("button"); y.className = "yes"; y.type = "button"; y.textContent = "✓ Paid, move up";
+      const y = document.createElement("button"); y.className = "yes"; y.type = "button"; y.textContent = "✓ Paid, lock it";
       y.onclick = () => act("/api/kj/bump/" + b.id, { ok: true });
       const n = document.createElement("button"); n.className = "no"; n.type = "button"; n.textContent = "✗ Not paid";
       n.onclick = () => act("/api/kj/bump/" + b.id, { ok: false });

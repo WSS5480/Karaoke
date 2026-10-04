@@ -1028,9 +1028,9 @@ async function bumpInfo(list, mine) {
   const out = { on: true, price: await bumpPrice(), host: s.host, links: s.links };
   if (mine && mine.status === "queued") {
     out.max = queuedAhead(list, mine);
-    // can't jump ahead of anyone who already paid
-    { const paid = await paidIds(), q = list.filter(r => r.status === "queued"), me = q.findIndex(r => r.id === mine.id);
-      let f = 0; q.forEach((r, k) => { if (k < me && paid.has(r.id)) f = k + 1; }); out.max = Math.max(0, me - f); out.locked = f > 0 && out.max === 0; }
+    // locked (paid) spots ahead can't be bought; show their numbers the way the singer sees the line
+    { const paid = await paidIds(), up = list.some(r => r.status === "up") ? 1 : 0, q = list.filter(r => r.status === "queued"), me = q.findIndex(r => r.id === mine.id);
+      out.locked = q.map((r, k) => k < me && paid.has(r.id) ? k + 1 + up : 0).filter(Boolean); }
     const req = (await getBumps()).filter(b => b.sid === mine.id).pop();
     if (req) out.req = { status: req.status, spots: req.spots, amount: req.amount };
   }
@@ -1184,16 +1184,22 @@ app.post("/api/kj/:id/rename", wrap(async (req, res) => {
 // paid move-up) can land ahead of a paid singer and push them down. A paid singer can still be moved up.
 async function paidIds() { return new Set((await getBumps()).filter(b => b.status === "approved").map(b => b.sid)); }
 async function placeAt(id, spot, fresh) {
+  // locked spots: a singer who paid keeps their spot number. Anyone moved, added, or paid in ahead of
+  // them flows around them (the singer just above slides to just below); a paid spot never changes
+  // except moving up as people ahead sing. A paid singer can be moved up, never down.
   const act = await db.active(), all = act.filter(r => r.status === "queued"), me = act.find(r => r.id === id);
   if (!me) return;
-  const q = all.filter(r => r.id !== id), at = all.findIndex(r => r.id === id), orig = fresh || at < 0 ? q.length : at;
-  let i = Math.min(Math.max((parseInt(spot, 10) || q.length + 1) - 1, 0), q.length);
-  const paid = await paidIds();
-  // anyone who paid and is ahead of this singer stays ahead of them
-  q.forEach((r, k) => { if (k < orig && paid.has(r.id)) i = Math.max(i, k + 1); });
-  if (paid.has(id) && !fresh) i = Math.min(i, orig);   // and a paid singer never gets moved down
-  q.splice(i, 0, me);
-  for (let k = 0; k < q.length; k++) await db.setPos(q[k].id, k + 1);
+  const N = all.length, at = all.findIndex(r => r.id === id), paid = await paidIds();
+  if (at < 0) return;
+  let i = Math.min(Math.max((parseInt(spot, 10) || N) - 1, 0), N - 1);
+  if (paid.has(id) && !fresh) i = Math.min(i, at);
+  const pins = new Map(); all.forEach((r, k) => { if (r.id !== id && paid.has(r.id)) pins.set(k, r); });
+  while (pins.has(i) && i < N - 1) i++;          // that spot is locked: take the next open one behind it
+  while (pins.has(i) && i > 0) i--;
+  const out = new Array(N); pins.forEach((r, k) => { out[k] = r; }); out[i] = me;
+  const rest = all.filter(r => r.id !== id && !pins.has(all.indexOf(r)));
+  for (let k = 0, j = 0; k < N; k++) if (!out[k]) out[k] = rest[j++];
+  for (let k = 0; k < N; k++) await db.setPos(out[k].id, k + 1);
 }
 // DJ/staff add a singer by hand (for guests without the app), optionally at a spot in line
 app.post("/api/kj/add", wrap(async (req, res) => {
@@ -1212,14 +1218,16 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   else if (action === "up") {
     const list = await db.active(), cur = list.find(r => r.status === "up");
     { const paid = await paidIds(), q = list.filter(r => r.status === "queued"), at = q.findIndex(r => r.id === id), first = q.findIndex(r => paid.has(r.id));
-      if (!paid.has(id) && first > -1 && (at < 0 || first < at)) return res.status(409).json({ error: q[first].name + " paid to move up and is ahead. Paid spots go first." }); }
+      if (!paid.has(id) && first > -1 && (at < 0 || first < at)) return res.status(409).json({ error: q[first].name + " paid to lock their spot and is ahead. Locked spots sing in order." }); }
     if (cur && cur.id !== id) await db.setStatus(cur.id, "queued");
     await db.setStatus(id, "up");
   } else if (action === "raise" || action === "lower") {
     const q = (await db.active()).filter(r => r.status === "queued"), i = q.findIndex(r => r.id === id);
     const j = action === "raise" ? i - 1 : i + 1;
-    if (i > -1 && j >= 0 && j < q.length) { const goesDown = action === "lower" ? q[i] : q[j]; if ((await paidIds()).has(goesDown.id)) return res.status(409).json({ error: goesDown.name + " paid to move up. Paid spots can't be moved down." }); }
-    if (i > -1 && j >= 0 && j < q.length) { await db.setPos(q[i].id, q[j].position); await db.setPos(q[j].id, q[i].position); }
+    // step over locked (paid) spots instead of swapping with them
+    const paid = await paidIds();
+    if (i > -1 && paid.has(id) && action === "lower") return res.status(409).json({ error: row.name + " paid to lock their spot. It can't be moved down." });
+    if (i > -1) { let k = j; while (k >= 0 && k < q.length && paid.has(q[k].id) && !paid.has(id)) k += action === "raise" ? -1 : 1; if (k >= 0 && k < q.length) await placeAt(id, k + 1); }
   } else if (action === "readd") {
     // undo an accidental skip: back into line (next up by default)
     if (row.status === "up" || row.status === "queued") return res.status(400).json({ error: "They're already in line." });
@@ -1228,7 +1236,7 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
     if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be moved." });
     await placeAt(id, req.body.spot);
     const q2 = (await db.active()).filter(r => r.status === "queued"), got = q2.findIndex(r => r.id === id) + 1, want = parseInt(req.body.spot, 10);
-    if (want && got !== want && got) return res.json({ ok: true, note: "Placed at #" + got + ". Paid spots can't be pushed down." });
+    if (want && got !== want && got) return res.json({ ok: true, note: "Placed at #" + got + ". That spot is locked by someone who paid." });
   } else return res.status(400).json({ error: "Unknown action." });
   res.json({ ok: true });
 }));
