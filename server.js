@@ -1060,7 +1060,7 @@ app.post("/api/bump", wrap(async (req, res) => {
 app.post("/api/bump/cancel", wrap(async (req, res) => {
   const list = await db.active(), d = owner(req, res), mine = list.find(r => r.device === d);
   if (!mine) return res.json({ ok: true });
-  const all = await getBumps(); all.forEach(b => { if (b.sid === mine.id && b.status === "pending") b.status = "canceled"; });
+  const all = await getBumps(); all.forEach(b => { if (b.sid === mine.id && b.status === "pending") { b.status = "canceled"; b.by = "the singer"; } });
   await saveBumps(all); res.json({ ok: true });
 }));
 // host side: the DJ who gets the money, the owner and managers can see and approve requests (staff can't see money)
@@ -1104,7 +1104,7 @@ app.post("/api/watch/bump", wrap(async (req, res) => {
   const ok = !!pin && (T() === "dive" ? same(pin, LIST_PIN) : pinMatches(pin, TEN().pinHash));
   if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
   await db.setSetting("bump", req.body.on ? "on" : "off");
-  if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") b.status = "canceled"; }); await saveBumps(all); }
+  if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = "owner turned move-ups off"; } }); await saveBumps(all); }
   res.json({ ok: true, on: !!req.body.on });
 }));
 // analytics: per night totals + top tipper, tipper ranking, lifetime totals

@@ -246,7 +246,7 @@ function paintBump(b){
     const bb = document.createElement("b"); bb.textContent = x.name + " · " + money(x.amount);
     const st = document.createElement("i"); st.className = "bst " + x.status; st.textContent = LBL[x.status] || x.status; bb.appendChild(st);
     const sp = document.createElement("span"); sp.className = "sub";
-    sp.textContent = "  up " + x.spots + (x.spots === 1 ? " spot" : " spots") + (x.from ? " (#" + x.from + " → #" + x.toSpot + ")" : "") + " · " + (NAMES[x.method] || x.method) + " · " + new Date(x.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " · to " + x.to + (x.by ? " · OK'd by " + x.by : "");
+    sp.textContent = "  up " + x.spots + (x.spots === 1 ? " spot" : " spots") + (x.from ? " (#" + x.from + " → #" + x.toSpot + ")" : "") + " · " + (NAMES[x.method] || x.method) + " · " + new Date(x.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " · to " + x.to + (x.by ? (x.status === "approved" ? " · OK'd by " : x.status === "canceled" ? " · canceled by " : " · by ") + x.by : "");
     li.append(bb, sp); ol.appendChild(li);
   });
 }
