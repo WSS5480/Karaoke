@@ -679,11 +679,11 @@ function setArtistFor(title, chosen){
 }
 $("artistPick").addEventListener("change", () => { $("artist").value = $("artistPick").value; $("artistHint").hidden = !!$("artistPick").value; $("err").textContent = ""; });
 /* artist field: suggestions of artists; picking one shows their songs */
-function suggestArtist(){
+function suggestArtist(again){
   const q = norm($("artist").value), box = $("asugg");
   box.innerHTML = "";
   if(q.length < 2 || !songs.length){ box.hidden = true; return; }
-  const counts = new Map(); songs.forEach(s => { if(s.a.toLowerCase().includes(q)) counts.set(s.a, (counts.get(s.a) || 0) + 1); });
+  const counts = new Map(); songs.forEach(s => { if(norm(s.a).includes(q)) counts.set(s.a, (counts.get(s.a) || 0) + 1); });
   const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   list.forEach(([a, n]) => sugBtn(box, a, n + " song" + (n > 1 ? "s" : ""), () => {
     $("artist").value = a; box.hidden = true; $("artistHint").hidden = true;
@@ -692,6 +692,18 @@ function suggestArtist(){
     if(!$("song").value.trim() || !theirs.some(s => norm(s.t) === norm($("song").value))){ $("song").value = ""; $("song").focus(); suggest(); }
   }));
   box.hidden = !list.length;
+  // any other artist: Apple Music's catalog
+  clearTimeout(suggestArtist.t);
+  if(!again && q.length >= 3 && list.length < 6){
+    const want = $("artist").value;
+    suggestArtist.t = setTimeout(async () => {
+      let more = [];
+      try{ more = (await (await fetch("/api/songsearch?by=artist&q=" + encodeURIComponent(q))).json()).songs || []; }catch(e){ return; }
+      if($("artist").value !== want || !more.length) return;
+      more.forEach(s => { if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, web: 1 }); });
+      suggestArtist(true);
+    }, 300);
+  }
 }
 $("song").addEventListener("input", () => {
   $("err").textContent = "";

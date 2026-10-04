@@ -1263,13 +1263,14 @@ app.get("/api/applesong", wrap(async (req, res) => {
 const songSearchCache = new Map(), songHits = new Map();
 app.get("/api/songsearch", wrap(async (req, res) => {
   const q = String(req.query.q || "").replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 80);
+  const by = req.query.by === "artist", ck = (by ? "a:" : "s:") + q;
   if (q.length < 2) return res.json({ songs: [] });
-  if (songSearchCache.has(q)) return res.json({ songs: songSearchCache.get(q) });
+  if (songSearchCache.has(ck)) return res.json({ songs: songSearchCache.get(ck) });
   const t = Date.now(), l = (songHits.get(req.ip) || []).filter(x => t - x < 60000);
   if (l.length >= 240) return res.json({ songs: [] }); l.push(t); songHits.set(req.ip, l);
   let out = [];
   try {
-    const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&limit=15&country=us&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
+    const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=" + (by ? "50&attribute=artistTerm" : "15") + "&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
     if (r.ok) {
       const j = await r.json(), seen = new Set();
       (j.results || []).forEach(x => {
@@ -1277,11 +1278,11 @@ app.get("/api/songsearch", wrap(async (req, res) => {
         const artist = String(x.artistName || "").trim().slice(0, 60), k = (title + "|" + artist).toLowerCase();
         if (title && artist && !seen.has(k)) { seen.add(k); out.push({ t: title, a: artist }); }
       });
-      out = out.slice(0, 8);
+      out = out.slice(0, by ? 40 : 8);
     }
   } catch (e) {}
   if (songSearchCache.size > 5000) songSearchCache.clear();
-  songSearchCache.set(q, out);
+  songSearchCache.set(ck, out);
   res.set("Cache-Control", "public, max-age=86400").json({ songs: out });
 }));
 // the staff list page is owner-only: The Dive uses its own list PIN (STAFF_LIST_PIN in Render, never in code);
