@@ -879,11 +879,19 @@ function cleanTipLinks(b) {
 }
 async function getTipLinks(name) { try { return JSON.parse((await db.getSetting("tiplinks:" + name)) || "{}"); } catch (e) { return {}; } }
 async function tipState() {
-  const host = await db.getSetting("tip_host");
+  let host = await db.getSetting("tip_host");
+  // tips are on automatically for the DJ signed in (once they've saved payment links), unless the DJ
+  // stopped them or staff turned them off tonight
+  if (!host) {
+    const ds = await djSession(), off = await tipsOff();
+    if (ds && !(off && off.name === ds.name && off.night === barDay().date)) host = ds.name;
+  }
   if (!host || host === "Owner") return { on: false };
   const links = await getTipLinks(host);
   return Object.keys(links).length ? { on: true, host, links } : { on: false };
 }
+async function tipsOff() { try { return JSON.parse((await db.getSetting("tips_off")) || "null"); } catch (e) { return null; } }
+async function setTipsOff(name) { await db.setSetting("tips_off", name ? JSON.stringify({ name, night: barDay().date }) : ""); }
 async function getTipNights() { try { return JSON.parse((await db.getSetting("tip_nights")) || "[]"); } catch (e) { return []; } }
 async function getTips(night) { try { return JSON.parse((await db.getSetting("tips:" + night)) || "[]"); } catch (e) { return []; } }
 const tipHits = new Map();
@@ -917,8 +925,8 @@ app.get("/api/kj/tips", wrap(async (req, res) => {
   const s = await tipState(), all = await getTips(barDay().date), dj = req.kj.role === "dj", owner = !!req.kj.admin;
   const list = owner ? all : dj ? all.filter(x => x.to === req.kj.name) : [];
   const byDj = {}; if (owner) all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
-  const ds = await djSession();
-  res.json({ role: req.kj.role, dj: ds ? ds.name : null, house: req.kj.role !== "dj", needPin: req.kj.role === "dj" && !req.kj.own, mine: req.kj.role !== "dj" ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, owner, seeMoney: owner || dj, tonight: list.slice().reverse(), byDj: owner ? byDj : null, total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
+  const ds = await djSession(), off = await tipsOff();
+  res.json({ stopped: !!(ds && off && off.name === ds.name && off.night === barDay().date), role: req.kj.role, dj: ds ? ds.name : null, house: req.kj.role !== "dj", needPin: req.kj.role === "dj" && !req.kj.own, mine: req.kj.role !== "dj" ? {} : await getTipLinks(req.kj.name), on: s.on, host: s.on ? s.host : null, owner, seeMoney: owner || dj, tonight: list.slice().reverse(), byDj: owner ? byDj : null, total: Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100 });
 }));
 app.post("/api/kj/tips/links", wrap(async (req, res) => {
   if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Add yourself in Hosts with your own PIN, then log in with that." });
@@ -931,12 +939,21 @@ app.post("/api/kj/tips/links", wrap(async (req, res) => {
 }));
 app.post("/api/kj/tips/take", wrap(async (req, res) => {
   if (req.kj.role !== "dj") return res.status(403).json({ error: "Only the DJ controls their tips. Close their session to stop them." });
-  if (!req.body.on) { if ((await db.getSetting("tip_host")) === req.kj.name) await db.setSetting("tip_host", ""); return res.json({ ok: true }); }
+  if (!req.body.on) { if ((await db.getSetting("tip_host")) === req.kj.name) await db.setSetting("tip_host", ""); await setTipsOff(req.kj.name); return res.json({ ok: true }); }
   if (req.kj.admin) return res.status(403).json({ error: "The house PIN is shared, so it can't take tips. Log in with your own host PIN." });
   if (req.kj.role === "staff") return res.status(403).json({ error: "Staff logins can't take tips. Only DJs can." });
   if (!req.kj.own) return res.status(403).json({ error: "Change your PIN first so only you know it." });
   if (!Object.keys(await getTipLinks(req.kj.name)).length) return res.status(400).json({ error: "Add at least one payment link first." });
-  await db.setSetting("tip_host", req.kj.name); res.json({ ok: true });
+  await db.setSetting("tip_host", req.kj.name); await setTipsOff(null); res.json({ ok: true });
+}));
+// staff or the house can stop the DJ's tips for tonight (and turn them back on)
+app.post("/api/kj/tips/staff", wrap(async (req, res) => {
+  if (req.kj.role === "dj") return res.status(403).json({ error: "Only staff can do that." });
+  const ds = await djSession(), s = await tipState();
+  if (req.body.on) { await setTipsOff(null); return res.json({ ok: true }); }
+  const who = s.on ? s.host : ds ? ds.name : null; if (!who) return res.json({ ok: true });
+  if ((await db.getSetting("tip_host")) === who) await db.setSetting("tip_host", "");
+  await setTipsOff(who); res.json({ ok: true });
 }));
 // analytics: per night totals + top tipper, tipper ranking, lifetime totals
 async function tipStats(days, onlyHost) {

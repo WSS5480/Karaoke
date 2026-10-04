@@ -216,7 +216,7 @@ a{color:var(--green-hi)}
         <button id="tipTake"></button></div>
       <div id="tipByDj" class="tipbydj" hidden></div>
       <ol id="tipList"></ol>
-      <div class="row" id="djOnRow" hidden style="justify-content:space-between"><span id="djOnTxt"></span><button id="kickDj" class="danger" type="button">Close DJ session</button></div>
+      <div class="row" id="djOnRow" hidden style="justify-content:space-between"><span id="djOnTxt"></span><span class="row" style="gap:6px"><button id="staffTips" type="button"></button><button id="kickDj" class="danger" type="button">Close DJ session</button></span></div>
       <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">Tips go to the DJ, and only the DJ controls them. If the DJ left or forgot to sign out, tap Close DJ session. That signs them out and stops their tips.</p>
       <p id="tipNeedPin" hidden style="margin:0;color:#ffc93c;font-size:14px">🔒 Change your PIN first. The owner set your starting PIN, so make one only you know before adding payment info.</p>
       <button id="tipPinBtn" type="button" class="next" hidden>Change my PIN</button>
@@ -672,6 +672,7 @@ async function loadTips(){
   try{ tips = await api("/api/kj/tips"); }catch(e){ return; }
   const me = state && state.me ? state.me.name : "", mineOn = tips.on && tips.host === me, has = Object.keys(tips.mine).length > 0;
   $("tipState").textContent = tips.on ? "going to " + (tips.host === me ? "you" : tips.host) : "off";
+  $("staffTips").hidden = !(tips.house && tips.dj); $("staffTips").textContent = tips.stopped ? "Turn tips back on" : "Stop tips tonight";
   $("tipTake").textContent = mineOn ? "Stop taking tips" : has ? "Send tips to me tonight" : "Add your links to take tips";
   $("tipTake").className = mineOn ? "" : "next";
   $("tipTotal").textContent = $$m(tips.total);
@@ -707,6 +708,7 @@ async function loadTips(){
     $("tlPaypal").value = tips.mine.paypal || ""; $("tlZelle").value = tips.mine.zelle || ""; $("tlApple").value = tips.mine.apple || "";
   }
 }
+$("staffTips").addEventListener("click", async () => { try{ await api("/api/kj/tips/staff", { on: !!(tips && tips.stopped) }); }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; } loadTips(); });
 $("tipTake").addEventListener("click", async () => {
   if(!tips) return;
   const me = state.me.name;
