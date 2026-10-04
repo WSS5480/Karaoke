@@ -206,6 +206,7 @@ li.up .av{border-color:var(--green)}
 .tpay button[data-m="cashapp"]{border-color:#00d64f}.tpay button[data-m="venmo"]{border-color:#3d95ce}.tpay button[data-m="paypal"]{border-color:#2790c3}.tpay button[data-m="zelle"]{border-color:#a0f}.tpay button[data-m="apple"]{border-color:#eee}
 .bumpbox{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .bumpbox .go{background:#ffc93c;color:#111}
+.bigbtn{width:100%;align-self:stretch;border-radius:999px;padding:15px;font-family:var(--slab);font-weight:800;font-size:19px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;background:transparent;color:var(--ink);border:2px solid #ffc93c}
 .bumpmsg{margin:0;font-size:14px;color:var(--ink-2)}.bumpmsg.ok{color:var(--green-hi)}
 .bspots{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
 .bspots button{font:inherit;font-weight:700;font-size:15px;border-radius:12px;padding:10px 6px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer;line-height:1.25}
@@ -342,7 +343,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <div class="bumpbox" id="bumpBox" hidden>
       <button class="go" id="bumpOpen" type="button">⏫ Move up · $<span id="bumpPrice">1</span> a spot</button>
       <p class="bumpmsg" id="bumpMsg" role="status"></p>
-      <button class="ghost" id="bumpCancel" type="button" hidden>Didn't pay? Cancel move-up request</button>
+      <button class="bigbtn" id="bumpCancel" type="button" hidden>Didn't pay? Cancel move-up request</button>
     </div>
     <p>Keep this page open. It updates on its own.</p>
     <button class="ghost" id="editSong" type="button">Change my song</button>
@@ -515,7 +516,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
       <p class="ok" role="status">Sent to the DJ. You'll move once they confirm your payment.</p>
     </div>
     <p class="err" id="bumpErr" role="alert"></p>
-    <button class="linkbtn" id="bumpClose" type="button">Close</button>
+    <button class="bigbtn" id="bumpClose" type="button" style="border-color:var(--line)">Close</button>
   </div>
 </div>
 <div class="tmodal" id="tipModal" hidden role="dialog" aria-modal="true" aria-labelledby="tipTitle">
