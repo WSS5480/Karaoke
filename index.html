@@ -207,6 +207,7 @@ li.up .av{border-color:var(--green)}
 .tpay button[data-m="cashapp"]{border-color:#00d64f}.tpay button[data-m="venmo"]{border-color:#3d95ce}.tpay button[data-m="paypal"]{border-color:#2790c3}.tpay button[data-m="zelle"]{border-color:#a0f}.tpay button[data-m="apple"]{border-color:#eee}
 .bumpbox{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .bumpbox .go{background:#ffc93c;color:#111}
+.bumpbox .go .bsub{display:block;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;margin-top:2px}
 .bumpterms{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:15px;line-height:1.35}
 #bumpAgree{background:#ffc93c;color:#111}
 .bigbtn{width:100%;align-self:stretch;border-radius:999px;padding:15px;font-family:var(--slab);font-weight:800;font-size:19px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;background:transparent;color:var(--ink);border:2px solid #ffc93c}
@@ -346,7 +347,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <div class="song" id="mineSong"></div>
     <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics / Letra</a>
     <div class="bumpbox" id="bumpBox" hidden>
-      <button class="go" id="bumpOpen" type="button">🔒 Move up &amp; lock your spot · $<span id="bumpPrice">1</span> a spot</button>
+      <button class="go" id="bumpOpen" type="button">🔒 Lock your spot<small class="bsub">Move up · $<span id="bumpPrice">1</span> a spot · nobody can bump you</small></button>
       <p class="bumpmsg" id="bumpMsg" role="status"></p>
       <button class="bigbtn" id="bumpCancel" type="button" hidden>Didn't pay? Cancel move-up request</button>
     </div>
