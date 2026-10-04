@@ -488,7 +488,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const last = mine ? null : await db.lastSung(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
   res.json({ venue: TEN().venue || "", lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await withPhotos(list.map(publicRow), list), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine) } : null,
-    last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null });
+    last: last ? { ...publicRow(last), rating: last.rating, public: !!last.public } : null, bump: await bumpInfo(list, mine) });
 }));
 
 app.post("/api/signup", wrap(async (req, res) => {
@@ -578,7 +578,7 @@ app.get("/api/wall", wrap(async (req, res) => {
 
 /* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
 // user agreement: which version this phone agreed to, and when (kept as a record)
-const TERMS_V = "2026-10-03";
+const TERMS_V = "2026-10-04";
 const HOST_TERMS_V = "2026-10-03";   // Host, DJ & Staff Terms (terms page, #hostterms)
 async function termsOk(dev) { try { return JSON.parse((await db.getSetting("terms:" + dev)) || "{}").v === TERMS_V; } catch (e) { return false; } }
 async function recordTerms(req, dev) { const u = currentUser(req); await db.setSetting("terms:" + dev, JSON.stringify({ v: TERMS_V, at: new Date().toISOString(), ip: req.ip, customer: u || null, ua: String(req.headers["user-agent"] || "").slice(0, 200) })); }
@@ -758,7 +758,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(); return withPhotosKJ(l.map(kjRow), l); })(), done: (await db.done(500)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -1007,6 +1007,93 @@ app.post("/api/kj/tips/staff", wrap(async (req, res) => {
   if ((await db.getSetting("tip_host")) === who) await db.setSetting("tip_host", "");
   await setTipsOff(who); res.json({ ok: true });
 }));
+/* ---------- pay to move up: $1 a spot, paid to the DJ through their tip links ----------
+   A singer can only move themselves. We can't see the payment, so the request waits until the
+   DJ (or the owner / a manager) checks their payment app and taps Approve. The owner can turn it off from the live view. */
+const BUMP_PRICE = 1;   // default; the DJ sets their own price per spot
+async function bumpPrice() { const v = parseInt(await db.getSetting("bump_price"), 10); return v >= 1 && v <= 50 ? v : BUMP_PRICE; }
+async function bumpOn() { return (await db.getSetting("bump")) !== "off"; }
+async function getBumps(night) { try { return JSON.parse((await db.getSetting("bumps:" + (night || barDay().date))) || "[]"); } catch (e) { return []; } }
+async function saveBumps(list) { await db.setSetting("bumps:" + barDay().date, JSON.stringify(list.slice(-300))); }
+function queuedAhead(list, row) { return list.filter(r => r.status === "queued" && (r.position < row.position)).length; }
+async function bumpInfo(list, mine) {
+  const s = await tipState(), on = (await bumpOn()) && s.on;
+  if (!on) return { on: false };
+  const out = { on: true, price: await bumpPrice(), host: s.host, links: s.links };
+  if (mine && mine.status === "queued") {
+    out.max = queuedAhead(list, mine);
+    const req = (await getBumps()).filter(b => b.sid === mine.id).pop();
+    if (req) out.req = { status: req.status, spots: req.spots, amount: req.amount };
+  }
+  return out;
+}
+const bumpHits = new Map();
+app.post("/api/bump", wrap(async (req, res) => {
+  const t = Date.now(), dk = device(req, res), l = (bumpHits.get(dk) || []).filter(x => t - x < 600000);
+  if (l.length >= 6) return res.status(429).json({ error: "Too many tries. Wait a few minutes." });
+  const list = await db.active(), d = owner(req, res), mine = list.find(r => r.device === d);
+  if (!mine || mine.status !== "queued") return res.status(409).json({ error: "You need to be waiting in line to move up." });
+  const info = await bumpInfo(list, mine);
+  if (!info.on) return res.status(409).json({ error: "Moving up isn't open right now." });
+  if (info.req && info.req.status === "pending") return res.status(409).json({ error: "You already have a request waiting for the DJ." });
+  const spots = parseInt(req.body.spots, 10), method = String(req.body.method || "");
+  if (!(spots >= 1 && spots <= info.max)) return res.status(400).json({ error: info.max ? "Pick 1 to " + info.max + " spots." : "You're already next." });
+  if (!TIP_KEYS.includes(method) || !info.links[method]) return res.status(400).json({ error: "Pick how you want to pay." });
+  l.push(t); bumpHits.set(dk, l);
+  const amount = spots * info.price, all = await getBumps();
+  all.push({ id: crypto.randomBytes(5).toString("hex"), at: t, sid: mine.id, name: mine.name, spots, amount, method, to: info.host, status: "pending" });
+  await saveBumps(all);
+  res.json({ ok: true, amount, to: info.links[method], host: info.host });
+}));
+app.post("/api/bump/cancel", wrap(async (req, res) => {
+  const list = await db.active(), d = owner(req, res), mine = list.find(r => r.device === d);
+  if (!mine) return res.json({ ok: true });
+  const all = await getBumps(); all.forEach(b => { if (b.sid === mine.id && b.status === "pending") b.status = "canceled"; });
+  await saveBumps(all); res.json({ ok: true });
+}));
+// host side: the DJ who gets the money, the owner and managers can see and approve requests (staff can't see money)
+const seesBumps = k => !!(k && (k.admin || k.manager || k.role === "dj"));
+async function bumpsFor(k) {
+  if (!seesBumps(k)) return null;
+  const all = await getBumps(), act = await db.active(), live = new Set(act.filter(r => r.status === "queued").map(r => r.id));
+  return all.filter(b => b.status === "pending" && live.has(b.sid) && (k.role !== "dj" || b.to === k.name));
+}
+app.post("/api/kj/bump/:id", wrap(async (req, res) => {
+  if (!seesBumps(req.kj)) return res.status(403).json({ error: "Only the DJ or the owner can do that." });
+  const all = await getBumps(), b = all.find(x => x.id === req.params.id);
+  if (!b || b.status !== "pending") return res.status(404).json({ error: "That request is gone." });
+  if (req.kj.role === "dj" && b.to !== req.kj.name) return res.status(403).json({ error: "That request went to another DJ." });
+  if (!req.body.ok) { b.status = "denied"; b.by = req.kj.name; await saveBumps(all); return res.json({ ok: true }); }
+  const act = await db.active(), row = act.find(r => r.id === b.sid);
+  if (!row || row.status !== "queued") { b.status = "expired"; await saveBumps(all); return res.status(409).json({ error: b.name + " isn't waiting anymore." }); }
+  const now = queuedAhead(act, row) + 1, to = Math.max(1, now - b.spots);
+  await placeAt(row.id, to);
+  b.status = "approved"; b.by = req.kj.name; b.from = now; b.toSpot = to; await saveBumps(all);
+  // count it with the DJ's tips so totals match their payment app
+  const night = barDay().date, tips = await getTips(night);
+  tips.push({ at: Date.now(), who: row.device, name: b.name, amount: b.amount, method: b.method, comment: "Moved up " + b.spots + (b.spots === 1 ? " spot" : " spots"), to: b.to, bump: b.spots });
+  await db.setSetting("tips:" + night, JSON.stringify(tips.slice(-500)));
+  const nights = await getTipNights(); if (!nights.includes(night)) { nights.push(night); await db.setSetting("tip_nights", JSON.stringify(nights)); }
+  res.json({ ok: true, from: now, to });
+}));
+// the DJ (or the owner / a manager) sets the price per spot, $1 to $50
+app.post("/api/kj/bump-price", wrap(async (req, res) => {
+  if (!seesBumps(req.kj)) return res.status(403).json({ error: "Only the DJ or the owner can set the price." });
+  const v = parseInt(req.body.price, 10);
+  if (!(v >= 1 && v <= 50)) return res.status(400).json({ error: "Pick $1 to $50 a spot." });
+  await db.setSetting("bump_price", String(v)); res.json({ ok: true, price: v });
+}));
+// owner's kill switch, from the live view (owner list PIN)
+app.post("/api/watch/bump", wrap(async (req, res) => {
+  const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
+  if (l.length >= 10) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." });
+  const pin = String(req.headers["x-watch-pin"] || "").replace(/\D/g, ""), LIST_PIN = process.env.STAFF_LIST_PIN || KJ_PIN;
+  const ok = !!pin && (T() === "dive" ? same(pin, LIST_PIN) : pinMatches(pin, TEN().pinHash));
+  if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
+  await db.setSetting("bump", req.body.on ? "on" : "off");
+  if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") b.status = "canceled"; }); await saveBumps(all); }
+  res.json({ ok: true, on: !!req.body.on });
+}));
 // analytics: per night totals + top tipper, tipper ranking, lifetime totals
 async function tipStats(days, onlyHost) {
   const nights = await getTipNights(), from = days ? nightOf(Date.now() - days * 864e5) : "";
@@ -1156,7 +1243,7 @@ app.get("/api/watch", wrap(async (req, res) => {
   res.json({
     state: { djOn: djNow ? djNow.name : null, lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await withPhotosKJ(act.map(kjRow), act), done: (await db.done(500)).map(kjRow) },
-    signups: await signupStats(), phones: await phoneStats(),
+    signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 }
   });
 }));

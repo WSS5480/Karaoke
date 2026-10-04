@@ -60,6 +60,10 @@ a{color:var(--green-hi)}
 .ctile{background:var(--panel-2,#1b211b);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
 .ctile b{display:block;font-family:var(--slab);font-size:22px;color:var(--green-hi)}
 .ctile span{font-size:12px;color:var(--ink-2)}
+.kill{font:inherit;font-weight:800;font-size:16px;border-radius:12px;padding:12px;cursor:pointer;border:1px solid var(--line);width:100%}
+.kill.on{background:#b3261e;color:#fff;border-color:transparent}.kill.off{background:var(--green,#39b54a);color:#fff;border-color:transparent}
+.bst{font-style:normal;font-size:12px;font-weight:700;border-radius:6px;padding:1px 6px;margin-left:6px}
+.bst.approved{background:rgba(57,181,74,.25);color:var(--green-hi)}.bst.pending{background:rgba(255,201,60,.2);color:#ffc93c}.bst.denied,.bst.expired,.bst.canceled{background:#2a2a2a;color:var(--ink-2)}
 .posted{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
 .net{font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 5px;color:#fff;display:inline-block}
 .net.fb{background:#1877f2}.net.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.net.tt{background:#000;border:1px solid #444}
@@ -82,7 +86,7 @@ a{color:var(--green-hi)}
   <div id="view" hidden style="display:flex;flex-direction:column;gap:14px">
     <header>
       <img src="/logo.png" alt="The Dive on 495">
-      <div style="flex:1"><h1>Live view</h1><div class="sub">View only · no controls · updates every few seconds</div></div>
+      <div style="flex:1"><h1>Live view</h1><div class="sub">View only · updates every few seconds</div></div>
       <span class="live"><i></i>Live</span>
     </header>
 
@@ -92,6 +96,14 @@ a{color:var(--green-hi)}
       <div class="chips" id="byDj"></div>
       <ol id="tipList"></ol>
       <p class="sub" style="margin:0">What guests tapped to send. Confirm in the DJ's payment apps. Past nights: <a href="/stats">Analytics</a>.</p>
+    </section>
+
+    <section class="card">
+      <h2>⏫ Paid move-ups <span id="bumpState"></span></h2>
+      <div class="tiles" id="bumpTiles" style="grid-template-columns:repeat(3,1fr)"></div>
+      <button type="button" class="kill" id="bumpKill"></button>
+      <ol id="bumpList"></ol>
+      <p class="sub" style="margin:0">Guests pay the DJ $<span id="bumpPrice">1</span> a spot. They only move after the DJ confirms the payment. Approved move-ups also count in the DJ's tips.</p>
     </section>
 
     <section class="card">
@@ -218,11 +230,39 @@ function paintTips(t){
     ol.appendChild(li);
   });
 }
+let bumpOn = true;
+function paintBump(b){
+  if(!b) return; bumpOn = !!b.on; $("bumpPrice").textContent = b.price;
+  $("bumpState").textContent = b.on ? "on" : "off";
+  const k = $("bumpKill"); k.className = "kill " + (b.on ? "on" : "off"); k.textContent = b.on ? "⛔ Turn off move-ups" : "▶ Turn move-ups back on";
+  const list = b.list || [], ok = list.filter(x => x.status === "approved"), wait = list.filter(x => x.status === "pending");
+  const tb = $("bumpTiles"); tb.innerHTML = "";
+  [[money(ok.reduce((a, x) => a + x.amount, 0)), "approved tonight"], [ok.length, ok.length === 1 ? "move-up" : "move-ups"], [wait.length, "waiting on DJ"]].forEach(([v, l]) => { const d = document.createElement("div"); d.className = "tile"; const bb = document.createElement("b"); bb.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(bb, sp); tb.appendChild(d); });
+  const LBL = { approved: "approved", pending: "waiting on DJ", denied: "not paid", expired: "left the line", canceled: "canceled" };
+  const ol = $("bumpList"); ol.innerHTML = "";
+  if(!list.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No move-ups yet tonight."; ol.appendChild(li); }
+  list.slice(0, 50).forEach(x => {
+    const li = document.createElement("li"); li.className = "tip"; li.style.display = "block";
+    const bb = document.createElement("b"); bb.textContent = x.name + " · " + money(x.amount);
+    const st = document.createElement("i"); st.className = "bst " + x.status; st.textContent = LBL[x.status] || x.status; bb.appendChild(st);
+    const sp = document.createElement("span"); sp.className = "sub";
+    sp.textContent = "  up " + x.spots + (x.spots === 1 ? " spot" : " spots") + (x.from ? " (#" + x.from + " → #" + x.toSpot + ")" : "") + " · " + (NAMES[x.method] || x.method) + " · " + new Date(x.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " · to " + x.to + (x.by ? " · OK'd by " + x.by : "");
+    li.append(bb, sp); ol.appendChild(li);
+  });
+}
+$("bumpKill").addEventListener("click", async () => {
+  const want = !bumpOn; $("bumpKill").disabled = true;
+  try{
+    const r = await fetch("/api/watch/bump", { method: "POST", headers: { "Content-Type": "application/json", "x-watch-pin": pin }, body: JSON.stringify({ on: want }) });
+    if(r.status === 401){ showLock("Wrong PIN."); return; }
+  }catch(e){}
+  $("bumpKill").disabled = false; refresh();
+});
 let timer = null;
 async function refresh(){
   try{
     const j = await get("/api/watch");
-    paintQueue(j.state); paintTips(j.tips); paintCrowd($("crowd"), j.signups, j.phones);
+    paintQueue(j.state); paintTips(j.tips); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
   }catch(e){}
 }
 async function open(){

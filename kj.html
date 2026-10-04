@@ -98,6 +98,13 @@ li:first-child{border-top:0}
 li .n{font-family:var(--slab);font-weight:800;color:var(--ink-2);width:26px;text-align:right;font-variant-numeric:tabular-nums}
 li .t{min-width:0;flex:1 1 180px}
 li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
+.bumpcard{border:2px solid #ffc93c}
+.bumplist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.bumplist li{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--wall,#0d110d);border-radius:12px;padding:10px}
+.bumplist .bt{flex:1 1 200px;min-width:0}.bumplist .bt b{display:block;color:#ffc93c;font-size:19px}
+.bumplist .bt span{display:block;font-size:14px;color:var(--ink-2)}
+.bumplist button{font:inherit;font-weight:700;border-radius:10px;padding:10px 14px;cursor:pointer;border:1px solid var(--line)}
+.bumplist .yes{background:var(--green,#39b54a);color:#fff;border-color:transparent}.bumplist .no{background:transparent;color:var(--ink)}
 #queue li .t b{font-size:21px;font-weight:700;color:#ffc93c;line-height:1.2}
 li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
 li .acts{display:flex;gap:6px;flex-wrap:wrap}
@@ -232,6 +239,12 @@ a{color:var(--green-hi)}
       </form>
     </section>
 
+    <section class="card bumpcard" id="bumpCard" hidden>
+      <h2>⏫ Paid to move up</h2>
+      <p class="sub" style="margin:0">Check your payment app. Tap ✓ when you see the money and they move up right away.</p>
+      <ul id="bumpList" class="bumplist"></ul>
+    </section>
+
     <section class="card">
       <h2>Waiting <span id="waitCount"></span></h2>
       <ol id="queue"></ol>
@@ -247,6 +260,10 @@ a{color:var(--green-hi)}
       <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">Tips go to the DJ, and only the DJ controls them. If the DJ left or forgot to sign out, tap Close DJ session. That signs them out and stops their tips.</p>
       <p id="tipNeedPin" hidden style="margin:0;color:#ffc93c;font-size:14px">🔒 Change your PIN first. The owner set your starting PIN, so make one only you know before adding payment info.</p>
       <button id="tipPinBtn" type="button" class="next" hidden>Change my PIN</button>
+      <form class="row" id="bumpPriceRow" hidden novalidate style="gap:8px;align-items:center">
+        <span>⏫ Move-up price</span><span>$</span><input id="bumpPriceIn" inputmode="numeric" maxlength="2" style="width:64px;letter-spacing:0" aria-label="Move-up price per spot in dollars"><span>a spot</span>
+        <button type="submit">Save</button><small id="bumpPriceMsg" style="color:var(--ink-2)"></small>
+      </form>
       <button id="tipLinksBtn" type="button">My payment links</button>
       <form id="tipLinksForm" hidden novalidate style="display:flex;flex-direction:column;gap:8px">
         <div class="tipgrid">
@@ -525,6 +542,23 @@ function render(){
   { const sel = $("addSpot"), keep = sel.value; sel.innerHTML = ""; const o = new Option("End of line (#" + (waiting.length + 1) + ")", ""); sel.add(o);
     for(let k = 1; k <= waiting.length; k++) sel.add(new Option("#" + k + (k === 1 ? " (next up)" : ""), String(k)));
     if([...sel.options].some(x => x.value === keep)) sel.value = keep; }
+  { const PAY = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
+    const bl = state.bumps || [], box = $("bumpList"); $("bumpCard").hidden = !bl.length; box.innerHTML = "";
+    bl.forEach(b => {
+      const at = waiting.findIndex(r => r.id === b.sid) + 1, to = Math.max(1, at - b.spots);
+      const li = document.createElement("li"), t = document.createElement("div"); t.className = "bt";
+      const nb = document.createElement("b"); nb.textContent = b.name;
+      const sp = document.createElement("span"); sp.textContent = "$" + b.amount + " by " + (PAY[b.method] || b.method) + (state.me && state.me.role !== "dj" ? " to " + b.to : "") + " · up " + b.spots + (b.spots === 1 ? " spot" : " spots") + (at ? " (#" + at + " → #" + to + ")" : "");
+      t.append(nb, sp);
+      const y = document.createElement("button"); y.className = "yes"; y.type = "button"; y.textContent = "✓ Paid, move up";
+      y.onclick = () => act("/api/kj/bump/" + b.id, { ok: true });
+      const n = document.createElement("button"); n.className = "no"; n.type = "button"; n.textContent = "✗ Not paid";
+      n.onclick = () => act("/api/kj/bump/" + b.id, { ok: false });
+      li.append(t, y, n); box.appendChild(li);
+    }); }
+  { const row = $("bumpPriceRow"), on = state.bumpPrice != null; row.hidden = !on;
+    if(on && document.activeElement !== $("bumpPriceIn")) $("bumpPriceIn").value = state.bumpPrice;
+    $("bumpPriceMsg").textContent = on && !state.bumpOn ? "(owner turned move-ups off)" : ""; }
   const q = $("queue"); q.innerHTML = "";
   if(!waiting.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No one waiting. Put the QR poster where people can see it."; q.appendChild(li); }
   waiting.forEach((r, i) => q.appendChild(item(r, i, true)));
@@ -809,6 +843,11 @@ if(pin) start();
   window.addEventListener("online", back);
 })();
 
+$("bumpPriceRow").addEventListener("submit", async e => {
+  e.preventDefault(); const v = parseInt($("bumpPriceIn").value, 10);
+  try{ await api("/api/kj/bump-price", { price: v }); $("bumpPriceMsg").textContent = "Saved ✓ $" + v + " a spot"; $("bumpPriceIn").blur(); }
+  catch(er){ if(er.message !== "pin") $("bumpPriceMsg").textContent = er.message; }
+});
 </script>
 </body>
 </html>

@@ -204,6 +204,13 @@ li.up .av{border-color:var(--green)}
 .tpay{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tpay button{font-size:15px}
 .tpay button[data-m="cashapp"]{border-color:#00d64f}.tpay button[data-m="venmo"]{border-color:#3d95ce}.tpay button[data-m="paypal"]{border-color:#2790c3}.tpay button[data-m="zelle"]{border-color:#a0f}.tpay button[data-m="apple"]{border-color:#eee}
+.bumpbox{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.bumpbox .go{background:#ffc93c;color:#111}
+.bumpmsg{margin:0;font-size:14px;color:var(--ink-2)}.bumpmsg.ok{color:var(--green-hi)}
+.bspots{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
+.bspots button{font:inherit;font-weight:700;font-size:15px;border-radius:12px;padding:10px 6px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer;line-height:1.25}
+.bspots button small{display:block;font-weight:500;font-size:12px;color:var(--ink-2)}
+.bspots button[aria-pressed="true"]{border-color:#ffc93c;background:rgba(255,201,60,.15);color:#ffc93c}
 .tcopy{background:var(--wall);border:1px dashed var(--line);border-radius:12px;padding:12px;text-align:center}
 .tcopy b{display:block;font-size:19px;overflow-wrap:anywhere;margin:4px 0}
 textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px;resize:vertical}
@@ -332,6 +339,11 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
     <p id="mineLine"></p>
     <div class="song" id="mineSong"></div>
     <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics / Letra</a>
+    <div class="bumpbox" id="bumpBox" hidden>
+      <button class="go" id="bumpOpen" type="button">⏫ Move up · $<span id="bumpPrice">1</span> a spot</button>
+      <p class="bumpmsg" id="bumpMsg" role="status"></p>
+      <button class="linkbtn" id="bumpCancel" type="button" hidden>Cancel my request</button>
+    </div>
     <p>Keep this page open. It updates on its own.</p>
     <button class="ghost" id="editSong" type="button">Change my song</button>
     <form id="editForm" hidden novalidate style="display:flex;flex-direction:column;gap:8px">
@@ -488,6 +500,23 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
   <span>Enjoying the music? Tip the DJ / Propina al DJ</span>
   <div class="tnrow"><button type="button" class="go" id="tnTip">💵 Tip <span id="tnHost"></span></button><button type="button" class="linkbtn" id="tnNo">Not now</button></div>
   <button type="button" class="tnoff" id="tnOff">Don't ask again tonight</button>
+</div>
+<div class="tmodal" id="bumpModal" hidden role="dialog" aria-modal="true" aria-labelledby="bumpTitle">
+  <div class="tbox" style="overflow:auto">
+    <h2 id="bumpTitle">⏫ Move up in line</h2>
+    <div id="bumpStep1" style="display:flex;flex-direction:column;gap:12px">
+      <div><label>How many spots? <span>/ ¿Cuántos lugares?</span></label><div class="bspots" id="bumpSpots"></div></div>
+      <div><label>Pay <span id="bumpHost"></span> with <span>/ Pagar con</span></label><div class="tpay" id="bumpPay"></div></div>
+      <p class="hint" style="color:var(--ink-2);margin:0">$<span id="bumpPrice2">1</span> a spot goes straight to the DJ. You move up as soon as the DJ sees your payment and taps OK. If they can't find it, you stay where you are. Ask the DJ about refunds.</p>
+    </div>
+    <div id="bumpStep2" hidden style="display:flex;flex-direction:column;gap:12px">
+      <div class="tcopy"><span id="bumpHow"></span><b id="bumpWho"></b><button class="sm" id="bumpCopy" type="button">Copy</button></div>
+      <button class="go" id="bumpSms" type="button" hidden>Open Messages</button>
+      <p class="ok" role="status">Sent to the DJ. You'll move once they confirm your payment.</p>
+    </div>
+    <p class="err" id="bumpErr" role="alert"></p>
+    <button class="linkbtn" id="bumpClose" type="button">Close</button>
+  </div>
 </div>
 <div class="tmodal" id="tipModal" hidden role="dialog" aria-modal="true" aria-labelledby="tipTitle">
   <div class="tbox" style="overflow:auto">
@@ -737,6 +766,7 @@ function render(data){
   // (layout) form first for a fresh scan
   $("formCard").hidden = (!!mine && !multiOn) || !data.open || data.paused || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
+  if(!mine && window.paintBump) window.paintBump({ on: false }, null);
   document.body.classList.toggle("fresh", !mine && !$("formCard").hidden);
   if(mine){
     const ahead = mine.spot;
@@ -744,6 +774,7 @@ function render(data){
     $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
     $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
     setLyr($("mineLyr"), mine);
+    if(window.paintBump) window.paintBump(data.bump || { on: false }, mine);
     $("editSong").hidden = mine.status === "up"; if(mine.status === "up") $("editForm").hidden = true;
     // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
     { const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
@@ -1471,6 +1502,73 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   window.addEventListener("appinstalled", () => { $("installBar").hidden = true; });
 })();
 
+/* ---------- pay to move up ($1 a spot, to the DJ, DJ confirms) ---------- */
+(function(){
+  const NAMES = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let info = null, cur = null, spots = 1;
+  const ord = n => "#" + n;
+  window.paintBump = function(b, mine){
+    info = b; cur = mine;
+    const box = $("bumpBox"), r = b && b.req;
+    if(!b || !b.on || !mine || mine.status !== "queued"){ box.hidden = true; if(!b || !b.on) $("bumpModal").hidden = true; return; }
+    const pending = r && r.status === "pending";
+    if(!b.max && !pending && !(r && r.status === "approved")){ box.hidden = true; return; }
+    box.hidden = false;
+    $("bumpPrice").textContent = b.price; $("bumpPrice2").textContent = b.price;
+    $("bumpOpen").hidden = pending || !b.max; $("bumpCancel").hidden = !pending;
+    const m = $("bumpMsg"); m.className = "bumpmsg";
+    if(pending) m.textContent = "⏳ Waiting for the DJ to see your $" + r.amount + " and move you up " + r.spots + (r.spots === 1 ? " spot." : " spots.");
+    else if(r && r.status === "approved"){ m.textContent = "✅ You moved up " + r.spots + (r.spots === 1 ? " spot!" : " spots!"); m.classList.add("ok"); }
+    else if(r && r.status === "denied") m.textContent = "The DJ couldn't find your payment. Ask the DJ.";
+    else m.textContent = "";
+  };
+  function paintSpots(){
+    const box = $("bumpSpots"); box.innerHTML = "";
+    const place = (cur.spot || 0) + 1;   // the number they see on their card
+    for(let k = 1; k <= Math.min(info.max, 12); k++){
+      const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-pressed", k === spots);
+      b.innerHTML = k + (k === 1 ? " spot" : " spots") + "<small>$" + (k * info.price) + " → " + ord(place - k) + "</small>";
+      b.addEventListener("click", () => { spots = k; paintSpots(); }); box.appendChild(b);
+    }
+  }
+  $("bumpOpen").addEventListener("click", () => {
+    if(!info || !info.on || !info.max) return;
+    spots = 1; $("bumpStep1").hidden = false; $("bumpStep2").hidden = true; $("bumpErr").textContent = "";
+    $("bumpHost").textContent = info.host; paintSpots();
+    const pay = $("bumpPay"); pay.innerHTML = "";
+    Object.keys(NAMES).filter(k => info.links[k]).forEach(k => {
+      const b = document.createElement("button"); b.type = "button"; b.dataset.m = k; b.textContent = NAMES[k];
+      b.addEventListener("click", () => send(k)); pay.appendChild(b);
+    });
+    $("bumpModal").hidden = false;
+  });
+  async function send(m){
+    $("bumpErr").textContent = "";
+    let d;
+    try{
+      const r = await fetch("/api/bump", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ spots, method: m }) });
+      d = await r.json(); if(!r.ok) throw new Error(d.error || "Couldn't send. Try again.");
+    }catch(e){ $("bumpErr").textContent = e.message; return; }
+    const amt = d.amount, to = d.to, memo = "Move me up " + spots + (spots === 1 ? " spot" : " spots") + " 🎤";
+    try{ refresh(); }catch(e){}
+    if(m === "cashapp"){ location.href = "https://cash.app/$" + encodeURIComponent(to) + "/" + amt; return; }
+    if(m === "venmo"){ location.href = "https://venmo.com/?txn=pay&recipients=" + encodeURIComponent(to) + "&amount=" + amt + "&note=" + encodeURIComponent(memo); return; }
+    if(m === "paypal"){ location.href = "https://www.paypal.me/" + encodeURIComponent(to) + "/" + amt + "USD"; return; }
+    $("bumpStep1").hidden = true; $("bumpStep2").hidden = false;
+    $("bumpWho").textContent = /^\+1\d{10}$/.test(to) ? "(" + to.slice(2, 5) + ") " + to.slice(5, 8) + "-" + to.slice(8) : to;
+    $("bumpHow").textContent = m === "zelle" ? "Open your bank app → Zelle → send $" + amt + " to" : "Send $" + amt + " with Apple Cash in Messages to";
+    $("bumpSms").hidden = !(m === "apple" && ios && /^\+/.test(to));
+    $("bumpSms").onclick = () => { location.href = "sms:" + to + "&body=" + encodeURIComponent(memo); };
+  }
+  $("bumpCopy").addEventListener("click", async () => {
+    try{ await navigator.clipboard.writeText($("bumpWho").textContent); $("bumpCopy").textContent = "Copied ✓"; }catch(e){ $("bumpCopy").textContent = "Press and hold to copy"; }
+    setTimeout(() => $("bumpCopy").textContent = "Copy", 1800);
+  });
+  $("bumpCancel").addEventListener("click", async () => { try{ await fetch("/api/bump/cancel", { method: "POST" }); }catch(e){} try{ refresh(); }catch(e){} });
+  $("bumpClose").addEventListener("click", () => $("bumpModal").hidden = true);
+  $("bumpModal").addEventListener("click", e => { if(e.target.id === "bumpModal") $("bumpModal").hidden = true; });
+})();
 /* ---------- tip the DJ ---------- */
 (function(){
   const NAMES = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
