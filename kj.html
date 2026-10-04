@@ -107,6 +107,7 @@ li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
 .bumplist .yes{background:var(--green,#39b54a);color:#fff;border-color:transparent}.bumplist .no{background:transparent;color:var(--ink)}
 .nosongtag{display:inline-block;margin-left:8px;font-size:12px;font-weight:800;color:#fff;background:#c0392b;border-radius:6px;padding:1px 6px;vertical-align:middle}
 .paidtag{display:inline-block;margin-left:8px;font-size:12px;font-weight:800;color:#111;background:#ffc93c;border-radius:6px;padding:1px 6px;vertical-align:middle}
+#undoNext{flex:none;font-weight:800;border:2px solid #ffc93c;color:#ffc93c;background:transparent;border-radius:12px;padding:12px 16px}
 #queue li .t b{font-size:21px;font-weight:700;color:#ffc93c;line-height:1.2}
 li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
 li .acts{display:flex;gap:6px;flex-wrap:wrap}
@@ -209,6 +210,7 @@ a{color:var(--green-hi)}
       <div class="singer" id="singer" hidden aria-live="polite"></div>
       <div class="row">
         <button class="next" id="nextBtn">Next singer</button>
+        <button id="undoNext" type="button" hidden title="Tapped Next by mistake? Puts the last singer back up.">↩ Undo</button>
       </div>
       <p class="err" id="err" role="alert"></p>
     </section>
@@ -547,6 +549,7 @@ function render(){
   if(up && up.id !== lastUp){ lastUp = up.id; showSinger(up, false); }
   if(!up){ lastUp = null; if(!singerPinned){ $("singer").hidden = true; singerFor = null; } }
   $("nextBtn").textContent = up ? "Done, next singer" : "Start first singer";
+  $("undoNext").hidden = !state.undo;
   $("waitCount").textContent = waiting.length + " waiting";
   { const sel = $("addSpot"), keep = sel.value; sel.innerHTML = ""; const o = new Option("End of line (#" + (waiting.length + 1) + ")", ""); sel.add(o);
     for(let k = 1; k <= waiting.length; k++) sel.add(new Option("#" + k + (k === 1 ? " (next up)" : ""), String(k)));
@@ -616,6 +619,7 @@ $("pinForm").addEventListener("submit", async e => {
 });
 $("pin").addEventListener("input", () => $("pinErr").textContent = "");
 $("nextBtn").addEventListener("click", () => act("/api/kj/next"));
+$("undoNext").addEventListener("click", () => act("/api/kj/undo-next"));
 ["p15", "p30", "p60", "pOn", "pOff"].forEach(id => $(id).addEventListener("click", () => act("/api/kj-pause", { minutes: Number($(id).dataset.m) })));
 $("refreshBtn").addEventListener("click", async () => {
   const b = $("refreshBtn"); b.disabled = true; b.textContent = "Refreshing…";

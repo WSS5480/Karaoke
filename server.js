@@ -761,7 +761,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -1160,10 +1160,25 @@ app.post("/api/kj/where", wrap(async (req, res) => {
   await endDj(req.kj.name, "You left " + (TEN().short || "the bar") + ", so your DJ session closed.");
   res.status(401).json({ error: "You left " + (TEN().short || "the bar") + ", so your DJ session closed.", kicked: true });
 }));
+// "Done, next singer" keeps a short undo list for tonight, so a double tap can be put right
+async function nextUndo() { try { const u = JSON.parse((await db.getSetting("next_undo")) || "null"); return u && u.night === barDay().date ? u.steps : []; } catch (e) { return []; } }
+async function saveUndo(steps) { await db.setSetting("next_undo", JSON.stringify({ night: barDay().date, steps: steps.slice(-10) })); }
 app.post("/api/kj/next", wrap(async (req, res) => {
   const list = await db.active();
   const up = list.find(r => r.status === "up"); if (up) await db.setStatus(up.id, "done");
   const nxt = list.find(r => r.status === "queued"); if (nxt) await db.setStatus(nxt.id, "up");
+  if (up || nxt) { const st = await nextUndo(); st.push({ done: up ? up.id : null, up: nxt ? nxt.id : null }); await saveUndo(st); }
+  res.json({ ok: true });
+}));
+// undo the last "Done, next singer": the singer now up goes back to the front of the line, the one marked done is back up
+app.post("/api/kj/undo-next", wrap(async (req, res) => {
+  const st = await nextUndo(), last = st.pop();
+  if (!last) return res.status(409).json({ error: "Nothing to undo." });
+  const cur = (await db.active()).find(r => r.status === "up");
+  if (last.up) { const r = await db.get(last.up); if (r && r.status === "up") await db.setStatus(r.id, "queued"); }
+  else if (cur) await db.setStatus(cur.id, "queued");
+  if (last.done) { const r = await db.get(last.done); if (r && r.status === "done") await db.setStatus(r.id, "up"); }
+  await saveUndo(st);
   res.json({ ok: true });
 }));
 app.post("/api/kj/:id/song", wrap(async (req, res) => {
