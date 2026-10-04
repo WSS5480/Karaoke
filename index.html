@@ -505,7 +505,7 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
   <div class="tbox" style="overflow:auto">
     <h2 id="bumpTitle">⏫ Move up in line</h2>
     <div id="bumpStep1" style="display:flex;flex-direction:column;gap:12px">
-      <div><label>How many spots? <span>/ ¿Cuántos lugares?</span></label><div class="bspots" id="bumpSpots"></div></div>
+      <div><label>How many spots? <span>/ ¿Cuántos lugares?</span></label><div class="bspots" id="bumpSpots" style="max-height:46vh;overflow:auto"></div></div>
       <div><label>Pay <span id="bumpHost"></span> with <span>/ Pagar con</span></label><div class="tpay" id="bumpPay"></div></div>
       <p class="hint" style="color:var(--ink-2);margin:0">$<span id="bumpPrice2">1</span> a spot goes straight to the DJ. You move up as soon as the DJ sees your payment and taps OK. If they can't find it, you stay where you are. Ask the DJ about refunds.</p>
     </div>
@@ -1526,7 +1526,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   function paintSpots(){
     const box = $("bumpSpots"); box.innerHTML = "";
     const place = (cur.spot || 0) + 1;   // the number they see on their card
-    for(let k = 1; k <= Math.min(info.max, 12); k++){
+    for(let k = 1; k <= info.max; k++){
       const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-pressed", k === spots);
       b.innerHTML = k + (k === 1 ? " spot" : " spots") + "<small>$" + (k * info.price) + " → " + ord(place - k) + "</small>";
       b.addEventListener("click", () => { spots = k; paintSpots(); }); box.appendChild(b);
