@@ -1107,7 +1107,8 @@ async function bumpInfo(list, mine) {
     out.max = queuedAhead(list, mine);
     // locked (paid) spots ahead can't be bought; show their numbers the way the singer sees the line
     { const paid = await paidIds(), up = list.some(r => r.status === "up") ? 1 : 0, q = list.filter(r => r.status === "queued"), me = q.findIndex(r => r.id === mine.id);
-      out.locked = q.map((r, k) => k < me && paid.has(r.id) ? k + 1 + up : 0).filter(Boolean); }
+      out.locked = q.map((r, k) => k < me && paid.has(r.id) ? k + 1 + up : 0).filter(Boolean);
+      let f = 0; q.forEach((r, k) => { if (k < me && paid.has(r.id)) f = k + 1; }); out.max = Math.max(0, me - f); }
     const req = (await getBumps()).filter(b => b.sid === mine.id).pop();
     if (req) out.req = { status: req.status, spots: req.spots, amount: req.amount, manual: !!req.manual };
   }
@@ -1292,6 +1293,8 @@ async function placeAt(id, spot, fresh) {
   let i = Math.min(Math.max((parseInt(spot, 10) || N) - 1, 0), N - 1);
   if (paid.has(id) && !fresh) i = Math.min(i, at);
   const pins = new Map(); all.forEach((r, k) => { if (r.id !== id && paid.has(r.id)) pins.set(k, r); });
+  // nobody jumps a locked spot: you can't land ahead of a locked singer who is ahead of you
+  { const orig = fresh ? N : at; pins.forEach((r, k) => { if (k < orig) i = Math.max(i, k + 1); }); i = Math.min(i, N - 1); }
   while (pins.has(i) && i < N - 1) i++;          // that spot is locked: take the next open one behind it
   while (pins.has(i) && i > 0) i--;
   const out = new Array(N); pins.forEach((r, k) => { out[k] = r; }); out[i] = me;
@@ -1343,7 +1346,7 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
     if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be moved." });
     await placeAt(id, req.body.spot);
     const q2 = (await db.active()).filter(r => r.status === "queued"), got = q2.findIndex(r => r.id === id) + 1, want = parseInt(req.body.spot, 10);
-    if (want && got !== want && got) return res.json({ ok: true, note: "Placed at #" + got + ". That spot is locked by someone who paid." });
+    if (want && got !== want && got) return res.json({ ok: true, note: "Placed at #" + got + ". Nobody can jump a locked spot." });
   } else return res.status(400).json({ error: "Unknown action." });
   res.json({ ok: true });
 }));
