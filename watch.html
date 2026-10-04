@@ -151,7 +151,7 @@ function paintQueue(st){
     [st.open ? (p.paused ? "Sign-ups paused" : "Sign-ups open") : "Sign-ups closed", st.open && !p.paused],
     ["Location check " + (st.geofence ? "on" : "off"), st.geofence],
     ["Lyrics " + (st.lyrics === false ? "off" : "on"), st.lyrics !== false],
-    [(st.multi ? "More than one song allowed" : "One song per person"), false]
+    ["One song per person on the queue: " + (st.multi ? "off" : "on"), !st.multi]
   ];
   const box = $("status"); box.innerHTML = "";
   chips.forEach(([t, on]) => { const s = document.createElement("span"); s.className = "pill" + (on ? " on" : ""); s.textContent = t; box.appendChild(s); });

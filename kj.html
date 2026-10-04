@@ -239,7 +239,7 @@ a{color:var(--green-hi)}
       <div class="row">
         <button id="toggleOpen"></button>
         <button id="toggleGeo"></button>
-        <label class="multi" for="multiChk"><input type="checkbox" id="multiChk"> Allow more than one song per person</label>
+        <label class="multi" for="multiChk"><input type="checkbox" id="multiChk"> One song per person on the queue</label>
         <button id="togglePhone" hidden></button>
         <button id="togglePhotoReview"></button>
         <button id="toggleLyrics" title="Lyrics buttons in the customer app"></button>
@@ -493,7 +493,7 @@ function render(){
   $("pOff").hidden = !p.paused;
   $("toggleOpen").textContent = state.open ? "Close sign-ups" : "Open sign-ups";
   $("toggleGeo").textContent = state.geofence ? "Location check: on" : "Location check: off";
-  $("multiChk").checked = !!state.multi;
+  $("multiChk").checked = !state.multi;
   $("toggleLyrics").textContent = state.lyrics === false ? "Lyrics: off" : "Lyrics: on";
   $("togglePhone").hidden = !state.twilioReady;
   $("togglePhone").textContent = state.phoneSignin ? "Phone sign-in: on" : "Phone sign-in: off";
@@ -536,7 +536,7 @@ $("refreshBtn").addEventListener("click", async () => {
 $("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !state.open }));
 $("toggleGeo").addEventListener("click", () => act("/api/kj-geofence", { on: !state.geofence }));
 $("toggleLyrics").addEventListener("click", () => act("/api/kj-lyrics", { on: state.lyrics === false }));
-$("multiChk").addEventListener("change", () => act("/api/kj-multi", { on: $("multiChk").checked }));
+$("multiChk").addEventListener("change", () => act("/api/kj-multi", { on: !$("multiChk").checked }));
 $("togglePhone").addEventListener("click", () => act("/api/kj-phone", { on: !state.phoneSignin }));
 $("togglePhotoReview").addEventListener("click", () => act("/api/kj-photoreview", { on: !state.photoReview }));
 $("newNight").addEventListener("click", () => $("nnConfirm").hidden = false);

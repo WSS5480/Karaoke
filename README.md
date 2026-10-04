@@ -39,7 +39,7 @@ Guests scan a QR code (or open the link), sign up for a song, and watch their pl
 - **Posted icons** (f / IG / TT) show on songs the guest shared.
 - **Photo check:** guest photos show as thumbnails in the waiting list. Tap one, then **Remove photo** if it's not OK.
 - Open or close sign-ups, pause (15 min, 30 min, 1 hour, or until resumed), location check on or off, phone sign-in on or off.
-- **Allow more than one song per person** checkbox. It's off by default.
+- **One song per person on the queue** checkbox. It is checked (on) by default.
 - **Lyrics: on / off** button in Night controls. Off hides every Lyrics / Sing along button and the lyrics pop-ups in the customer app (Now singing still shows).
 - Start a new night: clears the line and keeps all history.
 - **Separate host logins:** the owner adds hosts, each with their own PIN, and hosts can change their own PIN.
