@@ -374,6 +374,7 @@ async function api(path, body){
   return j;
 }
 function logout(msg){ stopDjWatch(); pin = ""; pinName = ""; try{ sessionStorage.removeItem("kj_name"); }catch(e){} $("forcePin").hidden = true; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
+window.diveRefresh = () => pin && !$("panel").hidden ? Promise.all([load(), typeof loadTips === "function" ? loadTips() : null]) : location.reload();
 async function load(){
   try{ state = await api("/api/kj/state"); render(); startDjWatch(); $("err").textContent = ""; }
   catch(e){ if(e.message !== "pin") $("err").textContent = "Lost connection. Retrying…"; }

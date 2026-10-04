@@ -259,6 +259,7 @@ $("bumpKill").addEventListener("click", async () => {
   $("bumpKill").disabled = false; refresh();
 });
 let timer = null;
+window.diveRefresh = () => !$("view").hidden ? refresh() : location.reload();
 async function refresh(){
   try{
     const j = await get("/api/watch");

@@ -34,7 +34,8 @@
   var add = function () { if (document.body && !tip.parentNode) document.body.appendChild(tip); };
   if (document.body) add(); else document.addEventListener("DOMContentLoaded", add);
   function scrolledInside(el) {
-    for (; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+    if (el && el.nodeType !== 1) el = el.parentElement;
+    for (; el && el.nodeType === 1 && el !== document.body && el !== document.documentElement; el = el.parentElement) {
       if (/INPUT|TEXTAREA|SELECT/.test(el.tagName)) return true;
       if (el.scrollTop > 0) return true;
       var oy = getComputedStyle(el).overflowY;
@@ -57,11 +58,21 @@
     tip.textContent = armed ? "↻ Release to refresh" : "↓ Pull to refresh";
     tip.style.transform = "translate(-50%," + (y + 10) + "px)";
   }, { passive: true });
-  window.addEventListener("touchend", function () {
+  // iPhones often end a pull with "touchcancel" (the page bounce takes over), so treat both the same.
+  // Pages that can reload their data in place (window.diveRefresh) do that: no blank screen, no flash.
+  var busy = false;
+  function finish() {
     if (startY === null) return;
     startY = null;
-    if (armed) { tip.textContent = "Refreshing…"; tip.style.transform = "translate(-50%,16px)"; setTimeout(function () { location.reload(); }, 150); }
-    else tip.style.transform = "translate(-50%,-60px)";
+    if (armed && !busy) {
+      busy = true; tip.textContent = "Refreshing…"; tip.style.transform = "translate(-50%,16px)";
+      var done = function () { tip.textContent = "Updated ✓"; setTimeout(function () { tip.style.transform = "translate(-50%,-60px)"; busy = false; }, 700); };
+      if (typeof window.diveRefresh === "function") {
+        try { Promise.resolve(window.diveRefresh()).then(done, function () { location.reload(); }); } catch (e) { location.reload(); }
+      } else setTimeout(function () { location.reload(); }, 150);
+    } else if (!busy) tip.style.transform = "translate(-50%,-60px)";
     armed = false;
-  }, { passive: true });
+  }
+  window.addEventListener("touchend", finish, { passive: true });
+  window.addEventListener("touchcancel", finish, { passive: true });
 })();
