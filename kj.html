@@ -255,13 +255,13 @@ a{color:var(--green-hi)}
     </section>
 
     <section class="card" id="tipsCard">
-      <h2>Tips <span id="tipState"></span></h2>
+      <h2><span id="tipsH">Tips</span> <span id="tipState"></span></h2>
       <div class="row" id="tipMoneyRow" style="justify-content:space-between"><div><div class="tiptot" id="tipTotal">$0</div><small style="color:var(--ink-2)" id="tipTotLbl">tapped tonight · check your apps to confirm</small></div>
         <button id="tipTake"></button></div>
       <div id="tipByDj" class="tipbydj" hidden></div>
       <ol id="tipList"></ol>
       <div class="row" id="djOnRow" hidden style="justify-content:space-between"><span id="djOnTxt"></span><span class="row" style="gap:6px"><button id="staffTips" type="button"></button><button id="kickDj" class="danger" type="button">Close DJ session</button></span></div>
-      <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">Tips go to the DJ, and only the DJ controls them. If the DJ left or forgot to sign out, tap Close DJ session. That signs them out and stops their tips.</p>
+      <p id="tipHouse" hidden style="margin:0;color:var(--ink-2);font-size:14px">DJ forgot to sign out? Tap Close DJ session to close their night. It signs them out and stops their tips. Tip money is only in the Bar Owner app.</p>
       <p id="tipNeedPin" hidden style="margin:0;color:#ffc93c;font-size:14px">🔒 Change your PIN first. The owner set your starting PIN, so make one only you know before adding payment info.</p>
       <button id="tipPinBtn" type="button" class="next" hidden>Change my PIN</button>
       <form class="row" id="bumpPriceRow" hidden novalidate style="gap:8px;align-items:center">
@@ -795,7 +795,9 @@ async function loadTips(){
     const a = document.createElement("a"); a.href = "/stats"; a.textContent = "Past nights in Analytics →"; bd.appendChild(a);
   }
   $("tipHouse").hidden = !tips.house; $("tipLinksBtn").hidden = !!tips.house; $("tipTake").hidden = false;
-  $("djOnRow").hidden = !(tips.house && tips.dj); $("djOnTxt").textContent = tips.dj ? "🎧 DJ on now: " + tips.dj : "";
+  $("djOnRow").hidden = !tips.house; $("djOnTxt").textContent = tips.dj ? "🎧 DJ on now: " + tips.dj : "No DJ signed in right now.";
+  $("kickDj").hidden = !tips.dj;
+  $("tipsH").textContent = tips.house ? "Tonight's DJ" : "Tips";
   $("tipNeedPin").hidden = !tips.needPin; $("tipPinBtn").hidden = !tips.needPin;
   if(tips.needPin){ $("tipLinksBtn").hidden = true; $("tipLinksForm").hidden = true; $("tipTake").hidden = true; }
   if(tips.house){ $("tipLinksForm").hidden = true; $("tipTake").hidden = true; }

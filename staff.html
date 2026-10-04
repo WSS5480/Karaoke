@@ -139,6 +139,18 @@ body.shared #installBar,body.shared .ghd p,body.shared .gbtns,body.shared .ownon
   </section>
   </div>
 
+  <div class="group" data-who="Bar owner" data-key="bar">
+    <div class="ghd"><div><h3>🏠 Bar owner &amp; managers</h3><p>Tips, move-ups, close the DJ's night</p></div><span class="gbtns"><button class="cpg" type="button">Send bar owner link</button><button class="cpt" type="button">Copy as text</button></span></div>
+  <section>
+    <h2>Links <span>· owner PIN, or a manager's own login</span></h2>
+    <div class="ln"><div class="t"><b>Bar Owner app</b><a href="/bar">the-dive-karaoke.onrender.com/bar</a></div><button class="cp" type="button">Copy</button></div>
+  </section>
+  <section>
+    <h2>What's in it</h2>
+    <ul><li>Tonight's tips for every DJ, by DJ and by guest, plus the last 30 days.</li><li><b>Close the DJ's night</b> if they forgot to sign out, and <b>Stop tips tonight</b>.</li><li>Paid move-ups (lock your spot) with an on/off switch.</li><li>The lineup, sign-ups, and who posted to social media.</li><li>Managers: type your name and your own PIN. Only staff logins the owner made a manager can open it.</li></ul>
+  </section>
+  </div>
+
   <div class="group" data-who="Staff" data-key="staff">
     <div class="ghd"><div><h3>🍺 House staff</h3><p>Bar staff and managers only</p></div><span class="gbtns"><button class="cpg" type="button">Send staff link</button><button class="cpt" type="button">Copy as text</button></span></div>
   <section>
@@ -162,7 +174,7 @@ body.shared #installBar,body.shared .ghd p,body.shared .gbtns,body.shared .ownon
   </section>
   <section>
     <h2>Running the night</h2>
-    <ul><li>Same controls as the DJ: <b>Next singer</b>, <b>Pause</b>, <b>Fix name</b>, photos, <b>Lyrics on / off</b>.</li><li><b>🔒 Lock tonight</b> or <b>Lock always</b> stops someone adding new photos. Rowdy night? Turn on <b>Approve photos first</b>.</li><li>Need tips off? Tap <b>Stop tips tonight</b> in the Tips card (tap again to turn them back on). DJ left or forgot to sign out? Tap <b>Close DJ session</b>. That also stops their tips, and the next DJ can sign in.</li><li>Staff can reset a DJ's PIN or remove a login in the <b>Hosts</b> card.</li><li>Ads page: headline, picture, pick days, Save. Shows at the top of the customer app.</li></ul>
+    <ul><li>Same controls as the DJ: <b>Next singer</b>, <b>Pause</b>, <b>Fix name</b>, photos, <b>Lyrics on / off</b>.</li><li><b>🔒 Lock tonight</b> or <b>Lock always</b> stops someone adding new photos. Rowdy night? Turn on <b>Approve photos first</b>.</li><li>DJ left or forgot to sign out? In the <b>Tonight's DJ</b> card tap <b>Close DJ session</b> to close their night. That signs them out and stops their tips, and the next DJ can sign in. Need tips off? <b>Stop tips tonight</b>. Staff never see tip money.</li><li>Staff can reset a DJ's PIN or remove a login in the <b>Hosts</b> card.</li><li>Ads page: headline, picture, pick days, Save. Shows at the top of the customer app.</li></ul>
   </section>
   <section>
     <h2>End of night</h2>
@@ -170,7 +182,7 @@ body.shared #installBar,body.shared .ghd p,body.shared .gbtns,body.shared .ownon
   </section>
   <section class="ownonly">
     <h2>Owner only <span>· house PIN</span></h2>
-    <ul><li>Add DJs and staff in the <b>Hosts</b> card with a starting PIN. Pick DJ or Staff. They must make their own PIN the first time they sign in.</li><li><b>Make DJ / Make staff</b> switches someone's login type.</li><li><b>Live view</b> (<a href="/watch">/watch</a>, your owner list PIN): the lineup and tonight's tips for every DJ, view only.</li><li>Never share the house PIN. Give everyone their own login. Customers never need a PIN: they use the QR code or the link.</li><li>Tip money (all DJs) shows for the house PIN and any staff login you tap <b>Make manager</b> on. Each DJ sees only their own tips. Other staff don't see tips.</li></ul>
+    <ul><li>Add DJs and staff in the <b>Hosts</b> card with a starting PIN. Pick DJ or Staff. They must make their own PIN the first time they sign in.</li><li><b>Make DJ / Make staff</b> switches someone's login type.</li><li><b>Live view</b> (<a href="/watch">/watch</a>, your owner list PIN): the lineup and tonight's tips for every DJ, view only.</li><li>Never share the house PIN. Give everyone their own login. Customers never need a PIN: they use the QR code or the link.</li><li>Tip money is only in the <b>Bar Owner app</b> (<a href="/bar">/bar</a>): your owner list PIN, or the own login of any staff you tap <b>Make manager</b> on. Each DJ sees only their own tips on the host page. Staff and the house PIN don't see tips.</li></ul>
   </section>
   </div>
 </main>
@@ -193,8 +205,8 @@ async function isOwner(p){
 }
 function openList(){ $("lock").hidden = true; $("main").hidden = false; }
 function showLock(t){ $("main").hidden = true; $("lock").hidden = false; $("lockErr").textContent = t || ""; $("lockPin").value = ""; $("lockPin").focus(); }
-const LINK_KEY = (location.pathname.match(/\/links\/(customers|dj|staff)\/?$/) || [])[1] || new URLSearchParams(location.search).get("for");
-const SHARED = { customers: "Karaoke Links", dj: "DJ Links", staff: "Staff Links" }[LINK_KEY];
+const LINK_KEY = (location.pathname.match(/\/links\/(customers|dj|staff|bar)\/?$/) || [])[1] || new URLSearchParams(location.search).get("for");
+const SHARED = { customers: "Karaoke Links", dj: "DJ Links", staff: "Staff Links", bar: "Bar Owner Links" }[LINK_KEY];
 if(SHARED){
   // someone opened a group link the owner sent: show only that group, no PIN needed
   const key = LINK_KEY;

@@ -79,7 +79,7 @@ app.use(async (req, res, next) => {
   if (/^\/(setup|api\/setup|api\/billing|terms|logo\.png|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|[\w-]*manifest\.json|m\/|healthz)/.test(req.path)) return next();
   if (planSummary(t).active) return next();
   if (req.path.startsWith("/api/")) return res.status(402).json({ error: "inactive", message: "This karaoke system isn't active right now. Ask the host." });
-  if (/^\/(kj|stats|ads|history|staff|owner|links|watch|wheel|tv|tent|poster)\b/.test(req.path)) return res.redirect(BASE() + "/setup");
+  if (/^\/(kj|stats|ads|history|staff|owner|links|watch|bar|wheel|tv|tent|poster)\b/.test(req.path)) return res.redirect(BASE() + "/setup");
   res.status(402).type("html").send(simplePage(t.name, `<img src="${BASE()}/logo.png" alt=""><h1>${esc(t.name)}</h1><p>Karaoke sign-up isn't open right now. Ask the host, or check back soon.</p>`));
 });
 /* =====================================================================
@@ -157,7 +157,7 @@ function refreshPlan(t) {
 }
 
 /* ---------- branding: other bars get The Dive's pages with their own name, logo and links ---------- */
-const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|owner\b|links\/|watch\b|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
+const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|owner\b|links\/|watch\b|bar\b|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
 function brand(html, t, base, host) {
   if (t.house) return html;
   const name = t.name, short = t.short || t.name, tagWord = (short || name).replace(/[^A-Za-z0-9]/g, ""), city = t.city || "";
@@ -846,7 +846,7 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     topRated: singerList.filter(x => x.avg !== null && x.songs >= 2).sort((a, b) => b.avg - a.avg || b.songs - a.songs).slice(0, 10),
     topSongs: [...songs.values()].sort((a, b) => b.count - a.count).slice(0, 15),
     topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10),
-    tips: (req.kj.admin || req.kj.manager) ? await tipStats(days) : req.kj.role === "dj" ? await tipStats(days, req.kj.name) : null
+    tips: req.kj.role === "dj" ? await tipStats(days, req.kj.name) : null
   });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
@@ -977,7 +977,7 @@ app.post("/api/tip", wrap(async (req, res) => {
 // host side
 app.get("/api/kj/tips", wrap(async (req, res) => {
   // tip money: the owner (house PIN) sees every DJ's tips with a per-DJ total, a DJ sees only their own, staff see none
-  const s = await tipState(), all = await getTips(barDay().date), dj = req.kj.role === "dj", owner = !!req.kj.admin || !!req.kj.manager;
+  const s = await tipState(), all = await getTips(barDay().date), dj = req.kj.role === "dj", owner = false;   // tip money lives in the Bar Owner app now
   const list = owner ? all : dj ? all.filter(x => x.to === req.kj.name) : [];
   const byDj = {}; if (owner) all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   const ds = await djSession(), off = await tipsOff();
@@ -1064,7 +1064,7 @@ app.post("/api/bump/cancel", wrap(async (req, res) => {
   await saveBumps(all); res.json({ ok: true });
 }));
 // host side: the DJ who gets the money, the owner and managers can see and approve requests (staff can't see money)
-const seesBumps = k => !!(k && (k.admin || k.manager || k.role === "dj"));
+const seesBumps = k => !!(k && k.role === "dj");   // money: only the DJ on the host page (owners use the Bar Owner app)
 async function bumpsFor(k) {
   if (!seesBumps(k)) return null;
   const all = await getBumps(), act = await db.active(), live = new Set(act.filter(r => r.status === "queued").map(r => r.id));
@@ -1328,6 +1328,53 @@ app.get("/api/songsearch", wrap(async (req, res) => {
 // the staff list page is owner-only: The Dive uses its own list PIN (STAFF_LIST_PIN in Render, never in code);
 // other bars and DJs use their owner PIN
 const listTries = new Map();
+/* ---------- Bar Owner app (/bar): tips, move-ups, close the DJ's night ----------
+   Opens with the bar owner PIN (The Dive: the owner list PIN, never the house PIN) or a manager's own login. */
+const barTries = new Map();
+async function barAuth(req, res) {
+  const t = Date.now(), l = (barTries.get(req.ip) || []).filter(x => t - x < 600000);
+  if (l.length >= 10) { res.status(429).json({ error: "Too many tries. Wait 10 minutes." }); return null; }
+  const pin = String(req.headers["x-bar-pin"] || "").replace(/\D/g, ""); let nm = ""; try { nm = decodeURIComponent(String(req.headers["x-bar-name"] || "")); } catch (e) {}
+  if (pin) {
+    if (T() === "dive" ? same(pin, process.env.STAFF_LIST_PIN || KJ_PIN) : pinMatches(pin, TEN().pinHash)) return { name: "Owner", owner: true };
+    const who = await whoIs(pin, nm);
+    if (who && who.pick) { res.status(409).json({ error: "Tap your name.", names: who.pick }); return null; }
+    if (who && who.manager && who.own) return { name: who.name, manager: true };
+  }
+  l.push(t); barTries.set(req.ip, l); res.status(401).json({ error: "Wrong PIN. Use the owner PIN or your manager login." }); return null;
+}
+app.get("/api/bar", wrap(async (req, res) => {
+  const who = await barAuth(req, res); if (!who) return;
+  const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active(), off = await tipsOff();
+  const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
+  res.json({
+    who,
+    dj: djNow ? { name: djNow.name, since: djNow.since || null } : null, tipsStopped: !!(djNow && off && off.name === djNow.name && off.night === barDay().date),
+    state: { lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
+      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await withPhotosKJ(act.map(kjRow), act), done: (await db.done(500)).map(kjRow) },
+    signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
+    tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 },
+    history: await tipStats(30)
+  });
+}));
+app.post("/api/bar/close-dj", wrap(async (req, res) => {
+  const who = await barAuth(req, res); if (!who) return;
+  const ds = await endDj(null, (who.owner ? "The bar owner" : who.name) + " closed your DJ session."); res.json({ ok: true, closed: ds ? ds.name : null });
+}));
+app.post("/api/bar/tips", wrap(async (req, res) => {
+  const who = await barAuth(req, res); if (!who) return;
+  const ds = await djSession(), s = await tipState();
+  if (req.body.on) { await setTipsOff(null); return res.json({ ok: true }); }
+  const name = s.on ? s.host : ds ? ds.name : null; if (!name) return res.json({ ok: true });
+  if ((await db.getSetting("tip_host")) === name) await db.setSetting("tip_host", "");
+  await setTipsOff(name); res.json({ ok: true });
+}));
+app.post("/api/bar/bump", wrap(async (req, res) => {
+  const who = await barAuth(req, res); if (!who) return;
+  await db.setSetting("bump", req.body.on ? "on" : "off");
+  if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = (who.owner ? "owner" : who.name) + " turned move-ups off"; } }); await saveBumps(all); }
+  res.json({ ok: true });
+}));
 // owner's live view (/watch): opens with the owner list PIN, never the house PIN
 app.get("/api/watch", wrap(async (req, res) => {
   const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
@@ -1549,7 +1596,7 @@ app.post("/api/kj/venue", wrap(async (req, res) => {
 
 /* ---------- pages ---------- */
 // HTML pages: sent as-is for The Dive, re-branded for other bars and DJs
-const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tent": "tent.html", "/terms": "terms.html", "/owner": "staff.html", "/watch": "watch.html", "/setup": "setup.html", "/start": "start.html" };
+const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tent": "tent.html", "/terms": "terms.html", "/owner": "staff.html", "/watch": "watch.html", "/bar": "bar.html", "/setup": "setup.html", "/start": "start.html" };
 // extra pages that each install as their own app (own name + icon)
 const APPS = {
   "/stats": { file: "stats.html", key: "stats", name: "The Dive Analytics", short: "Dive Stats" },
@@ -1571,10 +1618,10 @@ Object.entries(APPS).forEach(([route, a]) => {
   app.get(route, (req, res) => sendPage(req, res, a.file, a));
 });
 // the owner's list lives at /owner; staff, DJs and guests only get the group links the owner sends (/links/dj ...)
-const LINK_GROUPS = ["customers", "dj", "staff"];
+const LINK_GROUPS = ["customers", "dj", "staff", "bar"];
 app.get("/staff", (req, res) => { const g = String(req.query.for || ""); res.redirect(301, BASE() + (LINK_GROUPS.includes(g) ? "/links/" + g : "/owner")); });
 // group pages get their own title + link preview (iMessage etc.), never the owner's name or app
-const LINK_META = { customers: ["Karaoke Links", "Sign up to sing, the Wall of Fame, and our terms."], dj: ["DJ Links", "Links and how-to for DJs."], staff: ["Staff Links", "Links and how-to for bar staff."] };
+const LINK_META = { customers: ["Karaoke Links", "Sign up to sing, the Wall of Fame, and our terms."], dj: ["DJ Links", "Links and how-to for DJs."], staff: ["Staff Links", "Links and how-to for bar staff."], bar: ["Bar Owner Links", "Tips, move-ups and closing the night, for the bar owner and managers."] };
 app.get("/links/:group", (req, res) => {
   const g = req.params.group; if (!LINK_GROUPS.includes(g)) return res.redirect(BASE() + "/");
   const t = TEN(), key = t.slug + "|links/" + g + "|" + (t.v || 0) + "|" + req.get("host");

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bar Owner · The Dive</title>
+<link rel="icon" href="/logo.png">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+/* Bar Owner app: tonight's tips, move-ups, and closing the DJ's night. Owner PIN or a manager's own login. */
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--gold:#ffc93c;--ink:#eef3ee;--ink-2:#9fae9f;--warn:#ff6b6b;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+main{max-width:620px;margin:0 auto;padding:18px 16px 40px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;gap:12px}
+header img{width:48px}
+h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;line-height:1.1}
+.sub{font-size:13px;color:var(--ink-2)}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--green-hi)}
+.live i{width:8px;height:8px;border-radius:50%;background:#ff3b3b;box-shadow:0 0 8px #ff3b3b;animation:p 1.4s infinite}
+@keyframes p{50%{opacity:.3}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+h2{font-family:var(--slab);font-weight:800;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-hi);margin:0;display:flex;justify-content:space-between;gap:8px}
+h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+.now{display:flex;gap:12px;align-items:center}
+.av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:#fff;border:2px solid var(--line);flex:none}
+.now .av{width:64px;height:64px;border-color:var(--green)}
+.av.logo{object-fit:contain;padding:3px}
+.now b{display:block;font-family:var(--slab);font-size:22px;line-height:1.1}
+.now span{color:var(--ink-2)}
+ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+li{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);min-width:0}
+li:first-child{border-top:0}
+li .n{width:22px;text-align:right;color:var(--ink-2);font-family:var(--slab);font-weight:800;flex:none}
+li .t{min-width:0;flex:1}
+li .t b{display:block;font-weight:600;overflow-wrap:anywhere}
+#queue li .t b{font-size:21px;font-weight:700;color:#ffc93c;line-height:1.2}
+li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
+.empty{color:var(--ink-2);font-size:14px}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tile{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.tile b{display:block;font-family:var(--slab);font-size:24px;color:var(--gold)}
+.tile span{font-size:12px;color:var(--ink-2)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px}
+.chips b{color:var(--gold)}
+.tip b{font-weight:600}
+.tip q{display:block;color:var(--ink);font-size:14px;margin-top:2px;quotes:"“" "”"}
+.pill{font-size:13px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--ink-2)}
+.pill.on{border-color:var(--green);color:var(--green-hi)}
+.lock{min-height:80vh;display:grid;place-items:center}
+.lbox{width:100%;max-width:340px;background:var(--panel);border:1px solid var(--green);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.lbox input{font:inherit;font-size:22px;letter-spacing:.3em;text-align:center;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--wall);color:var(--ink)}
+.lbox button{font:inherit;font-weight:700;font-size:16px;border:0;border-radius:999px;padding:12px;background:var(--green);color:#041206;cursor:pointer}
+.err{color:var(--warn);font-size:14px;min-height:18px;margin:0}
+a{color:var(--green-hi)}
+.crowd{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ctile{background:var(--panel-2,#1b211b);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.ctile b{display:block;font-family:var(--slab);font-size:22px;color:var(--green-hi)}
+.ctile span{font-size:12px;color:var(--ink-2)}
+.kill{font:inherit;font-weight:800;font-size:16px;border-radius:12px;padding:12px;cursor:pointer;border:1px solid var(--line);width:100%}
+.kill.on{background:#b3261e;color:#fff;border-color:transparent}.kill.off{background:var(--green,#39b54a);color:#fff;border-color:transparent}
+.bst{font-style:normal;font-size:12px;font-weight:700;border-radius:6px;padding:1px 6px;margin-left:6px}
+.bst.approved{background:rgba(57,181,74,.25);color:var(--green-hi)}.bst.pending{background:rgba(255,201,60,.2);color:#ffc93c}.bst.denied,.bst.expired,.bst.canceled{background:#2a2a2a;color:var(--ink-2)}
+.posted{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
+.net{font-style:normal;font-size:11px;font-weight:800;border-radius:6px;padding:1px 5px;color:#fff;display:inline-block}
+.net.fb{background:#1877f2}.net.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.net.tt{background:#000;border:1px solid #444}
+@media (min-width:560px){.tiles{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<main>
+  <div class="lock" id="lock" hidden>
+    <form class="lbox" id="lockForm" novalidate>
+      <img src="/logo.png" alt="" style="width:64px;margin:0 auto">
+      <h1>Bar Owner</h1>
+      <p class="sub" style="margin:0">Owner PIN, or your manager login. Staff and DJs can't open this.</p>
+      <input id="mgrName" maxlength="30" autocomplete="username" aria-label="Manager name (managers only)" placeholder="Manager name (managers only)">
+      <input id="pin" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password" aria-label="PIN" placeholder="PIN">
+      <button type="submit">Open</button>
+      <p class="err" id="err" role="alert"></p>
+    </form>
+  </div>
+
+  <div id="view" hidden style="display:flex;flex-direction:column;gap:14px">
+    <header>
+      <img src="/logo.png" alt="The Dive on 495">
+      <div style="flex:1"><h1>Bar Owner</h1><div class="sub" id="whoLine">Updates every few seconds</div></div>
+      <span class="live"><i></i>Live</span>
+    </header>
+
+    <section class="card">
+      <h2>Tonight's DJ</h2>
+      <div id="djLine2" style="font-size:18px;font-weight:600"></div>
+      <button type="button" class="kill on" id="closeDj" hidden>Close the DJ's night (sign them out)</button>
+      <button type="button" class="kill" id="tipsToggle" hidden style="background:transparent;color:var(--ink)"></button>
+      <p class="sub" style="margin:0">Forgot to sign out? Close their night here. It signs the DJ out and stops their tips. Staff can also do this from the host page.</p>
+    </section>
+
+    <section class="card">
+      <h2>Tonight's tips <span id="tipState"></span></h2>
+      <div class="tiles" id="tiles"></div>
+      <div class="chips" id="byDj"></div>
+      <ol id="tipList"></ol>
+      <p class="sub" style="margin:0">What guests tapped to send. Confirm in the DJ's payment apps.</p>
+    </section>
+
+    <section class="card">
+      <h2>⏫ Paid move-ups <span id="bumpState"></span></h2>
+      <div class="tiles" id="bumpTiles" style="grid-template-columns:repeat(3,1fr)"></div>
+      <button type="button" class="kill" id="bumpKill"></button>
+      <ol id="bumpList"></ol>
+      <p class="sub" style="margin:0">Guests pay the DJ $<span id="bumpPrice">1</span> a spot. They only move after the DJ confirms the payment. Approved move-ups also count in the DJ's tips.</p>
+    </section>
+
+    <section class="card">
+      <h2>Tonight's crowd</h2>
+      <div class="crowd" id="crowd"></div>
+    </section>
+
+    <section class="card">
+      <h2>Last 30 days of tips</h2>
+      <div class="tiles" id="histTiles" style="grid-template-columns:repeat(3,1fr)"></div>
+      <ol id="histList"></ol>
+    </section>
+
+    <section class="card">
+      <h2>Posted to social media <span id="postCount"></span></h2>
+      <div class="tiles" id="postTiles" style="grid-template-columns:repeat(3,1fr)"></div>
+      <ol id="postList"></ol>
+      <p class="sub" style="margin:0">Counts when a singer taps a Facebook, Instagram or TikTok icon and finishes sharing.</p>
+    </section>
+
+    <section class="card">
+      <h2>Now singing <span id="djLine"></span></h2>
+      <div class="now" id="now"></div>
+    </section>
+
+    <section class="card">
+      <h2>Up next <span id="waitCount"></span></h2>
+      <ol id="queue"></ol>
+    </section>
+
+    <section class="card">
+      <h2>Sung tonight <span id="doneCount"></span></h2>
+      <ol id="done"></ol>
+    </section>
+
+    <section class="card">
+      <h2>Night status</h2>
+      <div class="chips" id="status"></div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let pin = "", mgr = ""; try{ pin = sessionStorage.getItem("bar_pin") || ""; mgr = sessionStorage.getItem("bar_name") || ""; }catch(e){}
+const H = () => ({ "x-bar-pin": pin, "x-bar-name": encodeURIComponent(mgr), "Content-Type": "application/json" });
+async function post(path, body){ const r = await fetch(path, { method: "POST", headers: H(), body: JSON.stringify(body || {}) }); if(r.status === 401){ showLock("Wrong PIN."); throw new Error("pin"); } const j = await r.json().catch(() => ({})); if(!r.ok) throw new Error(j.error || "Didn't work. Try again."); return j; }
+const money = v => "$" + (Number.isInteger(v) ? v : Number(v).toFixed(2));
+const NAMES = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
+async function get(path){
+  const r = await fetch(path, { headers: H(), cache: "no-store" });
+  const j = await r.json().catch(() => ({}));
+  if(r.status === 401){ showLock("Wrong PIN."); throw new Error("pin"); }
+  if(!r.ok) throw new Error(j.error || "Couldn't load.");
+  return j;
+}
+function showLock(msg){ $("view").hidden = true; $("lock").hidden = false; $("err").textContent = msg || ""; try{ sessionStorage.removeItem("bar_pin"); sessionStorage.removeItem("bar_name"); }catch(e){} clearInterval(timer); }
+function pic(r, big){
+  const im = document.createElement("img"); im.alt = ""; im.className = "av";
+  const logo = () => { im.onerror = null; im.src = "/logo.png"; im.classList.add("logo"); };
+  if(r && r.photo){ im.src = "/api/photo/" + r.id + "?v=" + r.photo; im.onerror = logo; } else logo();
+  return im;
+}
+function row(r, n){
+  const li = document.createElement("li");
+  const a = document.createElement("span"); a.className = "n"; a.textContent = n;
+  const t = document.createElement("div"); t.className = "t";
+  const b = document.createElement("b"); b.textContent = r.name + (r.rating ? "  " + "★".repeat(r.rating) : "");
+  const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
+  if(r.posted && r.posted.length){
+    const c = document.createElement("span"); c.className = "posted";
+    r.posted.forEach(n => { const x = document.createElement("i"); x.className = "net " + (NETC[n] || ""); x.textContent = NETL[n] || n; x.title = "Posted to " + n; c.appendChild(x); });
+    b.appendChild(c);
+  }
+  t.append(b, s); li.append(a, pic(r), t); return li;
+}
+const NETL = { Facebook: "f", Instagram: "IG", TikTok: "TT" }, NETC = { Facebook: "fb", Instagram: "ig", TikTok: "tt" };
+function paintQueue(st){
+  const up = st.queue.find(r => r.status === "up"), wait = st.queue.filter(r => r.status === "queued");
+  const now = $("now"); now.innerHTML = "";
+  if(up){ const t = document.createElement("div"); const b = document.createElement("b"); b.textContent = up.name; const s = document.createElement("span"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); t.append(b, s); now.append(pic(up, true), t); }
+  else { const p = document.createElement("p"); p.className = "empty"; p.style.margin = "0"; p.textContent = wait.length ? "Starting soon" : "Nobody singing"; now.appendChild(p); }
+  $("djLine").textContent = st.djOn ? "🎧 DJ: " + st.djOn : "no DJ signed in";
+  $("waitCount").textContent = wait.length + " waiting";
+  const q = $("queue"); q.innerHTML = "";
+  if(!wait.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody waiting."; q.appendChild(li); }
+  wait.forEach((r, i) => q.appendChild(row(r, i + 1)));
+  const d = $("done"); d.innerHTML = ""; $("doneCount").textContent = st.done.length ? st.done.length + " songs" : "";
+  if(!st.done.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No songs yet."; d.appendChild(li); }
+  st.done.forEach(r => d.appendChild(row(r, "✓")));
+  // who posted their song, and where
+  const cnt = { Facebook: 0, Instagram: 0, TikTok: 0 }, people = [];
+  st.done.concat(st.queue).forEach(r => { if(r.posted && r.posted.length){ people.push(r); r.posted.forEach(n => { if(n in cnt) cnt[n]++; }); } });
+  $("postCount").textContent = people.length ? people.length + (people.length === 1 ? " singer posted" : " singers posted") : "";
+  const pt = $("postTiles"); pt.innerHTML = "";
+  [["Facebook", "fb"], ["Instagram", "ig"], ["TikTok", "tt"]].forEach(([n, c]) => { const d2 = document.createElement("div"); d2.className = "tile"; const b = document.createElement("b"); b.textContent = cnt[n]; const sp = document.createElement("span"); sp.innerHTML = '<i class="net ' + c + '">' + NETL[n] + "</i> " + n; d2.append(b, sp); pt.appendChild(d2); });
+  const pl = $("postList"); pl.innerHTML = "";
+  if(!people.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No posts yet tonight."; pl.appendChild(li); }
+  people.forEach(r => pl.appendChild(row(r, "📣")));
+  const p = st.pause || {}, chips = [
+    [st.open ? (p.paused ? "Sign-ups paused" : "Sign-ups open") : "Sign-ups closed", st.open && !p.paused],
+    ["Location check " + (st.geofence ? "on" : "off"), st.geofence],
+    ["Lyrics " + (st.lyrics === false ? "off" : "on"), st.lyrics !== false],
+    ["One song per person on the queue: " + (st.multi ? "off" : "on"), !st.multi]
+  ];
+  const box = $("status"); box.innerHTML = "";
+  chips.forEach(([t, on]) => { const s = document.createElement("span"); s.className = "pill" + (on ? " on" : ""); s.textContent = t; box.appendChild(s); });
+}
+function paintCrowd(box, su, ph){
+  if(!box) return; box.innerHTML = "";
+  const tile = (v, l) => { const d = document.createElement("div"); d.className = "ctile"; const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(b, sp); box.appendChild(d); };
+  if(ph){ tile(ph.now, "phones open now"); tile(ph.tonight, "phones tonight"); tile(ph.app, "installed the app"); }
+  if(su){ tile(su.total, "sign-ups tonight"); tile(su.qr, "scanned the QR"); tile(su.app, "from the app"); tile(su.link, "from the link"); tile(su.dj, "added by the DJ"); if(su.untracked) tile(su.untracked, "before tracking"); }
+}
+function paintTips(t){
+  $("tipState").textContent = t.on ? "going to " + t.host : "tips off";
+  const list = t.tonight || [], total = t.total || 0, count = list.length;
+  const people = {}; list.forEach(x => { people[x.who] = people[x.who] || { name: x.name, total: 0 }; people[x.who].total += x.amount; people[x.who].name = x.name; });
+  const top = Object.values(people).sort((a, b) => b.total - a.total)[0];
+  const tiles = [[money(total), "tapped tonight"], [count, count === 1 ? "tip" : "tips"], [count ? money(Math.round(total / count * 100) / 100) : "$0", "average tip"], [top ? top.name : "–", top ? "top tipper · " + money(top.total) : "top tipper"]];
+  const tb = $("tiles"); tb.innerHTML = "";
+  tiles.forEach(([v, l]) => { const d = document.createElement("div"); d.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; d.append(b, s); tb.appendChild(d); });
+  const bd = $("byDj"); bd.innerHTML = "";
+  Object.entries(t.byDj || {}).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => { const s = document.createElement("span"); s.append("🎧 " + k + " "); const b = document.createElement("b"); b.textContent = money(v); s.appendChild(b); bd.appendChild(s); });
+  const ol = $("tipList"); ol.innerHTML = "";
+  if(!count){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No tips yet tonight."; ol.appendChild(li); }
+  list.slice(0, 50).forEach(x => {
+    const li = document.createElement("li"); li.className = "tip"; li.style.display = "block";
+    const b = document.createElement("b"); b.textContent = x.name + " · " + money(x.amount);
+    const s = document.createElement("span"); s.className = "sub"; s.textContent = "  " + (NAMES[x.method] || x.method) + " · " + new Date(x.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " · to " + x.to;
+    li.append(b, s);
+    if(x.comment){ const q = document.createElement("q"); q.textContent = x.comment; li.appendChild(q); }
+    ol.appendChild(li);
+  });
+}
+let bumpOn = true;
+function paintBump(b){
+  if(!b) return; bumpOn = !!b.on; $("bumpPrice").textContent = b.price;
+  $("bumpState").textContent = b.on ? "on" : "off";
+  const k = $("bumpKill"); k.className = "kill " + (b.on ? "on" : "off"); k.textContent = b.on ? "⛔ Turn off move-ups" : "▶ Turn move-ups back on";
+  const list = b.list || [], ok = list.filter(x => x.status === "approved"), wait = list.filter(x => x.status === "pending");
+  const tb = $("bumpTiles"); tb.innerHTML = "";
+  [[money(ok.reduce((a, x) => a + x.amount, 0)), "approved tonight"], [ok.length, ok.length === 1 ? "move-up" : "move-ups"], [wait.length, "waiting on DJ"]].forEach(([v, l]) => { const d = document.createElement("div"); d.className = "tile"; const bb = document.createElement("b"); bb.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(bb, sp); tb.appendChild(d); });
+  const LBL = { approved: "approved", pending: "waiting on DJ", denied: "not paid", expired: "left the line", canceled: "canceled" };
+  const ol = $("bumpList"); ol.innerHTML = "";
+  if(!list.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No move-ups yet tonight."; ol.appendChild(li); }
+  list.slice(0, 50).forEach(x => {
+    const li = document.createElement("li"); li.className = "tip"; li.style.display = "block";
+    const bb = document.createElement("b"); bb.textContent = x.name + " · " + money(x.amount);
+    const st = document.createElement("i"); st.className = "bst " + x.status; st.textContent = LBL[x.status] || x.status; bb.appendChild(st);
+    const sp = document.createElement("span"); sp.className = "sub";
+    sp.textContent = "  up " + x.spots + (x.spots === 1 ? " spot" : " spots") + (x.from ? " (#" + x.from + " → #" + x.toSpot + ")" : "") + " · " + (NAMES[x.method] || x.method) + " · " + new Date(x.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " · to " + x.to + (x.by ? (x.status === "approved" ? " · OK'd by " : x.status === "canceled" ? " · canceled by " : " · by ") + x.by : "");
+    li.append(bb, sp); ol.appendChild(li);
+  });
+}
+$("bumpKill").addEventListener("click", async () => {
+  const want = !bumpOn; $("bumpKill").disabled = true;
+  try{
+    await post("/api/bar/bump", { on: want });
+  }catch(e){}
+  $("bumpKill").disabled = false; refresh();
+});
+function paintDj(j){
+  $("whoLine").textContent = (j.who && j.who.manager ? "Manager: " + j.who.name : "Owner") + " · updates every few seconds";
+  const d = j.dj; $("djLine2").textContent = d ? "🎧 " + d.name + (d.since ? " · on since " + new Date(d.since).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "") : "No DJ signed in right now.";
+  $("closeDj").hidden = !d; $("tipsToggle").hidden = !d;
+  $("tipsToggle").textContent = j.tipsStopped ? "▶ Turn tips back on for " + (d ? d.name : "the DJ") : "⏸ Stop tips tonight";
+  $("tipsToggle").dataset.on = j.tipsStopped ? "1" : "";
+}
+function paintHist(h){
+  const tb = $("histTiles"), ol = $("histList"); tb.innerHTML = ""; ol.innerHTML = "";
+  if(!h){ return; }
+  const tot = h.totals || h.lifetime || {}, nights = h.nights || [];
+  const sum = nights.reduce((a, n) => a + (n.total || 0), 0), cnt = nights.reduce((a, n) => a + (n.count || 0), 0);
+  [[money(Math.round(sum * 100) / 100), "tapped, 30 days"], [cnt, "tips"], [nights.length, "nights"]].forEach(([v, l]) => { const d = document.createElement("div"); d.className = "tile"; const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(b, sp); tb.appendChild(d); });
+  nights.slice().reverse().slice(0, 14).forEach(n => { const li = document.createElement("li"); li.className = "tip"; li.style.display = "block"; const b = document.createElement("b"); b.textContent = n.night + " · " + money(n.total || 0); const sp = document.createElement("span"); sp.className = "sub"; sp.textContent = "  " + (n.count || 0) + " tips" + (n.top ? " · top: " + n.top + " " + money(n.topAmount || 0) : ""); li.append(b, sp); ol.appendChild(li); });
+  if(!nights.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No tips in the last 30 days."; ol.appendChild(li); }
+}
+$("closeDj").addEventListener("click", async () => {
+  const b = $("closeDj"); if(b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "Tap again to sign the DJ out"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Close the DJ's night (sign them out)"; }, 4000); return; }
+  b.dataset.armed = ""; b.textContent = "Close the DJ's night (sign them out)";
+  try{ await post("/api/bar/close-dj"); }catch(e){} refresh();
+});
+$("tipsToggle").addEventListener("click", async () => { try{ await post("/api/bar/tips", { on: $("tipsToggle").dataset.on === "1" }); }catch(e){} refresh(); });
+let timer = null;
+window.diveRefresh = () => !$("view").hidden ? refresh() : location.reload();
+async function refresh(){
+  try{
+    const j = await get("/api/bar");
+    paintDj(j); paintHist(j.history);
+    paintQueue(j.state); paintTips(j.tips); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
+  }catch(e){}
+}
+async function open(){
+  try{
+    await get("/api/bar");
+    try{ sessionStorage.setItem("bar_pin", pin); sessionStorage.setItem("bar_name", mgr); }catch(e){}
+    $("lock").hidden = true; $("view").hidden = false;
+    await refresh(); clearInterval(timer); timer = setInterval(refresh, 5000);
+  }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
+}
+$("lockForm").addEventListener("submit", e => { e.preventDefault(); pin = $("pin").value.trim(); mgr = $("mgrName").value.trim(); if(pin) open(); });
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && !$("view").hidden) refresh(); });
+if(pin) open(); else showLock("");
+</script>
+</body>
+</html>
