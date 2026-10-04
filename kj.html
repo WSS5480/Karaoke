@@ -470,7 +470,13 @@ function item(r, i, waiting){
   if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av" + (r.photoSt === "pending" ? " blur pend" : r.photoSt === "hidden" ? " blur hid" : ""); av.alt = "Photo of " + r.name + (r.photoSt === "pending" ? ", waiting for your OK" : r.photoSt === "hidden" ? ", blurred" : "") + ". Tap to check it."; kjPic(av, r); av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
   li.append(t);
   const info = document.createElement("button"); info.textContent = "History"; info.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); });
-  if(!waiting){ const a = document.createElement("div"); a.className = "acts"; a.appendChild(info); li.appendChild(a); }
+  if(!waiting){
+    const a = document.createElement("div"); a.className = "acts";
+    const back = document.createElement("button"); back.textContent = "↩ Put back"; back.className = "next";
+    back.title = "Skipped by mistake? Puts them back in line as next up";
+    back.addEventListener("click", () => { const n = prompt("Put " + r.name + " back at which spot? (1 = next up)", "1"); if(n === null) return; act(`/api/kj/${r.id}/readd`, { spot: parseInt(n, 10) || 1 }); });
+    a.append(back, info); li.appendChild(a);
+  }
   if(waiting){
     const a = document.createElement("div"); a.className = "acts";
     const mk = (label, action, cls) => { const x = document.createElement("button"); x.textContent = label; if(cls) x.className = cls; x.addEventListener("click", () => act(`/api/kj/${r.id}/${action}`)); return x; };

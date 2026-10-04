@@ -1112,6 +1112,10 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
     const q = (await db.active()).filter(r => r.status === "queued"), i = q.findIndex(r => r.id === id);
     const j = action === "raise" ? i - 1 : i + 1;
     if (i > -1 && j >= 0 && j < q.length) { await db.setPos(q[i].id, q[j].position); await db.setPos(q[j].id, q[i].position); }
+  } else if (action === "readd") {
+    // undo an accidental skip: back into line (next up by default)
+    if (row.status === "up" || row.status === "queued") return res.status(400).json({ error: "They're already in line." });
+    await db.setStatus(id, "queued"); await placeAt(id, req.body.spot || 1);
   } else if (action === "move") {
     if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be moved." });
     await placeAt(id, req.body.spot);
