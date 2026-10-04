@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Live View · The Dive</title>
+<link rel="icon" href="/logo.png">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@600;800&family=Outfit:wght@400;500;600&display=swap">
+<style>
+/* Owner's live view: what the DJ sees plus tonight's tip money, read-only. One column, refreshes itself. */
+:root{--wall:#0a0c0a;--panel:#131713;--panel-2:#1b211b;--line:#2b352b;--green:#39b54a;--green-hi:#5fd36e;--gold:#ffc93c;--ink:#eef3ee;--ink-2:#9fae9f;--warn:#ff6b6b;
+--slab:"Roboto Slab",Rockwell,Georgia,serif;--body:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+main{max-width:620px;margin:0 auto;padding:18px 16px 40px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;gap:12px}
+header img{width:48px}
+h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;line-height:1.1}
+.sub{font-size:13px;color:var(--ink-2)}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--green-hi)}
+.live i{width:8px;height:8px;border-radius:50%;background:#ff3b3b;box-shadow:0 0 8px #ff3b3b;animation:p 1.4s infinite}
+@keyframes p{50%{opacity:.3}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+h2{font-family:var(--slab);font-weight:800;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-hi);margin:0;display:flex;justify-content:space-between;gap:8px}
+h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+.now{display:flex;gap:12px;align-items:center}
+.av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:#fff;border:2px solid var(--line);flex:none}
+.now .av{width:64px;height:64px;border-color:var(--green)}
+.av.logo{object-fit:contain;padding:3px}
+.now b{display:block;font-family:var(--slab);font-size:22px;line-height:1.1}
+.now span{color:var(--ink-2)}
+ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+li{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);min-width:0}
+li:first-child{border-top:0}
+li .n{width:22px;text-align:right;color:var(--ink-2);font-family:var(--slab);font-weight:800;flex:none}
+li .t{min-width:0;flex:1}
+li .t b{display:block;font-weight:600;overflow-wrap:anywhere}
+li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
+.empty{color:var(--ink-2);font-size:14px}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tile{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.tile b{display:block;font-family:var(--slab);font-size:24px;color:var(--gold)}
+.tile span{font-size:12px;color:var(--ink-2)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px}
+.chips b{color:var(--gold)}
+.tip b{font-weight:600}
+.tip q{display:block;color:var(--ink);font-size:14px;margin-top:2px;quotes:"“" "”"}
+.pill{font-size:13px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--ink-2)}
+.pill.on{border-color:var(--green);color:var(--green-hi)}
+.lock{min-height:80vh;display:grid;place-items:center}
+.lbox{width:100%;max-width:340px;background:var(--panel);border:1px solid var(--green);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.lbox input{font:inherit;font-size:22px;letter-spacing:.3em;text-align:center;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--wall);color:var(--ink)}
+.lbox button{font:inherit;font-weight:700;font-size:16px;border:0;border-radius:999px;padding:12px;background:var(--green);color:#041206;cursor:pointer}
+.err{color:var(--warn);font-size:14px;min-height:18px;margin:0}
+a{color:var(--green-hi)}
+@media (min-width:560px){.tiles{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<main>
+  <div class="lock" id="lock" hidden>
+    <form class="lbox" id="lockForm" novalidate>
+      <img src="/logo.png" alt="" style="width:64px;margin:0 auto">
+      <h1>Live view</h1>
+      <p class="sub" style="margin:0">Owner only. Enter the house PIN.</p>
+      <input id="pin" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password" aria-label="House PIN" placeholder="House PIN">
+      <button type="submit">Open</button>
+      <p class="err" id="err" role="alert"></p>
+    </form>
+  </div>
+
+  <div id="view" hidden style="display:flex;flex-direction:column;gap:14px">
+    <header>
+      <img src="/logo.png" alt="The Dive on 495">
+      <div style="flex:1"><h1>Live view</h1><div class="sub">View only · no controls · updates every few seconds</div></div>
+      <span class="live"><i></i>Live</span>
+    </header>
+
+    <section class="card">
+      <h2>Tonight's tips <span id="tipState"></span></h2>
+      <div class="tiles" id="tiles"></div>
+      <div class="chips" id="byDj"></div>
+      <ol id="tipList"></ol>
+      <p class="sub" style="margin:0">What guests tapped to send. Confirm in the DJ's payment apps. Past nights: <a href="/stats">Analytics</a>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Now singing <span id="djLine"></span></h2>
+      <div class="now" id="now"></div>
+    </section>
+
+    <section class="card">
+      <h2>Up next <span id="waitCount"></span></h2>
+      <ol id="queue"></ol>
+    </section>
+
+    <section class="card">
+      <h2>Sung tonight <span id="doneCount"></span></h2>
+      <ol id="done"></ol>
+    </section>
+
+    <section class="card">
+      <h2>Night status</h2>
+      <div class="chips" id="status"></div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let pin = ""; try{ pin = sessionStorage.getItem("watch_pin") || ""; }catch(e){}
+const money = v => "$" + (Number.isInteger(v) ? v : Number(v).toFixed(2));
+const NAMES = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
+async function get(path){
+  const r = await fetch(path, { headers: { "x-kj-pin": pin }, cache: "no-store" });
+  const j = await r.json().catch(() => ({}));
+  if(r.status === 401){ showLock("Wrong PIN."); throw new Error("pin"); }
+  if(!r.ok) throw new Error(j.error || "Couldn't load.");
+  return j;
+}
+function showLock(msg){ $("view").hidden = true; $("lock").hidden = false; $("err").textContent = msg || ""; try{ sessionStorage.removeItem("watch_pin"); }catch(e){} clearInterval(timer); }
+function pic(r, big){
+  const im = document.createElement("img"); im.alt = ""; im.className = "av";
+  const logo = () => { im.onerror = null; im.src = "/logo.png"; im.classList.add("logo"); };
+  if(r && r.photo){ im.src = "/api/photo/" + r.id + "?v=" + r.photo; im.onerror = logo; } else logo();
+  return im;
+}
+function row(r, n){
+  const li = document.createElement("li");
+  const a = document.createElement("span"); a.className = "n"; a.textContent = n;
+  const t = document.createElement("div"); t.className = "t";
+  const b = document.createElement("b"); b.textContent = r.name + (r.rating ? "  " + "★".repeat(r.rating) : "");
+  const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
+  t.append(b, s); li.append(a, pic(r), t); return li;
+}
+function paintQueue(st){
+  const up = st.queue.find(r => r.status === "up"), wait = st.queue.filter(r => r.status === "queued");
+  const now = $("now"); now.innerHTML = "";
+  if(up){ const t = document.createElement("div"); const b = document.createElement("b"); b.textContent = up.name; const s = document.createElement("span"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); t.append(b, s); now.append(pic(up, true), t); }
+  else { const p = document.createElement("p"); p.className = "empty"; p.style.margin = "0"; p.textContent = wait.length ? "Starting soon" : "Nobody singing"; now.appendChild(p); }
+  $("djLine").textContent = st.djOn ? "🎧 DJ: " + st.djOn : "no DJ signed in";
+  $("waitCount").textContent = wait.length + " waiting";
+  const q = $("queue"); q.innerHTML = "";
+  if(!wait.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody waiting."; q.appendChild(li); }
+  wait.forEach((r, i) => q.appendChild(row(r, i + 1)));
+  const d = $("done"); d.innerHTML = ""; $("doneCount").textContent = st.done.length ? st.done.length + " songs" : "";
+  if(!st.done.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No songs yet."; d.appendChild(li); }
+  st.done.forEach(r => d.appendChild(row(r, "✓")));
+  const p = st.pause || {}, chips = [
+    [st.open ? (p.paused ? "Sign-ups paused" : "Sign-ups open") : "Sign-ups closed", st.open && !p.paused],
+    ["Location check " + (st.geofence ? "on" : "off"), st.geofence],
+    ["Lyrics " + (st.lyrics === false ? "off" : "on"), st.lyrics !== false],
+    [(st.multi ? "More than one song allowed" : "One song per person"), false]
+  ];
+  const box = $("status"); box.innerHTML = "";
+  chips.forEach(([t, on]) => { const s = document.createElement("span"); s.className = "pill" + (on ? " on" : ""); s.textContent = t; box.appendChild(s); });
+}
+function paintTips(t){
+  $("tipState").textContent = t.on ? "going to " + t.host : "tips off";
+  const list = t.tonight || [], total = t.total || 0, count = list.length;
+  const people = {}; list.forEach(x => { people[x.who] = people[x.who] || { name: x.name, total: 0 }; people[x.who].total += x.amount; people[x.who].name = x.name; });
+  const top = Object.values(people).sort((a, b) => b.total - a.total)[0];
+  const tiles = [[money(total), "tapped tonight"], [count, count === 1 ? "tip" : "tips"], [count ? money(Math.round(total / count * 100) / 100) : "$0", "average tip"], [top ? top.name : "–", top ? "top tipper · " + money(top.total) : "top tipper"]];
+  const tb = $("tiles"); tb.innerHTML = "";
+  tiles.forEach(([v, l]) => { const d = document.createElement("div"); d.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; d.append(b, s); tb.appendChild(d); });
+  const bd = $("byDj"); bd.innerHTML = "";
+  Object.entries(t.byDj || {}).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => { const s = document.createElement("span"); s.append("🎧 " + k + " "); const b = document.createElement("b"); b.textContent = money(v); s.appendChild(b); bd.appendChild(s); });
+  const ol = $("tipList"); ol.innerHTML = "";
+  if(!count){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No tips yet tonight."; ol.appendChild(li); }
+  list.slice(0, 50).forEach(x => {
+    const li = document.createElement("li"); li.className = "tip"; li.style.display = "block";
+    const b = document.createElement("b"); b.textContent = x.name + " · " + money(x.amount);
+    const s = document.createElement("span"); s.className = "sub"; s.textContent = "  " + (NAMES[x.method] || x.method) + " · " + new Date(x.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " · to " + x.to;
+    li.append(b, s);
+    if(x.comment){ const q = document.createElement("q"); q.textContent = x.comment; li.appendChild(q); }
+    ol.appendChild(li);
+  });
+}
+let timer = null;
+async function refresh(){
+  try{
+    const st = await get("/api/kj/state");
+    if(!st.me || !st.me.admin){ showLock("Live view is for the owner's house PIN only."); return; }
+    paintQueue(st);
+    paintTips(await get("/api/kj/tips"));
+  }catch(e){}
+}
+async function open(){
+  try{
+    const st = await get("/api/kj/state");
+    if(!st.me || !st.me.admin){ showLock("Live view is for the owner's house PIN only."); return; }
+    try{ sessionStorage.setItem("watch_pin", pin); }catch(e){}
+    $("lock").hidden = true; $("view").hidden = false;
+    await refresh(); clearInterval(timer); timer = setInterval(refresh, 5000);
+  }catch(e){ if(e.message !== "pin") $("err").textContent = e.message; }
+}
+$("lockForm").addEventListener("submit", e => { e.preventDefault(); pin = $("pin").value.trim(); if(pin) open(); });
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && !$("view").hidden) refresh(); });
+if(pin) open(); else showLock("");
+</script>
+</body>
+</html>

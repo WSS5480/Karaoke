@@ -79,7 +79,7 @@ app.use(async (req, res, next) => {
   if (/^\/(setup|api\/setup|api\/billing|terms|logo\.png|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|[\w-]*manifest\.json|m\/|healthz)/.test(req.path)) return next();
   if (planSummary(t).active) return next();
   if (req.path.startsWith("/api/")) return res.status(402).json({ error: "inactive", message: "This karaoke system isn't active right now. Ask the host." });
-  if (/^\/(kj|stats|ads|history|staff|owner|links|wheel|tv|tent|poster)\b/.test(req.path)) return res.redirect(BASE() + "/setup");
+  if (/^\/(kj|stats|ads|history|staff|owner|links|watch|wheel|tv|tent|poster)\b/.test(req.path)) return res.redirect(BASE() + "/setup");
   res.status(402).type("html").send(simplePage(t.name, `<img src="${BASE()}/logo.png" alt=""><h1>${esc(t.name)}</h1><p>Karaoke sign-up isn't open right now. Ask the host, or check back soon.</p>`));
 });
 /* =====================================================================
@@ -157,7 +157,7 @@ function refreshPlan(t) {
 }
 
 /* ---------- branding: other bars get The Dive's pages with their own name, logo and links ---------- */
-const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|owner\b|links\/|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
+const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|owner\b|links\/|watch\b|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
 function brand(html, t, base, host) {
   if (t.house) return html;
   const name = t.name, short = t.short || t.name, tagWord = (short || name).replace(/[^A-Za-z0-9]/g, ""), city = t.city || "";
@@ -1248,7 +1248,7 @@ app.post("/api/kj/venue", wrap(async (req, res) => {
 
 /* ---------- pages ---------- */
 // HTML pages: sent as-is for The Dive, re-branded for other bars and DJs
-const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tent": "tent.html", "/terms": "terms.html", "/owner": "staff.html", "/setup": "setup.html", "/start": "start.html" };
+const PAGES = { "/": "index.html", "/kj": "kj.html", "/poster": "poster.html", "/tent": "tent.html", "/terms": "terms.html", "/owner": "staff.html", "/watch": "watch.html", "/setup": "setup.html", "/start": "start.html" };
 // extra pages that each install as their own app (own name + icon)
 const APPS = {
   "/stats": { file: "stats.html", key: "stats", name: "The Dive Analytics", short: "Dive Stats" },
