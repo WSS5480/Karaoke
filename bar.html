@@ -69,6 +69,7 @@ a{color:var(--green-hi)}
 .net.fb{background:#1877f2}.net.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.net.tt{background:#000;border:1px solid #444}
 @media (min-width:560px){.tiles{grid-template-columns:repeat(4,1fr)}}
 </style>
+<script src="/forgot.js"></script>
 </head>
 <body>
 <main>
@@ -90,6 +91,15 @@ a{color:var(--green-hi)}
       <div style="flex:1"><h1>Bar Owner</h1><div class="sub" id="whoLine">Updates every few seconds</div></div>
       <span class="live"><i></i>Live</span>
     </header>
+
+    <section class="card" id="newPinCard" hidden style="border:2px solid var(--gold)">
+      <h2>Make your own Bar Owner PIN</h2>
+      <p class="sub" style="margin:0">You're on the starting PIN. Pick one only you know, and add your phone so you can reset it by text if you forget.</p>
+      <input id="np1" type="password" inputmode="numeric" maxlength="8" placeholder="New PIN (4–8 digits)" aria-label="New PIN">
+      <input id="npPhone" inputmode="tel" maxlength="20" placeholder="Your phone (for Forgot PIN)" aria-label="Your phone">
+      <button type="button" class="kill off" id="npSave">Save</button>
+      <p class="err" id="npErr" role="alert"></p>
+    </section>
 
     <section class="card">
       <h2>Tonight's DJ</h2>
@@ -146,6 +156,15 @@ a{color:var(--green-hi)}
     <section class="card">
       <h2>Sung tonight <span id="doneCount"></span></h2>
       <ol id="done"></ol>
+    </section>
+
+    <section class="card" id="ownSet" hidden>
+      <h2>Your PIN &amp; phone <span class="sub" id="ownPhone"></span></h2>
+      <input id="op1" type="password" inputmode="numeric" maxlength="8" placeholder="New Bar Owner PIN (4–8 digits)" aria-label="New PIN">
+      <button type="button" class="kill" id="opSave" style="background:transparent;color:var(--ink)">Change PIN</button>
+      <input id="opPhone" inputmode="tel" maxlength="20" placeholder="Phone for Forgot PIN" aria-label="Phone for Forgot PIN">
+      <button type="button" class="kill" id="opPhoneSave" style="background:transparent;color:var(--ink)">Save phone</button>
+      <p class="err" id="opMsg" role="status"></p>
     </section>
 
     <section class="card">
@@ -274,6 +293,19 @@ $("bumpKill").addEventListener("click", async () => {
   }catch(e){}
   $("bumpKill").disabled = false; refresh();
 });
+function paintOwn(j){
+  const own = !!(j.who && j.who.owner && j.who.name === "Owner");
+  $("ownSet").hidden = !own; $("ownPhone").textContent = j.ownerPhone ? "· phone " + j.ownerPhone : "· no phone yet";
+  $("newPinCard").hidden = !(j.who && j.who.starting);
+}
+async function savePin(v){ await post("/api/bar/pin", { pin: v }); pin = v; try{ sessionStorage.setItem("bar_pin", v); }catch(e){} }
+$("npSave").addEventListener("click", async () => {
+  $("npErr").textContent = "";
+  try{ if($("npPhone").value.trim()) await post("/api/bar/phone", { phone: $("npPhone").value }); await savePin($("np1").value.trim()); $("np1").value = ""; refresh(); }
+  catch(e){ if(e.message !== "pin") $("npErr").textContent = e.message; }
+});
+$("opSave").addEventListener("click", async () => { try{ await savePin($("op1").value.trim()); $("op1").value = ""; $("opMsg").textContent = "PIN changed ✓"; }catch(e){ if(e.message !== "pin") $("opMsg").textContent = e.message; } });
+$("opPhoneSave").addEventListener("click", async () => { try{ const j = await post("/api/bar/phone", { phone: $("opPhone").value }); $("opPhone").value = ""; $("opMsg").textContent = "Phone saved ✓ " + j.phone; refresh(); }catch(e){ if(e.message !== "pin") $("opMsg").textContent = e.message; } });
 function paintDj(j){
   $("whoLine").textContent = (j.who && j.who.manager ? "Manager: " + j.who.name : "Owner") + " · updates every few seconds";
   const d = j.dj; $("djLine2").textContent = d ? "🎧 " + d.name + (d.since ? " · on since " + new Date(d.since).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "") : "No DJ signed in right now.";
@@ -301,7 +333,7 @@ window.diveRefresh = () => !$("view").hidden ? refresh() : location.reload();
 async function refresh(){
   try{
     const j = await get("/api/bar");
-    paintDj(j); paintHist(j.history);
+    paintDj(j); paintHist(j.history); paintOwn(j);
     paintQueue(j.state); paintTips(j.tips); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
   }catch(e){}
 }
@@ -315,6 +347,7 @@ async function open(){
 }
 $("lockForm").addEventListener("submit", e => { e.preventDefault(); pin = $("pin").value.trim(); mgr = $("mgrName").value.trim(); if(pin) open(); });
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && !$("view").hidden) refresh(); });
+if(window.diveForgotLink) diveForgotLink($("lockForm"), { kinds: [{ k: "bar", label: "Bar Owner PIN" }, { k: "host", label: "My manager login", name: true }] });
 if(pin) open(); else showLock("");
 </script>
 </body>

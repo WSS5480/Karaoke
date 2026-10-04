@@ -162,6 +162,7 @@ a{color:var(--green-hi)}
 #tipList li small{color:var(--ink-2)}
 </style>
 <script src="/zoom.js" defer></script>
+<script src="/forgot.js"></script>
 </head>
 <body>
 <main>
@@ -191,6 +192,7 @@ a{color:var(--green-hi)}
   <div id="panel" hidden style="display:flex;flex-direction:column;gap:16px">
     <div class="row" style="justify-content:space-between;font-size:14px;color:var(--ink-2)"><span id="meLine"></span><span class="row" style="gap:6px"><button id="myPinBtn" type="button" style="padding:6px 12px;font-size:13px" hidden>Change my PIN</button><button id="signOut" type="button" style="padding:6px 12px;font-size:13px">Sign out</button></span></div>
     <form id="myPinForm" class="row" hidden novalidate><input id="myPin" inputmode="numeric" maxlength="8" placeholder="New PIN (4–8 digits)" aria-label="New PIN" style="flex:1 1 160px;font-size:16px"><button type="submit">Save PIN</button><span class="err" id="myPinErr" role="alert"></span></form>
+    <form id="myPhoneForm" class="row" hidden novalidate><input id="myPhone" inputmode="tel" maxlength="20" placeholder="Phone for Forgot PIN" aria-label="Phone for Forgot PIN" style="flex:1 1 160px;font-size:16px;letter-spacing:0"><button type="submit">Save phone</button><span id="myPhoneMsg" style="font-size:13px;color:var(--ink-2)"></span></form>
     <section class="card bizcard" id="bizCard" hidden>
       <div class="row" style="justify-content:space-between"><b id="planLine"></b><a href="/setup" id="setupLink">Setup &amp; billing →</a></div>
       <div id="venueBox" class="row">
@@ -736,7 +738,7 @@ function paintMe(){
   $("crowdCard").hidden = !(state.signups || state.phones); paintCrowd($("crowd"), state.signups, state.phones);
   $("hostPin").placeholder = state.tempPin ? "Start PIN " + state.tempPin : "PIN";
   $("hostsCard").hidden = state.me.role === "dj"; $("hostForm").hidden = !state.me.admin;
-  $("myPinBtn").hidden = state.me.admin;
+  $("myPinBtn").hidden = false; $("myPinBtn").textContent = state.me.admin ? "Change house PIN" : "Change my PIN";
   $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "staff" ? " (staff)" : state.me.role === "dj" ? " (DJ)" : " (house)");
   if(state.me.role !== "dj" && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
 }
@@ -763,11 +765,11 @@ $("fpForm").addEventListener("submit", async e => {
   }catch(err){ if(err.message !== "pin") $("fpErr").textContent = err.message; }
 });
 $("fpOut").addEventListener("click", async () => { $("forcePin").hidden = true; try{ await api("/api/kj/logout", {}); }catch(e){} logout(""); });
-$("myPinBtn").addEventListener("click", () => { $("myPinForm").hidden = !$("myPinForm").hidden; $("myPinErr").textContent = ""; });
+$("myPinBtn").addEventListener("click", () => { $("myPhoneForm").hidden = !$("myPhoneForm").hidden; if(state){ $("myPhoneMsg").textContent = state.myPhone ? "On file: " + state.myPhone : "No phone on file yet"; } $("myPinForm").hidden = !$("myPinForm").hidden; $("myPinErr").textContent = ""; });
 $("myPinForm").addEventListener("submit", async e => {
   e.preventDefault(); const p = $("myPin").value.trim();
   if(!/^\d{4,8}$/.test(p)){ $("myPinErr").textContent = "PIN must be 4 to 8 digits."; return; }
-  try{ await api("/api/kj/my-pin", { pin: p }); pin = p; try{ sessionStorage.setItem("kj_pin", p); }catch(er){} $("myPin").value = ""; $("myPinForm").hidden = true; $("meLine").textContent = "PIN changed. Signed in as " + state.me.name;  loadTips(); }
+  try{ await api("/api/kj/my-pin", { pin: p }); pin = p; try{ sessionStorage.setItem("kj_pin", p); }catch(er){} $("myPin").value = ""; $("myPinForm").hidden = true; $("meLine").textContent = (state.me.admin ? "House PIN changed. Tell your staff who use it. " : "PIN changed. ") + "Signed in as " + state.me.name;  loadTips(); }
   catch(err){ $("myPinErr").textContent = err.message; }
 });
 $("signOut").addEventListener("click", async () => { try{ await api("/api/kj/logout", {}); }catch(e){} hostsLoaded = false; logout(""); });
@@ -843,6 +845,12 @@ $("tipLinksForm").addEventListener("submit", async e => {
   }catch(err){ if(err.message !== "pin") $("tipLinksErr").textContent = err.message; }
 });
 setInterval(() => { if(pin && !$("panel").hidden) loadTips(); }, 8000);
+if(window.diveForgotLink) diveForgotLink($("pinForm"), { kinds: [{ k: "host", label: "My DJ or staff login", name: true }, { k: "house", label: "The house PIN" }] });
+$("myPhoneForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try{ const j = await api("/api/kj/my-phone", { phone: $("myPhone").value }); $("myPhoneMsg").textContent = "Saved ✓ " + j.phone; $("myPhone").value = ""; }
+  catch(er){ if(er.message !== "pin") $("myPhoneMsg").textContent = er.message; }
+});
 if(pin) start();
 
 /* ---------- stay fresh when the app comes back ---------- */

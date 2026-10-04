@@ -80,6 +80,7 @@ body.shared #installBar,body.shared .ghd p,body.shared .gbtns,body.shared .ownon
 .iosguide.top .arrow::before{content:"⬆"}
 .iosguide.top .arrow{font-size:0}.iosguide.top .arrow::before{font-size:64px}
 </style>
+<script src="/forgot.js"></script>
 </head>
 <body>
 <div class="lock" id="lock" hidden>
@@ -203,7 +204,23 @@ const OWN_KEY = "dive_staff_owner_pin";
 async function isOwner(p){
   try{ const r = await fetch("/api/staff-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: p }), cache: "no-store" }); if(r.status === 429){ $("lockErr").textContent = "Too many tries. Wait 10 minutes."; return false; } return r.ok; }catch(e){ return false; }
 }
-function openList(){ $("lock").hidden = true; $("main").hidden = false; }
+function openList(){ $("lock").hidden = true; $("main").hidden = false; if(!document.body.classList.contains("shared")) ownerPhoneBox(); }
+// owner only: the phone that gets a code if you forget this list PIN
+async function ownerPhoneBox(){
+  let p = ""; try{ p = localStorage.getItem(OWN_KEY) || ""; }catch(e){} if(!p) return;
+  let box = document.getElementById("recBox");
+  if(!box){
+    box = document.createElement("div"); box.id = "recBox";
+    box.style.cssText = "border:1px solid var(--line,#2b352b);border-radius:14px;padding:12px;margin:0 0 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center";
+    box.innerHTML = '<b style="flex:1 1 100%">🔐 Forgot-PIN phone <span id="recNow" style="font-weight:400;color:#9fae9f"></span></b><input id="recPh" inputmode="tel" maxlength="20" placeholder="Your phone" style="flex:1 1 160px;font-size:16px;padding:10px;border-radius:10px;letter-spacing:0"><button type="button" id="recSave">Save</button><span id="recMsg" style="font-size:13px;color:#9fae9f"></span>';
+    $("main").insertBefore(box, $("main").firstChild);
+    $("recSave").addEventListener("click", async () => {
+      try{ const r = await fetch("/api/staff-list/phone", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: p, phone: $("recPh").value }) }); const j = await r.json(); if(!r.ok) throw new Error(j.error || "Didn't save."); $("recMsg").textContent = "Saved ✓"; $("recNow").textContent = "· " + j.phone; $("recPh").value = ""; }
+      catch(e){ $("recMsg").textContent = e.message; }
+    });
+  }
+  try{ const r = await fetch("/api/staff-list/info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: p }) }); const j = await r.json(); $("recNow").textContent = j.phone ? "· " + j.phone : "· none yet. Add one so a text can reset this PIN."; }catch(e){}
+}
 function showLock(t){ $("main").hidden = true; $("lock").hidden = false; $("lockErr").textContent = t || ""; $("lockPin").value = ""; $("lockPin").focus(); }
 const LINK_KEY = (location.pathname.match(/\/links\/(customers|dj|staff|bar)\/?$/) || [])[1] || new URLSearchParams(location.search).get("for");
 const SHARED = { customers: "Karaoke Links", dj: "DJ Links", staff: "Staff Links", bar: "Bar Owner Links" }[LINK_KEY];
@@ -226,6 +243,7 @@ $("lockForm").addEventListener("submit", async e => {
   if(await isOwner(p)){ try{ localStorage.setItem(OWN_KEY, p); }catch(er){} openList(); }
   else if(!$("lockErr").textContent.startsWith("Too many")) showLock("Wrong PIN. Only the owner can open this list.");
 });
+if(window.diveForgotLink) diveForgotLink($("lockForm"), { kinds: [{ k: "list", label: "Owner list PIN" }] });
 $("relock").addEventListener("click", () => { try{ localStorage.removeItem(OWN_KEY); }catch(e){} showLock(""); });
 
 const msg = document.getElementById("msg");

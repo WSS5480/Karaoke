@@ -47,6 +47,8 @@ Guests scan a QR code (or open the link), sign up for a song, and watch their pl
 - **Shared starting PIN:** set `HOST_TEMP_PIN` in Render. New logins and PIN resets use it when the owner leaves the PIN blank. Several logins can share it until they make their own; signing in with it shows a "Tap your name" step. Nobody can keep it as their own PIN.
 - **Host, DJ & Staff Terms:** on first sign-in (and whenever `HOST_TERMS_V` changes) DJs and staff must check a box agreeing to the host terms (terms page, `#hostterms`). Acceptance (version, time, IP) is saved on their login.
 - **Tip money:** the house PIN sees every DJ's tips and a per-DJ total (Tips card and Analytics). Each DJ sees only their own. Staff see none.
+- **Bar Owner app (`/bar`):** tips (tonight + 30 days), paid move-ups, close the DJ's night, stop tips. Opens with the bar owner PIN or a manager's own login. Staff and the house PIN never see tip money.
+- **Forgot PIN (every sign-in screen):** a code is texted to the phone saved for that login (host page: Change my PIN → phone; Bar Owner app: Your PIN & phone; owner list: Forgot-PIN phone), then a new PIN is set. Changed PINs are stored hashed and override the Render starting PINs.
 - **Owner list (`/owner`) is owner-only:** opens with the list PIN (`STAFF_LIST_PIN` in Render; other bars use their owner PIN). Each group (Customers, DJs, House staff) has a Send button that shares a link to just that group's page (`/links/customers`, `/links/dj`, `/links/staff`), no PIN needed. Old `/staff` links redirect.
 
 ### Other pages
@@ -138,6 +140,7 @@ Both directions are signed with **the same secret**: My Apps calls it `APP_SECRE
 | `DATABASE_URL` | yes | Internal Database URL of `karaoke-db` (starts with `postgresql://`) |
 | `KJ_PIN` | yes | The Dive's house PIN (set in Render only; never write it here) |
 | `STAFF_LIST_PIN` | no | PIN that opens the owner list (`/owner`). Falls back to `KJ_PIN`. Set in Render only. |
+| `BAR_OWNER_PIN` | no | Starting PIN for the Bar Owner app (`/bar`). The owner must change it on first sign-in. Set in Render only. |
 | `HOST_TEMP_PIN` | no | Shared starting PIN for new DJ and staff logins. Set in Render only. |
 | `SESSION_SECRET` | no | Signs login cookies. Made automatically and saved if blank. |
 | `PUBLIC_URL` | no | Custom domain for QR codes and links, for example `https://karaoke.example.com` |

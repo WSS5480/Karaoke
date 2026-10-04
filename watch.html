@@ -69,6 +69,7 @@ a{color:var(--green-hi)}
 .net.fb{background:#1877f2}.net.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.net.tt{background:#000;border:1px solid #444}
 @media (min-width:560px){.tiles{grid-template-columns:repeat(4,1fr)}}
 </style>
+<script src="/forgot.js"></script>
 </head>
 <body>
 <main>
@@ -276,6 +277,7 @@ async function open(){
 }
 $("lockForm").addEventListener("submit", e => { e.preventDefault(); pin = $("pin").value.trim(); if(pin) open(); });
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && !$("view").hidden) refresh(); });
+if(window.diveForgotLink) diveForgotLink($("lockForm"), { kinds: [{ k: "list", label: "Owner list PIN" }] });
 if(pin) open(); else showLock("");
 </script>
 </body>

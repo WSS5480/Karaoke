@@ -157,7 +157,7 @@ function refreshPlan(t) {
 }
 
 /* ---------- branding: other bars get The Dive's pages with their own name, logo and links ---------- */
-const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|owner\b|links\/|watch\b|bar\b|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
+const PATH_RE = /(["'`(])\/(?=(?:api\/|kj\b|wall\b|tv\b|tent\b|poster\b|history\b|stats\b|ads\b|terms\b|staff\b|owner\b|links\/|watch\b|bar\b|wheel\b|setup\b|s\/|m\/|qr\.svg|logo\.png|songs\.json|sw\.js|install\.js|zoom\.js|update\.js|forgot\.js|[\w-]*manifest\.json|[\w-]*icon[\w-]*\.png|[\w-]*apple-touch-icon\.png|\?|["'`)]))/g;
 function brand(html, t, base, host) {
   if (t.house) return html;
   const name = t.name, short = t.short || t.name, tagWord = (short || name).replace(/[^A-Za-z0-9]/g, ""), city = t.city || "";
@@ -459,6 +459,26 @@ async function twilio(path, form) {
   });
   return { ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) };
 }
+/* ---------- owner PINs: house (host page), list (app owner: /owner, /watch), bar (Bar Owner app) ----------
+   Render holds the starting PINs (KJ_PIN, STAFF_LIST_PIN, BAR_OWNER_PIN). Once someone changes a PIN, or resets it
+   with a texted code, the new one is kept hashed in settings and wins. */
+const PIN_KINDS = ["house", "list", "bar"];
+function startPin(kind) {
+  if (kind === "house") return KJ_PIN;
+  if (kind === "list") return process.env.STAFF_LIST_PIN || KJ_PIN;
+  return process.env.BAR_OWNER_PIN || process.env.STAFF_LIST_PIN || KJ_PIN;
+}
+async function pinIs(kind, pin) {
+  pin = String(pin || "").replace(/\D/g, ""); if (!pin) return false;
+  const o = await db.getSetting(kind + "_pin"); if (o) return pinMatches(pin, o);
+  return T() === "dive" ? same(pin, startPin(kind)) : pinMatches(pin, TEN().pinHash);
+}
+async function pinIsStarting(kind) { return T() === "dive" && kind === "bar" && !(await db.getSetting("bar_pin")); }
+async function setOwnerPin(kind, pin) {
+  // other bars' house PIN is their account PIN (also changed on their Setup page): update it there
+  if (T() !== "dive" && kind === "house") { const t = await db.getTenant(T()); if (t) { t.pinHash = hashPin(pin); await saveTenant(t); return; } }
+  await db.setSetting(kind + "_pin", hashPin(pin));
+}
 function pinOk(req) {
   const p = String(req.headers["x-kj-pin"] || "");
   return p.length === KJ_PIN.length && crypto.timingSafeEqual(Buffer.from(p), Buffer.from(KJ_PIN));
@@ -669,7 +689,7 @@ const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.fr
 const TEMP_PIN = String(process.env.HOST_TEMP_PIN || "").replace(/\D/g, "");
 async function whoIs(pin, name) {
   if (!pin) return null;
-  if (T() === "dive" ? same(pin, KJ_PIN) : pinMatches(pin, TEN().pinHash)) return { name: "Owner", admin: true, role: "house" };
+  if (await pinIs("house", pin)) return { name: "Owner", admin: true, role: "house" };
   const hs = (await getHosts()).filter(x => same(pin, x.pin));
   let h = hs[0];
   if (hs.length > 1) { h = name ? hs.find(x => x.name === name) : null; if (!h) return { pick: hs.map(x => x.name) }; }
@@ -687,7 +707,7 @@ async function kjAuth(req, res, next) {
     if (who.role === "dj") { const bad = await djGate(req, who); if (bad) return res.status(bad.status).json(bad.body); }
     // DJ and staff logins start with a PIN the owner made; they must set their own before doing anything else
     // ...and agree to the Host, DJ & Staff Terms
-    if (!who.admin && (!who.own || !who.agreed) && !/\/api\/kj\/(state|my-pin|logout|host-terms)(\?|$)/.test(req.originalUrl))
+    if (!who.admin && (!who.own || !who.agreed) && !/\/api\/kj\/(state|my-pin|my-phone|logout|host-terms)(\?|$)/.test(req.originalUrl))
       return res.status(403).json({ error: !who.own ? "Set your own PIN first." : "Agree to the Host, DJ & Staff Terms first.", needNewPin: true });
     req.kj = who; next();
   } catch (e) { console.error(e); res.status(500).json({ error: "Something went wrong. Try again." }); }
@@ -761,7 +781,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -878,8 +898,12 @@ app.post("/api/kj/host-terms", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 app.post("/api/kj/my-pin", wrap(async (req, res) => {
-  if (req.kj.admin) return res.status(400).json({ error: T() === "dive" ? "The owner PIN is changed in Render (KJ_PIN)." : "Change the owner PIN on the Setup page." });
   const pin = String(req.body.pin || "").replace(/\D/g, ""), hosts = await getHosts();
+  if (req.kj.admin) {   // the house PIN: changed here by whoever knows it (kept hashed; Render's KJ_PIN is only the starting one)
+    if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
+    if (pin === TEMP_PIN || hosts.some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
+    await setOwnerPin("house", pin); return res.json({ ok: true, house: true });
+  }
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
   if (TEMP_PIN && pin === TEMP_PIN) return res.status(409).json({ error: "That's the starting PIN. Pick your own." });
   const taken = await whoIs(pin);
@@ -1100,8 +1124,7 @@ app.post("/api/kj/bump-price", wrap(async (req, res) => {
 app.post("/api/watch/bump", wrap(async (req, res) => {
   const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
   if (l.length >= 10) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." });
-  const pin = String(req.headers["x-watch-pin"] || "").replace(/\D/g, ""), LIST_PIN = process.env.STAFF_LIST_PIN || KJ_PIN;
-  const ok = !!pin && (T() === "dive" ? same(pin, LIST_PIN) : pinMatches(pin, TEN().pinHash));
+  const ok = await pinIs("list", req.headers["x-watch-pin"]);
   if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
   await db.setSetting("bump", req.body.on ? "on" : "off");
   if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = "owner turned move-ups off"; } }); await saveBumps(all); }
@@ -1336,7 +1359,8 @@ async function barAuth(req, res) {
   if (l.length >= 10) { res.status(429).json({ error: "Too many tries. Wait 10 minutes." }); return null; }
   const pin = String(req.headers["x-bar-pin"] || "").replace(/\D/g, ""); let nm = ""; try { nm = decodeURIComponent(String(req.headers["x-bar-name"] || "")); } catch (e) {}
   if (pin) {
-    if (T() === "dive" ? same(pin, process.env.STAFF_LIST_PIN || KJ_PIN) : pinMatches(pin, TEN().pinHash)) return { name: "Owner", owner: true };
+    if (await pinIs("bar", pin)) return { name: "Owner", owner: true, starting: await pinIsStarting("bar") };
+    if (T() === "dive" && await pinIs("list", pin)) return { name: "App owner", owner: true };
     const who = await whoIs(pin, nm);
     if (who && who.pick) { res.status(409).json({ error: "Tap your name.", names: who.pick }); return null; }
     if (who && who.manager && who.own) return { name: who.name, manager: true };
@@ -1348,7 +1372,7 @@ app.get("/api/bar", wrap(async (req, res) => {
   const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active(), off = await tipsOff();
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   res.json({
-    who,
+    who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
     dj: djNow ? { name: djNow.name, since: djNow.since || null } : null, tipsStopped: !!(djNow && off && off.name === djNow.name && off.night === barDay().date),
     state: { lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await withPhotosKJ(act.map(kjRow), act), done: (await db.done(500)).map(kjRow) },
@@ -1375,12 +1399,85 @@ app.post("/api/bar/bump", wrap(async (req, res) => {
   if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = (who.owner ? "owner" : who.name) + " turned move-ups off"; } }); await saveBumps(all); }
   res.json({ ok: true });
 }));
+// the bar owner changes their own PIN and recovery phone (managers can't)
+app.post("/api/bar/pin", wrap(async (req, res) => {
+  const who = await barAuth(req, res); if (!who) return;
+  if (!who.owner) return res.status(403).json({ error: "Only the bar owner can change this PIN." });
+  const pin = String(req.body.pin || "").replace(/\D/g, "");
+  if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
+  if (T() === "dive" && pin === startPin("bar")) return res.status(409).json({ error: "That's the starting PIN. Pick your own." });
+  if (pin === TEMP_PIN || (await getHosts()).some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
+  await setOwnerPin("bar", pin); res.json({ ok: true });
+}));
+async function recoveryPhone(kind) { return (await db.getSetting("recover:" + kind)) || ""; }
+const maskPhone = p => p ? "•••-•••-" + p.slice(-4) : "";
+app.post("/api/bar/phone", wrap(async (req, res) => {
+  const who = await barAuth(req, res); if (!who) return;
+  if (!who.owner) return res.status(403).json({ error: "Only the bar owner can set this." });
+  const ph = normPhone(req.body.phone); if (!ph) return res.status(400).json({ error: "Enter a 10-digit phone number." });
+  await db.setSetting("recover:bar", ph); res.json({ ok: true, phone: maskPhone(ph) });
+}));
+// app owner list + house PIN recovery phones (set while signed in)
+app.post("/api/staff-list/phone", wrap(async (req, res) => {
+  if (!(await pinIs("list", req.body.pin))) return res.status(401).json({ error: "Wrong PIN." });
+  const ph = normPhone(req.body.phone); if (!ph) return res.status(400).json({ error: "Enter a 10-digit phone number." });
+  await db.setSetting("recover:list", ph); res.json({ ok: true, phone: maskPhone(ph) });
+}));
+app.post("/api/staff-list/info", wrap(async (req, res) => {
+  if (!(await pinIs("list", req.body.pin))) return res.status(401).json({ error: "Wrong PIN." });
+  res.json({ phone: maskPhone(await recoveryPhone("list")) });
+}));
+/* ---------- Forgot PIN: a code texted to the phone on file, then a new PIN ----------
+   kind: house | list | bar | host (a DJ or staff login, by name). Answers the same whether or not the phone matches. */
+const forgotHits = new Map();
+async function forgotTarget(kind, name) {
+  if (PIN_KINDS.includes(kind)) return { phone: await recoveryPhone(kind) };
+  if (kind === "host") { const h = (await getHosts()).find(x => x.name.toLowerCase() === String(name || "").trim().toLowerCase()); return h ? { phone: h.phone || "", host: h } : { phone: "" }; }
+  return null;
+}
+app.post("/api/forgot/start", wrap(async (req, res) => {
+  if (!TW_READY) return res.status(503).json({ error: "Texting isn't set up. Ask the owner to reset your PIN." });
+  const kind = String(req.body.kind || ""), ph = normPhone(req.body.phone);
+  if (!ph) return res.status(400).json({ error: "Enter the 10-digit phone number on file." });
+  const t = Date.now(), k = kind + "|" + req.ip, l = (forgotHits.get(k) || []).filter(x => t - x < 600000);
+  if (l.length >= 3) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." }); l.push(t); forgotHits.set(k, l);
+  const tg = await forgotTarget(kind, req.body.name); if (!tg) return res.status(400).json({ error: "Unknown login." });
+  if (tg.phone && tg.phone === ph) {
+    const r = await twilio("Verifications", { To: ph, Channel: "sms" });
+    if (!r.ok) console.error("forgot pin text", r.status, r.body && r.body.message);
+  }
+  res.json({ ok: true, msg: "If that number is on file, a code is on its way." });
+}));
+app.post("/api/forgot/finish", wrap(async (req, res) => {
+  if (!TW_READY) return res.status(503).json({ error: "Texting isn't set up." });
+  const kind = String(req.body.kind || ""), ph = normPhone(req.body.phone), code = String(req.body.code || "").replace(/\D/g, ""), pin = String(req.body.pin || "").replace(/\D/g, "");
+  const t = Date.now(), k = "f|" + req.ip, l = (forgotHits.get(k) || []).filter(x => t - x < 600000);
+  if (l.length >= 8) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." }); l.push(t); forgotHits.set(k, l);
+  if (!ph || code.length < 4) return res.status(400).json({ error: "Enter the code from your text." });
+  if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "New PIN must be 4 to 8 digits." });
+  const tg = await forgotTarget(kind, req.body.name);
+  if (!tg || !tg.phone || tg.phone !== ph) return res.status(400).json({ error: "That code didn't work." });
+  const r = await twilio("VerificationCheck", { To: ph, Code: code });
+  if (!r.ok || r.body.status !== "approved") return res.status(400).json({ error: "That code didn't work. Check it or send a new one." });
+  const hosts = await getHosts();
+  if (pin === TEMP_PIN || (kind !== "host" && hosts.some(h => h.pin === pin)) || (kind === "host" && (hosts.some(h => h.pin === pin && h.name !== tg.host.name) || await pinIs("house", pin))))
+    return res.status(409).json({ error: "That PIN is taken. Pick another." });
+  if (kind === "host") { const me = hosts.find(h => h.name === tg.host.name); me.pin = pin; me.own = true; await db.setSetting("hosts", JSON.stringify(hosts)); }
+  else await setOwnerPin(kind, pin);
+  res.json({ ok: true });
+}));
+// host page: each login (and the house PIN) can save the phone used for "Forgot PIN"
+app.post("/api/kj/my-phone", wrap(async (req, res) => {
+  const ph = normPhone(req.body.phone); if (!ph) return res.status(400).json({ error: "Enter a 10-digit phone number." });
+  if (req.kj.admin) { await db.setSetting("recover:house", ph); return res.json({ ok: true, phone: maskPhone(ph) }); }
+  const hosts = await getHosts(), me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Login not found." });
+  me.phone = ph; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true, phone: maskPhone(ph) });
+}));
 // owner's live view (/watch): opens with the owner list PIN, never the house PIN
 app.get("/api/watch", wrap(async (req, res) => {
   const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
   if (l.length >= 10) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." });
-  const pin = String(req.headers["x-watch-pin"] || "").replace(/\D/g, ""), LIST_PIN = process.env.STAFF_LIST_PIN || KJ_PIN;
-  const ok = !!pin && (T() === "dive" ? same(pin, LIST_PIN) : pinMatches(pin, TEN().pinHash));
+  const ok = await pinIs("list", req.headers["x-watch-pin"]);
   if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
   const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active();
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
@@ -1394,9 +1491,7 @@ app.get("/api/watch", wrap(async (req, res) => {
 app.post("/api/staff-list", wrap(async (req, res) => {
   const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
   if (l.length >= 10) return res.status(429).json({ ok: false, error: "Too many tries. Wait 10 minutes." });
-  const pin = String(req.body.pin || "").replace(/\D/g, "");
-  const LIST_PIN = process.env.STAFF_LIST_PIN || KJ_PIN;
-  const ok = !!pin && (T() === "dive" ? same(pin, LIST_PIN) : pinMatches(pin, TEN().pinHash));
+  const ok = await pinIs("list", req.body.pin);
   if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ ok: false, error: "Wrong PIN." }); }
   res.json({ ok: true });
 }));
@@ -1653,6 +1748,7 @@ Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => {
 }));
 app.get("/sw.js", (req, res) => sendPage(req, res, "sw.js", null, "application/javascript"));
 app.get("/update.js", (req, res) => res.type("application/javascript").set("Cache-Control", "no-cache").sendFile(path.join(__dirname, "update.js")));
+app.get("/forgot.js", (req, res) => res.type("application/javascript").set("Cache-Control", "no-cache").sendFile(path.join(__dirname, "forgot.js")));
 app.get("/zoom.js", (req, res) => res.type("application/javascript").sendFile(path.join(__dirname, "zoom.js")));
 app.get("/install.js", (req, res) => res.type("application/javascript").sendFile(path.join(__dirname, "install.js")));
 app.get("/default-logo.png", (req, res) => res.sendFile(path.join(__dirname, "default-logo.png")));
