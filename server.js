@@ -1570,9 +1570,9 @@ app.get("/api/platform/bars", wrap(async (req, res) => {
     const hosts = await ctx.run({ t: t.slug, tenant: t, base: "/b/" + t.slug }, () => getHosts());
     out.push({ slug: t.slug, key: tkey(t.slug), type: t.type || "bar", name: t.name, city: t.city || "", email: t.email || "", created: t.created || t.created_at,
       hosts: hosts.length, songs: (counts[t.slug] || {}).songs || 0, lastSong: (counts[t.slug] || {}).last || null, plan: planSummary(t), disabled: !!t.disabled,
-      url: siteUrl(req) + "/b/" + t.slug + "/", kj: siteUrl(req) + "/b/" + t.slug + "/kj" });
+      url: siteUrl(req) + "/b/" + t.slug + "/", kj: siteUrl(req) + "/b/" + t.slug + "/kj", bar: siteUrl(req) + "/b/" + t.slug + "/bar" });
   }
-  res.json({ bars: out, house: { name: DIVE.name, songs: (counts.dive || {}).songs || 0 } });
+  res.json({ bars: out, house: { name: DIVE.name, songs: (counts.dive || {}).songs || 0 }, signup: siteUrl(req) + "/start" });
 }));
 app.post("/api/platform/bars/:slug", wrap(async (req, res) => {
   if (!platformAuth(req, res)) return;
