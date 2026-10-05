@@ -116,7 +116,8 @@ async function loadTenant(slug) {
 async function saveTenant(t) { t.v = (t.v || 0) + 1; await db.saveTenant(t); tenantCache.delete(t.slug); pageCache.clear(); }
 function tenantPublic(t) { return { slug: t.slug, house: !!t.house, type: t.type || "bar", name: t.name, short: t.short, city: t.city || "", venue: t.venue || "" }; }
 // location check works only once the bar/DJ has a location saved
-function geofenceActive(v) { if (v === "off") return false; const t = TEN(); return t.lat != null && t.lat !== "" && Number.isFinite(Number(t.lat)); }
+// singers must always be at the bar to sign up: the location check can't be turned off (only works once the bar's spot is set)
+function geofenceActive() { const t = TEN(); return t.lat != null && t.lat !== "" && Number.isFinite(Number(t.lat)); }
 
 /* ---------- plan: is this bar allowed to run tonight? ---------- */
 function planSummary(t) {
@@ -571,9 +572,9 @@ app.post("/api/signup", wrap(async (req, res) => {
   if ((await authOn()) && !currentUser(req)) return res.status(401).json({ error: "signin", message: "Sign in with your phone number first." });
   if (rateLimited(req.ip, dev)) return res.status(429).json({ error: "Too many tries. Wait a minute and try again." });
   if (!(await termsOk(dev))) return res.status(428).json({ error: "terms", message: "Please read and agree to the Terms to sign up." });
-  if (geofenceActive(await db.getSetting("geofence")) && req.body.qr !== TEN().qr) {
+  if (geofenceActive()) {   // always: even the QR code needs the phone to be at the bar
     const lat = Number(req.body.lat), lng = Number(req.body.lng), acc = Math.min(Math.max(Number(req.body.acc) || 0, 0), 200);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(403).json({ error: "location", message: "Turn on location so we can see you're at " + TEN().short + ", or scan the QR code." });
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(403).json({ error: "location", message: "Turn on location so we can see you're at " + TEN().short + ". You must be here to sign up." });
     const away = metersAway(lat, lng);
     if (away - acc > (Number(TEN().radius) || 150)) return res.status(403).json({ error: "far", miles: Math.round(away / 1609.34 * 10) / 10, message: "You need to be at " + TEN().short + " to sign up." });
   }
@@ -1609,7 +1610,7 @@ app.post("/api/kj-multi", kjAuth, wrap(async (req, res) => {
   await db.setSetting("multi", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
 app.post("/api/kj-geofence", kjAuth, wrap(async (req, res) => {
-  await db.setSetting("geofence", req.body.on ? "on" : "off"); res.json({ ok: true });
+  res.status(403).json({ error: "The location check is always on. Singers must be at the bar to sign up." });
 }));
 app.post("/api/kj-photoreview", kjAuth, wrap(async (req, res) => {
   await db.setSetting("photo_review", req.body.on ? "on" : "off"); res.json({ ok: true });

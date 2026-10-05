@@ -289,7 +289,6 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <h2>Night controls</h2>
       <div class="row">
         <button id="toggleOpen"></button>
-        <button id="toggleGeo"></button>
         <label class="multi" for="multiChk"><input type="checkbox" id="multiChk"> One song per person on the queue</label>
         <button id="togglePhone" hidden></button>
         <button id="togglePhotoReview"></button>
@@ -596,7 +595,6 @@ function render(){
   $("pauseState").textContent = p.paused ? (p.until ? "paused until " + new Date(p.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "paused") : "";
   $("pOff").hidden = !p.paused;
   $("toggleOpen").textContent = state.open ? "Close sign-ups" : "Open sign-ups";
-  $("toggleGeo").textContent = state.geofence ? "Location check: on" : "Location check: off";
   $("multiChk").checked = !state.multi;
   $("toggleLyrics").textContent = state.lyrics === false ? "Lyrics: off" : "Lyrics: on";
   $("togglePhone").hidden = !state.twilioReady;
@@ -639,7 +637,6 @@ $("refreshBtn").addEventListener("click", async () => {
   b.disabled = false; b.textContent = "✓ Updated"; setTimeout(() => b.textContent = "↻ Refresh", 1500);
 });
 $("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !state.open }));
-$("toggleGeo").addEventListener("click", () => act("/api/kj-geofence", { on: !state.geofence }));
 $("addForm").addEventListener("submit", async e => {
   e.preventDefault(); $("addErr").textContent = "";
   const body = { name: $("addName").value.trim(), song: $("addSong").value.trim(), artist: $("addArtist").value.trim(), spot: $("addSpot").value };

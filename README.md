@@ -16,7 +16,7 @@ Guests scan a QR code (or open the link), sign up for a song, and watch their pl
 ### Guests (customer app, `/`)
 - Sign up with a name, song and artist, with song and artist suggestions from a 699-song library (188 in Spanish).
 - See their spot in line live. The page refreshes itself.
-- **Location check:** only phones inside the bar (150 m by default) can sign up. Scanning the QR code always works.
+- **Location check (always on):** only phones inside the bar (150 m by default) can sign up, including from the QR code. It can't be turned off. Guests who can't share location can be added by the DJ (Add a singer).
 - **Terms pop-up** the first time (Texas-law Terms of Use and Privacy Notice). They must check a box to continue, and the acceptance is recorded.
 - **One song in line at a time** unless the host allows more.
 - **Rate themselves** (1–5 stars) after singing, and opt in to the **Wall of Fame**.
@@ -238,7 +238,7 @@ To use a local Postgres: `DATABASE_URL=postgresql://user@localhost/karaoke PGSSL
 ## 7. Every night
 
 1. Open the host page and tap **Open sign-ups**.
-2. Location check **on**. DJs tap **I'm at a new venue tonight**.
+2. Location check is always on. DJs tap **I'm at a new venue tonight**.
 3. Cast **/tv** (or the wheel) to the TV.
 4. Tap **Next singer** as people finish. Use **Pause** for breaks.
 5. At close, tap **Start a new night**. History stays saved.

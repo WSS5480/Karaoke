@@ -741,7 +741,7 @@ document.addEventListener("click", e => { if(!e.target.closest(".field")){ $("su
 async function doSignup(name, song, artist, errEl){
   try{
     let spot = {};
-    if(geofenceOn && !qrToken){ try{ spot = await getSpot(); }catch(ge){ spot = {}; } }
+    if(geofenceOn){ try{ spot = await getSpot(); }catch(ge){ spot = {}; } }
     const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, app: !!(matchMedia("(display-mode: standalone)").matches || navigator.standalone), ...spot }) });
     const j = await r.json();
     if(!r.ok){
@@ -763,7 +763,7 @@ $("form").addEventListener("submit", async e => {
   if(!song){ $("err").textContent = "Enter the song you want to sing."; $("song").focus(); return; }
   if(!$("artistPick").hidden && !$("artistPick").value){ $("err").textContent = "Pick which artist's version you're singing."; $("artistPick").focus(); return; }
   if(!termsAccepted){ openTerms(); return; }
-  $("submit").disabled = true; $("submit").textContent = geofenceOn && !qrToken ? "Checking you're at The Dive…" : "Adding you…";
+  $("submit").disabled = true; $("submit").textContent = geofenceOn ? "Checking you're at The Dive…" : "Adding you…";
   const ok = await doSignup(name, song, artist, $("err"));
   if(ok){ $("song").value = ""; $("artist").value = ""; }
   $("submit").disabled = false; $("submit").textContent = "Put me on the list";
@@ -827,7 +827,7 @@ function render(data){
   lyricsOn = data.lyrics !== false; document.body.classList.toggle("nolyr", !lyricsOn);
   if(!lyricsOn){ $("lyrModal").hidden = true; $("singModal").hidden = true; }
   $("venueLine").hidden = !data.venue; $("venueLine").textContent = data.venue ? "Tonight at " + data.venue : "";
-  geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn || !!qrToken;
+  geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn;
   renderRate(data.last);
   const blocked = !data.open || data.paused;
   $("closedCard").hidden = !blocked || !!mine;
