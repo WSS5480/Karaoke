@@ -218,6 +218,17 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <p class="err" id="err" role="alert"></p>
     </section>
 
+    <section class="card bumpcard" id="bumpCard" hidden>
+      <h2>🔒 Paid to lock a spot</h2>
+      <p class="sub" style="margin:0">Check your payment app. Tap ✓ when you see the money and they move up right away.</p>
+      <ul id="bumpList" class="bumplist"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Waiting <span id="waitCount"></span></h2>
+      <ol id="queue"></ol>
+    </section>
+
     <section class="card">
       <h2>Pause sign-ups <span id="pauseState"></span></h2>
       <div class="row">
@@ -246,16 +257,6 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       </form>
     </section>
 
-    <section class="card bumpcard" id="bumpCard" hidden>
-      <h2>🔒 Paid to lock a spot</h2>
-      <p class="sub" style="margin:0">Check your payment app. Tap ✓ when you see the money and they move up right away.</p>
-      <ul id="bumpList" class="bumplist"></ul>
-    </section>
-
-    <section class="card">
-      <h2>Waiting <span id="waitCount"></span></h2>
-      <ol id="queue"></ol>
-    </section>
 
     <section class="card" id="tipsCard">
       <h2><span id="tipsH">Tips</span> <span id="tipState"></span></h2>
