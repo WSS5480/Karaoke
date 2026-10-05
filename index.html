@@ -539,6 +539,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
   <b id="tnTitle">👏 That was <span id="tnWho"></span>!</b>
   <span>Enjoying the music? Tip the DJ / Propina al DJ</span>
   <div class="tnrow"><button type="button" class="go" id="tnTip">💵 Tip <span id="tnHost"></span></button><button type="button" class="linkbtn" id="tnNo">Not now</button></div>
+  <button type="button" class="go" id="tnBump" hidden style="background:#ffc93c;color:#111">⏫ Move & lock · $<span id="tnBumpP">1</span> a spot</button>
   <button type="button" class="tnoff" id="tnOff">Don't ask again tonight</button>
 </div>
 <div class="tmodal" id="bumpModal" hidden role="dialog" aria-modal="true" aria-labelledby="bumpTitle">
@@ -574,6 +575,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 <div class="tmodal" id="tipModal" hidden role="dialog" aria-modal="true" aria-labelledby="tipTitle">
   <div class="tbox" style="overflow:auto">
     <h2 id="tipTitle">Tip <span id="tipTo"></span></h2>
+    <button type="button" class="go" id="tipBumpLink" hidden style="background:#ffc93c;color:#111">⏫ Move & lock your spot instead</button>
     <div id="tipStep1" style="display:flex;flex-direction:column;gap:12px">
       <div><label>Amount <span>/ Cantidad</span></label>
         <div class="tamts" id="tipAmts"><button type="button" data-a="1">$1</button><button type="button" data-a="5" aria-pressed="true">$5</button><button type="button" data-a="10">$10</button><button type="button" data-a="20">$20</button></div>
@@ -1614,8 +1616,11 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     const pending = r && r.status === "pending";
     if(!b.max && !pending && !(r && r.status === "approved")){ box.hidden = true; return; }
     box.hidden = false;
-    $("bumpPrice").textContent = b.price; $("bumpPrice2").textContent = b.price;
+    if($("bumpPrice")) $("bumpPrice").textContent = b.price; $("bumpPrice2").textContent = b.price;
     $("bumpOpen").hidden = pending || !b.max; $("bumpCancel").hidden = !pending;
+    const again = r && r.status === "approved";
+    $("bumpOpen").firstChild.textContent = again ? "⏫ Move & lock again " : "🔒 Lock your spot";
+    $("bumpOpen").querySelector(".bsub").innerHTML = again ? "$" + b.price + " a spot · you stay locked" : "Move up · $<span id=\"bumpPrice\">" + b.price + "</span> a spot · nobody can bump you";
     const m = $("bumpMsg"); m.className = "bumpmsg";
     if(pending) m.textContent = "⏳ Waiting for the DJ to see your $" + r.amount + " and move you up " + r.spots + (r.spots === 1 ? " spot." : " spots.") + " (Your song is still in line.)";
     else if(r && r.status === "approved"){ m.textContent = r.manual ? "🔒 The DJ locked your spot. Nobody can push you down." : "🔒 Spot locked! You moved up " + r.spots + (r.spots === 1 ? " spot" : " spots") + " and nobody can push you down."; m.classList.add("ok"); }
@@ -1624,6 +1629,9 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     else if(r && r.status === "expired") m.textContent = "The DJ didn't confirm in time. You can try again.";
     else m.textContent = "";
   };
+  window.diveCanBump = () => !!(info && info.on && info.max && cur && cur.status === "queued" && !(info.req && info.req.status === "pending")) && !$("bumpBox").hidden && !$("bumpOpen").hidden;
+  window.diveBumpPrice = () => info && info.price;
+  window.diveOpenBump = () => { $("tipModal").hidden = true; $("bumpOpen").click(); };
   function paintSpots(){
     const box = $("bumpSpots"); box.innerHTML = "";
     const place = (cur.spot || 0) + 1, locked = new Set(info.locked || []);   // numbers as they see them on their card
@@ -1713,8 +1721,10 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
       const b = document.createElement("button"); b.type = "button"; b.dataset.m = k; b.textContent = NAMES[k];
       b.addEventListener("click", () => send(k)); pay.appendChild(b);
     });
+    const cb = window.diveCanBump && window.diveCanBump(); $("tipBumpLink").hidden = !cb;
     $("tipModal").hidden = false;
   });
+  $("tipBumpLink").addEventListener("click", () => window.diveOpenBump && window.diveOpenBump());
   async function send(m){
     $("tipErr").textContent = "";
     if(!(amt >= 1 && amt <= 500)){ $("tipErr").textContent = "Pick an amount from $1 to $500."; return; }
@@ -1749,10 +1759,12 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   window.diveTipNudge = singer => {
     if(!tipInfo || !tipInfo.on || offTonight() || !$("tipModal").hidden) return;
     $("tnWho").textContent = singer || "a great song"; $("tnHost").textContent = tipInfo.host;
+    const cb = window.diveCanBump && window.diveCanBump(); $("tnBump").hidden = !cb; if(cb && window.diveBumpPrice) $("tnBumpP").textContent = window.diveBumpPrice();
     $("tipNudge").hidden = false; clearTimeout(tnTimer); tnTimer = setTimeout(hideNudge, 30000);
   };
   $("tnTip").addEventListener("click", () => { hideNudge(); $("tipOpen").click(); });
   $("tnNo").addEventListener("click", hideNudge);
+  $("tnBump").addEventListener("click", () => { hideNudge(); window.diveOpenBump && window.diveOpenBump(); });
   $("tnX").addEventListener("click", hideNudge);
   $("tnOff").addEventListener("click", () => { try{ localStorage.setItem("dive_tipnudge_off", night()); }catch(e){} hideNudge(); });
   loadTip(); setInterval(loadTip, 30000);
