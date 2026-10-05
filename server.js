@@ -433,9 +433,22 @@ async function phoneBook() {
 async function seenPhone(dev, app) {
   try { const b = await phoneBook(), now = Date.now(), p = b.list[dev]; b.list[dev] = [p ? p[0] : now, now, (p && p[2]) || !!app]; b.dirty = true; } catch (e) {}
 }
+// a wall-clock time on the bar's day, in the bar's time zone, as epoch ms
+function barTime(dateStr, hour) {
+  const [y, m, d] = dateStr.split("-").map(Number), guess = Date.UTC(y, m - 1, d, hour);
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: ZONE(), hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(guess)).map(x => [x.type, x.value]));
+  const wall = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute);
+  return guess - (wall - guess);
+}
+// "tonight" starts when sign-ups were opened tonight, but never before 6 PM; "today" is everything since 6 AM
+async function nightStart() {
+  const day = barDay().date, six = barTime(day, 18);
+  let o = null; try { o = JSON.parse((await db.getSetting("open_at")) || "null"); } catch (e) {}
+  return o && o.night === day && o.at > six ? o.at : six;
+}
 async function phoneStats() {
-  const b = await phoneBook(), now = Date.now(), v = Object.values(b.list);
-  return { tonight: v.length, now: v.filter(p => now - p[1] < 120000).length, app: v.filter(p => p[2]).length };
+  const b = await phoneBook(), now = Date.now(), v = Object.values(b.list), start = await nightStart();
+  return { tonight: v.filter(p => p[1] >= start).length, today: v.length, since: start, now: v.filter(p => now - p[1] < 120000).length, app: v.filter(p => p[2]).length };
 }
 setInterval(() => {
   for (const [t, b] of phones) if (b.dirty) { b.dirty = false; ctx.run({ t }, () => db.setSetting("phones:" + b.night, JSON.stringify(b.list)).catch(() => {})); }
@@ -1381,7 +1394,9 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 app.post("/api/kj-open", kjAuth, wrap(async (req, res) => {
-  await db.setSetting("open", req.body.open ? "yes" : "no"); res.json({ ok: true });
+  await db.setSetting("open", req.body.open ? "yes" : "no");
+  if (req.body.open) { const day = barDay().date; let cur = null; try { cur = JSON.parse((await db.getSetting("open_at")) || "null"); } catch (e) {} if (!cur || cur.night !== day) await db.setSetting("open_at", JSON.stringify({ night: day, at: Date.now() })); }
+  res.json({ ok: true });
 }));
 // Lyrics in Apple Music: find the exact song so the guest lands on it, not on a search page.
 // Uses Apple's public iTunes Search API (no key). Cached, and falls back to search if it fails.
