@@ -907,7 +907,36 @@ async function djIdleCheck() {
   const last = ds.last;
   if (Date.now() - last > DJ_IDLE) await endDj(ds.name, "Your DJ session closed after 5 hours with no activity.", "auto-closed after 5 hours with no activity", last + DJ_IDLE);
 }
-setInterval(() => { ctx.run({ t: "dive", tenant: DIVE, base: "" }, () => djIdleCheck().catch(() => {})); }, 5 * 60000);
+/* ---------- nightly shutdown at 4 AM bar time, every bar: DJ signed out, list cleared, sign-ups closed.
+   Sign-ups reopen on their own at 6 PM (only if this shut them). Runs once per morning even after a restart. ---------- */
+function barClock(at) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: ZONE(), hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit" }).formatToParts(new Date(at || Date.now())).map(x => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, hour: +p.hour % 24 };
+}
+async function nightlyClose() {
+  const c = barClock();
+  if (c.hour >= 4 && c.hour < 18) {
+    if ((await db.getSetting("auto_close_day")) === c.date) return;
+    await db.setSetting("auto_close_day", c.date);
+    const ds = await djSession();
+    if (ds) await endDj(ds.name, "The night closed at 4 AM.", "closed at 4 AM (nightly shutdown)");
+    const left = (await db.active()).length;
+    await db.newNight();
+    await db.setSetting("paused", "off");
+    if ((await db.getSetting("open")) !== "no") { await db.setSetting("open", "no"); await db.setSetting("auto_closed", c.date); }
+    audit("System", "auto", "Nightly 4 AM shutdown: " + (ds ? ds.name + " signed out, " : "") + (left ? left + " left on the list cleared, " : "") + "sign-ups closed until 6 PM");
+  } else if (c.hour >= 18 && (await db.getSetting("auto_closed"))) {
+    await db.setSetting("auto_closed", "");
+    if ((await db.getSetting("open")) === "no") { await db.setSetting("open", "yes"); audit("System", "auto", "Sign-ups reopened at 6 PM"); }
+  }
+}
+async function allBars(fn) {
+  await ctx.run({ t: "dive", tenant: DIVE, base: "" }, () => fn().catch(e => console.error("dive:", e.message)));
+  let list = []; try { list = await db.listTenants(); } catch (e) {}
+  for (const t of list) { if (!t.slug || t.slug === "dive") continue; await ctx.run({ t: t.slug, tenant: t, base: "/b/" + t.slug }, () => fn().catch(e => console.error(t.slug + ":", e.message))); }
+}
+setInterval(() => { allBars(async () => { await djIdleCheck(); await nightlyClose(); }).catch(() => {}); }, 5 * 60000);
+setTimeout(() => { allBars(async () => { await djIdleCheck(); await nightlyClose(); }).catch(() => {}); }, 20000);
 async function endDj(name, why, how, at) {
   const ds = await djSession();
   if (!ds || (name && ds.name !== name)) return null;
