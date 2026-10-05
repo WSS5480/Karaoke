@@ -120,6 +120,14 @@ li.up .av{border-color:var(--green)}
 .shares .main{grid-column:1/-1;background:var(--green);color:#041206;border-color:var(--green)}
 .ok{color:var(--green-hi);font-size:14px;min-height:20px;margin:0}
 .wall{color:var(--green-hi);text-align:center;display:block}
+.linkbox{display:flex;flex-direction:column;gap:6px;border:1px dashed var(--line);border-radius:12px;padding:10px;margin-top:8px}
+.linkbox label{font-weight:700}.linkbox label span{font-weight:400;color:var(--ink-2)}
+.linkbox .row2{display:flex;gap:6px}.linkbox input{flex:1;min-width:0;letter-spacing:0}
+.posts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.posts a,.posts button{display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:13px;font-weight:700;border-radius:999px;padding:5px 10px;color:#fff;text-decoration:none;border:0;cursor:pointer}
+.posts .fb{background:#1877f2}.posts .ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.posts .tt{background:#111;border:1px solid #444}
+.posts .addp{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.posts small{font-weight:400;opacity:.85}
 .mine-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .mine-list li{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px;border-top:1px solid var(--line)}
 .mine-list li:first-child{border-top:0}
@@ -410,6 +418,12 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
     </div>
     <div id="vidStage" aria-hidden="true"></div>
     <p class="ok" id="shareMsg" role="status"></p>
+    <div class="linkbox" id="postLinkBox" hidden>
+      <label for="postLinkIn">🔗 Save where you posted <span>/ Guarda tu publicación</span></label>
+      <p class="hint" style="margin:0;color:var(--ink-2)">Paste the link to your <b id="plNet"></b> post (Share → Copy link), or your @username. Then one tap in My songs takes you back to it.</p>
+      <div class="row2"><input id="postLinkIn" inputmode="url" autocomplete="off" placeholder="Link or @username"><button type="button" class="sm" id="postLinkSave">Save</button></div>
+      <p class="hint" id="postLinkMsg" role="status" style="margin:0"></p>
+    </div>
     <a class="go" id="followBtn" target="_blank" rel="noopener" hidden style="text-decoration:none;display:block;text-align:center"></a>
     <div class="row" style="justify-content:space-between">
       <button class="linkbtn" id="dl" type="button">TikTok? Save to Photos first</button>
@@ -967,7 +981,7 @@ let postMode = "dive", photoFile = null;
 const shown = item => ({ ...item, rating: $("showStars").checked ? (item.rating || 0) : 0 });
 // make the picture first; the Post button only turns on when it's ready, so the tap opens the share menu instantly
 async function openPost(item){
-  postItem = item; postPic = null;
+  postItem = item; postPic = null; $("postLinkBox").hidden = true;
   $("postCard").hidden = false; $("shareMsg").textContent = "";
   $("postSong").textContent = item.song + (item.artist ? " – " + item.artist : "");
   $("postBtn").disabled = true; $("postBtn").textContent = "Getting it ready…"; $("postPreview").hidden = true;
@@ -1014,7 +1028,15 @@ $("postBtn").addEventListener("click", () => {
 const netBtns = [...document.querySelectorAll(".net")];
 function syncNets(){ const b = $("postBtn"); netBtns.forEach(n => n.disabled = b.disabled); $("netStatus").textContent = b.disabled ? b.textContent : "Tap where you want to post it."; }
 new MutationObserver(syncNets).observe($("postBtn"), { attributes: true, childList: true, characterData: true, subtree: true }); syncNets();
-function markPosted(net){ if(postItem && postItem.id) fetch("/api/posted", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: postItem.id, net }) }).then(() => { mineSig = ""; loadMine(true); }).catch(() => {}); }
+let linkNet = null;
+function askLink(net){ if(!postItem || !postItem.id) return; linkNet = net; $("plNet").textContent = net; $("postLinkIn").value = ""; $("postLinkMsg").textContent = ""; $("postLinkBox").hidden = false; }
+$("postLinkSave").addEventListener("click", async () => {
+  const v = $("postLinkIn").value.trim(); if(!v || !postItem || !linkNet) return;
+  if(!/[\/.]/.test(v) || /^@/.test(v)){ setHandle(linkNet, v); $("postLinkMsg").textContent = "✓ Saved your " + linkNet + " username."; mineSig = ""; loadMine(true); return; }
+  try{ const r = await fetch("/api/postlink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: postItem.id, net: linkNet, url: v }) }); const j = await r.json(); if(!r.ok) throw new Error(j.error || "Couldn't save."); $("postLinkMsg").textContent = "✓ Saved. Find it in My songs → Sang."; mineSig = ""; loadMine(true); }
+  catch(e){ $("postLinkMsg").textContent = e.message; }
+});
+function markPosted(net){ askLink(net); if(postItem && postItem.id) fetch("/api/posted", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: postItem.id, net }) }).then(() => { mineSig = ""; loadMine(true); }).catch(() => {}); }
 function sharePic(net){
   if(navigator.canShare && navigator.canShare({ files: [postPic.file] })){
     $("shareMsg").textContent = "Pick " + net + " on the next screen.";
@@ -1210,7 +1232,7 @@ async function loadLists(){ try{ lists = await (await fetch("/api/lists", { cach
 async function loadMine(force){
   try{
     const j = await (await fetch("/api/mine?sort=" + mSort, { cache: "no-store" })).json();
-    const sig = mSort + JSON.stringify(j.items.map(x => [x.id, x.rating, (x.posted || []).length])) + JSON.stringify(lists.fav.map(x => sKey(x.song, x.artist)));
+    const sig = mSort + JSON.stringify(j.items.map(x => [x.id, x.rating, (x.posted || []).length, JSON.stringify(x.links || {})])) + JSON.stringify(lists.fav.map(x => sKey(x.song, x.artist)));
     if(!force && sig === mineSig) return; mineSig = sig; mineItems = j.items; paintFor();
     $("cAll").textContent = j.items.length ? "(" + j.items.length + ")" : ""; $("allEmpty").hidden = !!j.items.length;
     $("mTop").setAttribute("aria-pressed", mSort === "top"); $("mNew").setAttribute("aria-pressed", mSort === "new");
@@ -1227,14 +1249,41 @@ async function loadMine(force){
         });
         st.appendChild(s);
       }
-      const sh = document.createElement("button"); sh.type = "button"; sh.className = "sm"; sh.textContent = "Share";
+      const sh = document.createElement("button"); sh.type = "button"; sh.className = "sm"; sh.textContent = "📣 Post"; sh.title = "Post this song with The Dive picture, your photo, or your video"; sh.setAttribute("aria-label", "Post " + x.song);
       sh.addEventListener("click", () => {
         openPost({ id: x.id, name: x.name, song: x.song, artist: x.artist, rating: x.rating, public: x.public });
         $("postCard").scrollIntoView({ behavior: "smooth", block: "center" });
       });
-      ol.appendChild(songRow(x, { date: x.at, left: st, extra: [sh] }));
+      const li = songRow(x, { date: x.at, left: st, extra: [sh] });
+      if((x.posted && x.posted.length) || (x.links && Object.keys(x.links).length)) li.appendChild(postChips(x));
+      ol.appendChild(li);
     });
   }catch(e){}
+}
+/* where they posted: one tap opens the post (or their profile on that app) */
+const NETINFO = { Facebook: ["fb", "f", "https://www.facebook.com/", h => "https://www.facebook.com/" + h], Instagram: ["ig", "IG", "https://www.instagram.com/", h => "https://www.instagram.com/" + h], TikTok: ["tt", "TT", "https://www.tiktok.com/", h => "https://www.tiktok.com/@" + h] };
+function getHandle(net){ try{ return localStorage.getItem("dive_handle_" + net) || ""; }catch(e){ return ""; } }
+function setHandle(net, v){ v = String(v || "").trim().replace(/^@/, "").replace(/[^\w.\-]/g, "").slice(0, 40); try{ if(v) localStorage.setItem("dive_handle_" + net, v); }catch(e){} }
+function postChips(x){
+  const box = document.createElement("div"); box.className = "posts";
+  const nets = [...new Set([...(x.posted || []), ...Object.keys(x.links || {})])];
+  nets.forEach(net => {
+    const info = NETINFO[net]; if(!info) return;
+    const link = (x.links || {})[net], h = getHandle(net);
+    const a = document.createElement("a"); a.className = info[0]; a.target = "_blank"; a.rel = "noopener";
+    a.href = link || (h ? info[3](h) : info[2]);
+    a.textContent = info[1] + " "; const sm = document.createElement("small"); sm.textContent = link ? "my post ↗" : "posted ↗"; a.appendChild(sm);
+    a.title = link ? "Open my " + net + " post" : "Open " + net + (h ? " (@" + h + ")" : "");
+    if(!link) a.addEventListener("click", e => {
+      const v = prompt("Paste the link to your " + net + " post (or your @username) so this opens it next time. Leave blank to just open " + net + ".", "");
+      if(v === null || !v.trim()) return;
+      e.preventDefault();
+      if(!/[\/.]/.test(v) || /^@/.test(v.trim())){ setHandle(net, v); loadMine(true); window.open(info[3](getHandle(net)), "_blank"); return; }
+      fetch("/api/postlink", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: x.id, net, url: v }) }).then(r => r.json()).then(j => { if(j.error){ alert(j.error); return; } mineSig = ""; loadMine(true); window.open(j.links[net], "_blank"); }).catch(() => {});
+    });
+    box.appendChild(a);
+  });
+  return box;
 }
 $("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
 $("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
