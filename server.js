@@ -783,6 +783,12 @@ async function kjAuth(req, res, next) {
   try {
     const t = Date.now(), l = (pinTries.get(req.ip) || []).filter(x => t - x < 600000);
     if (l.length >= 20) return res.status(429).json({ error: "Too many wrong PINs. Wait 10 minutes." });
+    // Analytics also opens with the owner list PIN (app owner) or the Bar Owner PIN: view only, never host controls
+    if (req.method === "GET" && /^\/api\/kj\/stats(\?|$)/.test(req.originalUrl)) {
+      const pv = String(req.headers["x-kj-pin"] || "");
+      if (await pinIs("list", pv)) { req.kj = { name: "App owner", role: "owner", owner: true, admin: false }; return next(); }
+      if (await pinIs("bar", pv)) { req.kj = { name: "Bar owner", role: "owner", owner: true, admin: false }; return next(); }
+    }
     let nm = ""; try{ nm = decodeURIComponent(String(req.headers["x-kj-name"] || "")); }catch(e){}
     const who = await whoIs(String(req.headers["x-kj-pin"] || ""), nm);
     if (who && who.pick) return res.status(409).json({ error: "Tap your name.", pickName: true, names: who.pick });
@@ -949,7 +955,7 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     topRated: singerList.filter(x => x.avg !== null && x.songs >= 2).sort((a, b) => b.avg - a.avg || b.songs - a.songs).slice(0, 10),
     topSongs: [...songs.values()].sort((a, b) => b.count - a.count).slice(0, 15),
     topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10),
-    tips: req.kj.role === "dj" ? await tipStats(days, req.kj.name) : null
+    tips: (req.kj.owner || req.kj.manager) ? await tipStats(days) : req.kj.role === "dj" ? await tipStats(days, req.kj.name) : null
   });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
