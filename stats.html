@@ -76,7 +76,7 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
 
   <div id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
     <div class="row" role="group" aria-label="Time range">
-      <button data-r="7">7 days</button><button data-r="30">30 days</button><button data-r="90">90 days</button><button data-r="all" aria-pressed="true">All time</button>
+      <button data-r="week">This week</button><button data-r="month">This month</button><button data-r="7">7 days</button><button data-r="30">30 days</button><button data-r="90">90 days</button><button data-r="all" aria-pressed="true">All time</button>
     </div>
     <div class="tiles" id="tiles"></div>
     <div class="grid2">
@@ -85,7 +85,7 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
     </div>
     <div class="grid2">
       <section class="card"><h2>Top singers <span>by songs</span></h2><ol class="rank" id="topSingers"></ol></section>
-      <section class="card"><h2>Best rated <span>2+ songs</span></h2><ol class="rank" id="topRated"></ol></section>
+      <section class="card"><h2>❤️ Most liked singers <span>likes from the crowd</span></h2><ol class="rank" id="topRated"></ol></section>
     </div>
     <div class="grid2">
       <section class="card"><h2>Top songs</h2><ol class="rank" id="topSongs"></ol></section>
@@ -100,7 +100,7 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
     </div>
     <section class="card" id="tipHostsCard"><h2>Tips by host</h2><ol class="rank" id="tipHosts"></ol></section>
     </div>
-    <section class="card"><h2>Self-ratings <span id="ratedNote"></span></h2><div class="dist" id="dist"></div></section>
+
   </div>
 </main>
 <div class="tip" id="tip" hidden></div>
@@ -157,13 +157,14 @@ async function load(){
   if(r.status === 401){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("err").textContent = "Wrong PIN."; return false; }
   const d = await r.json(), T = d.totals;
   $("tiles").innerHTML = "";
-  [[T.songs, "songs sung"], [T.singers, "singers"], [T.repeat, "came back 2+ nights"], [T.nights, "karaoke nights"], [T.perNight, "songs per night"], [T.avgRating == null ? "–" : "★ " + T.avgRating, "average self-rating"], [T.onWall, "on the Wall of Fame"]]
+  [[T.songs, "songs sung"], [T.singers, "singers"], [T.repeat, "came back 2+ nights"], [T.nights, "karaoke nights"], [T.perNight, "songs per night"], ["❤️ " + (T.likes || 0), "likes from the crowd"], [T.likesPerSong || 0, "likes per song"], [T.onWall, "on the Wall of Fame"]]
     .forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("tiles").appendChild(t); });
   bars($("nights"), d.nights.map(x => ({ v: x.count, l: fmtNight(x.night), tip: fmtNight(x.night) + ": " + x.count + (x.count === 1 ? " song" : " songs") })), Math.max(1, Math.ceil(d.nights.length / 6)));
   const order = [...Array(24).keys()].map(i => (i + 12) % 24);
   bars($("hours"), order.map(h => ({ v: d.hours[h], l: hourLbl(h), tip: hourLbl(h) + "m: " + d.hours[h] + (d.hours[h] === 1 ? " song" : " songs") })), 3);
-  rank($("topSingers"), d.topSingers, x => x.name, x => x.nights + (x.nights === 1 ? " night" : " nights") + (x.avg ? " · ★ " + x.avg : ""), x => x.songs + (x.songs === 1 ? " song" : " songs"), x => x.songs);
-  rank($("topRated"), d.topRated, x => x.name, x => x.songs + " songs", x => starsText(x.avg), x => x.avg);
+  const crown = (x, i) => (i === 0 ? "👑 " : "") + x.name;
+  rank($("topSingers"), d.topSingers, x => crown(x, d.topSingers.indexOf(x)), x => x.nights + (x.nights === 1 ? " night" : " nights") + (x.likes ? " · ❤️ " + x.likes : ""), x => x.songs + (x.songs === 1 ? " song" : " songs"), x => x.songs);
+  rank($("topRated"), d.topLiked || [], x => crown(x, (d.topLiked || []).indexOf(x)), x => x.songs + (x.songs === 1 ? " song" : " songs"), x => "❤️ " + x.likes, x => x.likes);
   rank($("topSongs"), d.topSongs, x => x.song, x => x.artist, x => x.count + "×", x => x.count);
   rank($("topArtists"), d.topArtists, x => x.artist, () => "", x => x.count + "×", x => x.count);
 
@@ -178,14 +179,6 @@ async function load(){
   rank($("topTippers"), TP.topTippers, x => (x.crowns ? "👑".repeat(Math.min(x.crowns, 3)) + (x.crowns > 3 ? "×" + x.crowns : "") + " " : "") + x.name, x => x.count + (x.count === 1 ? " tip" : " tips") + " · " + x.nights + (x.nights === 1 ? " night" : " nights"), x => usd(x.total), x => x.total);
   $("tipHostsCard").hidden = TP.byHost.length < 2;
   rank($("tipHosts"), TP.byHost, x => x.host, () => "", x => usd(x.total), x => x.total);
-  const dist = $("dist"); dist.innerHTML = ""; const maxS = Math.max(...d.stars, 1);
-  for(let i = 4; i >= 0; i--){
-    const row = document.createElement("div"); const l = document.createElement("span"); l.className = "stars"; l.textContent = "★".repeat(i + 1);
-    const tr = document.createElement("div"); tr.className = "track"; const f = document.createElement("i"); f.style.width = (d.stars[i] / maxS * 100) + "%"; tr.appendChild(f);
-    const c = document.createElement("span"); c.className = "c"; c.textContent = d.stars[i];
-    row.append(l, tr, c); dist.appendChild(row);
-  }
-  $("ratedNote").textContent = T.rated + " of " + T.songs + " songs rated";
   return true;
 }
 document.querySelectorAll("[data-r]").forEach(b => b.addEventListener("click", () => { range = b.dataset.r; load(); }));

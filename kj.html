@@ -76,10 +76,10 @@ li .av{width:30px;height:30px;border-radius:50%;object-fit:cover;flex:none;borde
 .chips{display:inline-flex;gap:4px;align-items:center;vertical-align:middle;margin-left:6px}
 .chip{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;font-size:10px;font-weight:800;color:#fff;line-height:1}
 .chip.fb{background:#1877f2}.chip.ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#4f5bd5)}.chip.tt{background:#000;border:1px solid #444}
-.stars{color:#f5c518;font-size:13px;margin-left:6px;letter-spacing:1px}
+.stars{color:#ff6fa8;font-size:13px;margin-left:6px;letter-spacing:1px}
 li .t span.chips{display:inline-flex;color:inherit}
 li .t span.chip{display:inline-grid;color:#fff;font-size:10px}
-li .t span.stars{display:inline;color:#f5c518;font-size:13px}
+li .t span.stars{display:inline;color:#ff6fa8;font-size:13px}
 @media (max-width:420px){.sgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .now small{display:block;font-family:var(--body);font-weight:400;font-size:17px;color:var(--ink-2)}
 button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
@@ -402,7 +402,7 @@ function chips(list){
   (list || []).forEach(n => { const c = document.createElement("span"); c.className = "chip " + CHIP[n][0]; c.textContent = CHIP[n][1]; c.title = "Posted to " + n; c.setAttribute("aria-label", "Posted to " + n); w.appendChild(c); });
   return w;
 }
-const starStr = n => n ? "★".repeat(n) : "";
+const likeStr = n => n ? "❤️ " + n : "";
 let singerFor = null, singerPinned = false, lastUp = null;
 function ago(t){
   const d = Math.round((Date.now() - Date.parse(t)) / 864e5);
@@ -470,7 +470,7 @@ async function showSinger(r, pinned){
     const p = document.createElement("p"); p.className = "note new"; p.textContent = "★ First time singing here! Give them a shout-out."; box.appendChild(p); return;
   }
   const g = document.createElement("div"); g.className = "sgrid";
-  [[j.songs, "songs sung"], [j.nights, j.nights === 1 ? "night" : "nights"], [j.avg ? "★ " + j.avg : "–", "self-rating"], [j.posts, "songs posted"]].forEach(([v, l]) => {
+  [[j.songs, "songs sung"], [j.nights, j.nights === 1 ? "night" : "nights"], [j.likes || 0, "crowd likes"], [j.posts, "songs posted"]].forEach(([v, l]) => {
     const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; d.append(b, s); g.appendChild(d);
   });
   box.appendChild(g);
@@ -482,7 +482,7 @@ async function showSinger(r, pinned){
   j.recent.forEach(x => {
     const li = document.createElement("li"); const tt = document.createElement("div"); tt.className = "t";
     const b = document.createElement("b"); b.textContent = x.song + (x.artist ? " – " + x.artist : "");
-    if(x.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(x.rating); b.appendChild(st); }
+    if(x.likes){ const st = document.createElement("span"); st.className = "stars"; st.textContent = likeStr(x.likes); b.appendChild(st); }
     if(x.posted && x.posted.length) b.appendChild(chips(x.posted));
     const s = document.createElement("span"); s.textContent = ago(x.at);
     tt.append(b, s); li.appendChild(tt); ol.appendChild(li);
@@ -495,7 +495,7 @@ function item(r, i, waiting){
   const t = document.createElement("div"); t.className = "t";
   const b = document.createElement("b"); b.textContent = r.name;
   const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
-  if(r.rating){ const st = document.createElement("span"); st.className = "stars"; st.textContent = starStr(r.rating); b.appendChild(st); }
+  if(r.likes){ const st = document.createElement("span"); st.className = "stars"; st.textContent = likeStr(r.likes); b.appendChild(st); }
   if(r.posted && r.posted.length) b.appendChild(chips(r.posted));
   if(r.nosong){ const ns = document.createElement("span"); ns.className = "nosongtag"; ns.textContent = "✗ NO SONG · waiting for a new pick"; b.appendChild(ns); }
   if(r.paid && waiting){ const pd = document.createElement("span"); pd.className = "paidtag"; pd.textContent = r.djLock ? "DJ LOCK" : "PAID"; pd.title = "Paid to lock this spot. Others flow around them; it can't be moved down."; b.appendChild(pd); }

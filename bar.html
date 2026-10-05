@@ -222,7 +222,7 @@ function row(r, n){
   const li = document.createElement("li"); if(r.paid && r.status === "queued") li.classList.add("locked");
   const a = document.createElement("span"); a.className = "n"; a.textContent = n;
   const t = document.createElement("div"); t.className = "t";
-  const b = document.createElement("b"); b.textContent = r.name + (r.rating ? "  " + "★".repeat(r.rating) : "");
+  const b = document.createElement("b"); b.textContent = r.name + (r.likes ? "  ❤️ " + r.likes : "");
   const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
   if(r.posted && r.posted.length){
     const c = document.createElement("span"); c.className = "posted";

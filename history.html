@@ -63,7 +63,7 @@ td.n{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink-2)}
   <div id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
     <div class="stats" id="stats"></div>
     <div class="row">
-      <button id="top" aria-pressed="true">Sort by rating</button>
+      <button id="top" aria-pressed="true">Most liked</button>
       <button id="new" aria-pressed="false">Sort by newest</button>
       <input type="search" id="q" placeholder="Search name or song" aria-label="Search name or song">
     </div>
@@ -83,10 +83,10 @@ async function load(){
   const r = await fetch("/api/kj/history?sort=" + sort + "&q=" + encodeURIComponent($("q").value.trim()), { headers: { "x-kj-pin": pin }, cache: "no-store" });
   if(r.status === 401){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("err").textContent = "Wrong PIN."; return false; }
   const j = await r.json(), items = j.items, tb = $("rows"); tb.innerHTML = "";
-  const rated = items.filter(x => x.rating), avg = rated.length ? (rated.reduce((s, x) => s + x.rating, 0) / rated.length).toFixed(1) : "–";
+  const avg = items.reduce((s, x) => s + (x.likes || 0), 0);
   const singers = new Set(items.map(x => x.name.toLowerCase())).size;
   $("stats").innerHTML = "";
-  [[items.length, "songs sung"], [singers, "singers"], [avg, "average rating"], [items.filter(x => x.public).length, "on the wall"]].forEach(([v, l]) => {
+  [[items.length, "songs sung"], [singers, "singers"], [avg, "crowd likes"], [items.filter(x => x.public).length, "on the wall"]].forEach(([v, l]) => {
     const d = document.createElement("div"); d.className = "stat"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; d.append(b, s); $("stats").appendChild(d);
   });
   if(!items.length){ const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 5; td.className = "muted"; td.textContent = "No songs logged yet. Singers show up here after you tap Next singer."; tr.appendChild(td); tb.appendChild(tr); return true; }
@@ -95,7 +95,7 @@ async function load(){
     const c = (txt, cls) => { const td = document.createElement("td"); if(cls) td.className = cls; td.textContent = txt; tr.appendChild(td); return td; };
     c(x.name); const sg = c(x.song + (x.artist ? " – " + x.artist : ""));
     if(x.posted && x.posted.length){ const w = document.createElement("span"); w.className = "chips"; x.posted.forEach(n => { const k = { Facebook: ["fb", "f"], Instagram: ["ig", "IG"], TikTok: ["tt", "TT"] }[n]; const ch = document.createElement("span"); ch.className = "chip " + k[0]; ch.textContent = k[1]; ch.title = "Posted to " + n; w.appendChild(ch); }); sg.appendChild(w); }
-    const st = c(x.rating ? "★".repeat(x.rating) + "☆".repeat(5 - x.rating) : "Not rated", x.rating ? "st" : "muted");
+    const st = c(x.likes ? "❤️ " + x.likes : "No likes yet", x.likes ? "st" : "muted");
     c(fmt(x.at), "n");
     const w = c(""); if(x.public){ const p = document.createElement("span"); p.className = "pill"; p.textContent = "Yes"; w.appendChild(p); } else { w.className = "muted"; w.textContent = "No"; }
     tb.appendChild(tr);

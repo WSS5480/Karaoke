@@ -128,6 +128,7 @@ li.up .av{border-color:var(--green)}
 .posts .fb{background:#1877f2}.posts .ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.posts .tt{background:#111;border:1px solid #444}
 .posts .addp{background:transparent;border:1px solid var(--line);color:var(--ink)}
 .posts small{font-weight:400;opacity:.85}
+.mylk{font-weight:800;color:#ff8fa6;font-size:15px}
 .mine-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .mine-list li{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px;border-top:1px solid var(--line)}
 .mine-list li:first-child{border-top:0}
@@ -214,6 +215,12 @@ li.up .av{border-color:var(--green)}
 .tpay button{font-size:15px}
 .tpay button[data-m="cashapp"]{border-color:#00d64f}.tpay button[data-m="venmo"]{border-color:#3d95ce}.tpay button[data-m="paypal"]{border-color:#2790c3}.tpay button[data-m="zelle"]{border-color:#a0f}.tpay button[data-m="apple"]{border-color:#eee}
 .eta{margin:0;font-size:17px;font-weight:700;color:#5fd36e}.eta small{display:block;font-size:12px;font-weight:400;color:var(--ink-2)}
+.likebtn{font:inherit;font-weight:800;font-size:16px;border-radius:999px;padding:8px 12px;border:1px solid #ff6b8a;background:transparent;color:#ff8fa6;cursor:pointer;white-space:nowrap}
+.likebtn.on{background:#ff3d6e;color:#fff;border-color:#ff3d6e}
+.likelist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.likelist li{display:flex;align-items:center;gap:10px}.likelist .t{flex:1;min-width:0}.likelist .t b{display:block;overflow-wrap:anywhere}.likelist .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
+.likelist .upnow{font-size:11px;font-weight:800;color:#041206;background:var(--green-hi);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+.mylikes{font-size:28px;font-weight:800;color:#ff8fa6;text-align:center;margin:0}
 .nosong{margin:0;padding:12px;border-radius:12px;background:rgba(220,60,60,.15);border:2px solid #e05555;color:#ffb3b3;font-weight:700;text-align:center}
 .bumpbox{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .bumpbox .go{background:#ffc93c;color:#111}
@@ -275,7 +282,13 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
   <div class="nowbar" id="nowBar" hidden aria-live="polite">
     <div class="t"><small>🎤 Now singing</small><b id="nowSong"></b><span id="nowWho"></span></div>
     <a class="lyr" id="nowLyr" target="_blank" rel="noopener">🔎 Sing along</a>
+    <button type="button" class="likebtn" id="nowLike" hidden aria-label="Like this singer">❤️ <span id="nowLikes">0</span></button>
   </div>
+  <section class="card likes" id="likeCard" hidden>
+    <h2>❤️ Like tonight's singers <span style="text-transform:none;letter-spacing:0">/ Dale like</span></h2>
+    <ol class="likelist" id="likeList"></ol>
+    <p class="hint" style="margin:0;color:var(--ink-2)">One like per song from each phone. Likes are open the night they sing.</p>
+  </section>
   <label class="nowopt" id="nowOpt" hidden for="nowPop"><input type="checkbox" id="nowPop"> Pop up lyrics for every new song / Letra en cada canción</label>
   <p class="nowopt lyrwhere" id="lyrWhere" hidden>Lyrics open in: <b id="lyrAppName">not picked</b> <button type="button" class="linkbtn" id="lyrChange" style="font-size:14px;padding:0 4px">Change</button></p>
   <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
@@ -283,7 +296,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
   <section class="card" id="authCard" hidden>
     <div id="stepPhone" style="display:flex;flex-direction:column;gap:14px">
       <h2>Sign in to sing <span style="text-transform:none;letter-spacing:0">/ Entra para cantar</span></h2>
-      <p style="margin:0;color:var(--ink-2)">We'll text you a code. Your songs and ratings follow you to any phone.</p>
+      <p style="margin:0;color:var(--ink-2)">We'll text you a code. Your songs and likes follow you to any phone.</p>
       <div>
         <label for="phone">Phone number <span>/ Teléfono</span></label>
         <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="956-555-0123">
@@ -377,12 +390,12 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
   </section>
 
   <section class="card rate" id="rateCard" hidden>
-    <h2>How'd you do? <span style="text-transform:none;letter-spacing:0">/ ¿Cómo te fue?</span></h2>
+    <h2>Nice singing! <span style="text-transform:none;letter-spacing:0">/ ¡Bien cantado!</span></h2>
     <div class="song" id="rateSong"></div>
-    <div class="stars" id="stars" role="radiogroup" aria-label="Rate your performance"></div>
+    <p class="mylikes" id="myLikes">❤️ 0 likes</p>
+    <p class="hint" style="margin:0;color:var(--ink-2);text-align:center">Likes from the crowd keep coming in tonight.</p>
     <label class="chk" for="pub"><input type="checkbox" id="pub"> Add me to The Dive's wall of fame</label>
-    <button class="go" id="saveRate" type="button">Save my rating</button>
-    <button class="linkbtn" id="skipRate" type="button" style="align-self:center">Skip rating, just post</button>
+    <button class="go" id="saveRate" type="button">📣 Post my song</button>
     <p class="ok" id="rateMsg" role="status"></p>
     <button class="ghost" id="rateDone" type="button">Done</button>
   </section>
@@ -401,7 +414,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
           <button class="net tt" data-net="TikTok" type="button" disabled aria-label="Post to TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M16.6 3c.3 2.2 1.6 3.6 3.9 3.8v2.6c-1.4.1-2.6-.3-3.9-1.1v5.6c0 3.5-2.5 5.6-5.4 5.6-3 0-5.3-2.3-5.1-5.4.2-2.8 2.6-4.8 5.6-4.5v2.7c-1.4-.3-2.9.4-3 1.9-.1 1.4.9 2.5 2.4 2.5 1.6 0 2.6-1 2.6-2.8V3z"/></svg><span>TikTok</span></button>
         </div>
         <p class="hint" id="netStatus" style="color:var(--ink-2);margin:0">Getting it ready…</p>
-        <label class="chk" for="showStars" style="justify-content:flex-start"><input type="checkbox" id="showStars" checked> Show my stars</label>
+        <label class="chk" for="showStars" style="justify-content:flex-start"><input type="checkbox" id="showStars" checked> Show my likes</label>
         <label class="chk" for="tagDive" style="justify-content:flex-start"><input type="checkbox" id="tagDive" checked> Tag The Dive</label>
         <label class="chk" for="followDive" id="followRow" style="justify-content:flex-start"><input type="checkbox" id="followDive" checked> Follow The Dive</label>
         <button class="linkbtn" id="ownPhoto" type="button" style="align-self:flex-start;padding-left:0">📷 Use my own photo</button>
@@ -456,7 +469,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
     </div>
     <div id="paneAll" hidden>
       <div class="seg">
-        <button class="sm" id="mTop" type="button" aria-pressed="false">Top rated</button>
+        <button class="sm" id="mTop" type="button" aria-pressed="false">Most liked</button>
         <button class="sm" id="mNew" type="button" aria-pressed="true">Newest</button>
       </div>
       <ol class="mine-list" id="mineList"></ol>
@@ -864,6 +877,7 @@ function render(data){
     }
   }
   paintNow((data.queue || []).find(r => r.status === "up"));
+  paintLikes(data.sung);
   const ol = $("queue"); ol.innerHTML = "";
   if(!data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
   data.queue.forEach((r, i) => {
@@ -885,36 +899,21 @@ setTimeout(() => document.body.classList.remove("booting"), 3500);   // never hi
 let last = null, picked = 0;
 $("formCard").before($("rateCard"));
 $("formCard").before($("postCard"));
-const starsBox = $("stars");
-for(let i = 1; i <= 5; i++){
-  const b = document.createElement("button"); b.type = "button"; b.textContent = "★"; b.setAttribute("role", "radio");
-  b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : ""));
-  b.addEventListener("click", () => { picked = i; paintStars(); $("rateMsg").textContent = ""; });
-  starsBox.appendChild(b);
-}
-function paintStars(){ [...starsBox.children].forEach((b, i) => { b.classList.toggle("on", i < picked); b.setAttribute("aria-checked", i + 1 === picked); }); }
-function dismissed(id){ try{ return localStorage.getItem("dive_rated_done") === String(id); }catch(e){ return false; } }
 function renderRate(l){
   if(!l || dismissed(l.id) || mine){ $("rateCard").hidden = true; return; }
   const first = !last || last.id !== l.id; last = l;
   $("rateCard").hidden = false;
   $("rateSong").textContent = l.song + (l.artist ? " – " + l.artist : "");
-  if(first){ picked = l.rating || 0; $("pub").checked = !!l.public; paintStars(); }
+  $("myLikes").textContent = "❤️ " + (l.likes || 0) + ((l.likes || 0) === 1 ? " like" : " likes");
+  if(first) $("pub").checked = !!l.public;
 }
-$("saveRate").addEventListener("click", async () => {
-  if(!picked){ $("rateMsg").textContent = "Tap the stars to rate yourself."; return; }
-  try{
-    const r = await fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating: picked, public: $("pub").checked }) });
-    const j = await r.json();
-    if(!r.ok){ $("rateMsg").textContent = j.error || "Couldn't save. Try again."; return; }
-    last.rating = picked; last.public = $("pub").checked;
-    $("rateMsg").textContent = $("pub").checked ? "Saved. You're on the wall of fame." : "Saved.";
-    openPost({ ...last });
-    loadMine(true);
-  }catch(e){ $("rateMsg").textContent = "No connection. Try again."; }
+$("saveRate").addEventListener("click", () => { if(!last) return; openPost({ ...last }); $("postCard").scrollIntoView({ behavior: "smooth", block: "center" }); });
+$("pub").addEventListener("change", async () => {
+  if(!last) return;
+  try{ const r = await fetch("/api/wall-optin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: last.id, public: $("pub").checked }) }); if(!r.ok) throw 0;
+    last.public = $("pub").checked; $("rateMsg").textContent = $("pub").checked ? "You're on the wall of fame." : "Taken off the wall of fame."; loadMine(true); }
+  catch(e){ $("rateMsg").textContent = "Couldn't save. Try again."; }
 });
-$("skipRate").addEventListener("click", () => { if(!last) return; openPost({ ...last, rating: 0 }); $("postCard").scrollIntoView({ behavior: "smooth", block: "center" }); });
-$("pub").addEventListener("change", () => { $("rateMsg").textContent = "Tap Save my rating to update."; });
 $("rateDone").addEventListener("click", () => { try{ localStorage.setItem("dive_rated_done", String(last.id)); }catch(e){} $("rateCard").hidden = true; });
 
 function wrapText(c, text, x, y, maxW, lh){
@@ -924,7 +923,7 @@ function wrapText(c, text, x, y, maxW, lh){
 }
 const picCache = new Map();
 async function makeImage(item){
-  if(picCache.has(item.id + ":" + item.rating)) return picCache.get(item.id + ":" + item.rating);
+  if(picCache.has(item.id + ":" + item.likesShown)) return picCache.get(item.id + ":" + item.likesShown);
   const W = 1080, H = 1920, cv = document.createElement("canvas"); cv.width = W; cv.height = H; const c = cv.getContext("2d");
   c.fillStyle = "#0a0c0a"; c.fillRect(0, 0, W, H);
   const g = c.createRadialGradient(W/2, 560, 80, W/2, 560, 520); g.addColorStop(0, "rgba(57,181,74,.55)"); g.addColorStop(1, "rgba(57,181,74,0)");
@@ -936,14 +935,14 @@ async function makeImage(item){
   const n = wrapText(c, item.song, W/2, 1120, W - 140, 104);
   let y = 1120 + n * 104;
   if(item.artist){ c.fillStyle = "#9fae9f"; c.font = "500 50px Outfit, system-ui, sans-serif"; c.fillText(item.artist, W/2, y); y += 90; }
-  if(item.rating){c.fillStyle = "#ffc93c"; c.font = "100px system-ui, sans-serif"; c.fillText("★".repeat(item.rating || 0) + "☆".repeat(5 - (item.rating || 0)), W/2, y + 60); }
+  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = "72px system-ui, sans-serif"; c.fillText("❤️ " + item.likesShown + (item.likesShown === 1 ? " like" : " likes"), W/2, y + 60); }
   c.fillStyle = "#5fd36e"; c.font = "800 56px 'Roboto Slab', Georgia, serif"; c.fillText(item.name, W/2, y + 190);
   c.fillStyle = "#eef3ee"; c.font = "500 44px Outfit, system-ui, sans-serif"; c.fillText("Karaoke at The Dive on 495 · McAllen, TX", W/2, H - 170);
   c.fillStyle = "#5fd36e"; c.font = "600 40px Outfit, system-ui, sans-serif"; c.fillText("#TheDiveOn495  #Karaoke  #McAllen", W/2, H - 105);
   const blob = await new Promise(r => cv.toBlob(r, "image/png"));
   const file = new File([blob], "the-dive-karaoke.png", { type: "image/png" });
   const out = { blob, file, url: URL.createObjectURL(blob) };
-  picCache.set(item.id + ":" + item.rating, out);
+  picCache.set(item.id + ":" + item.likesShown, out);
   return out;
 }
 // card with the customer's own photo on top, The Dive badge, then song, stars and name
@@ -969,7 +968,7 @@ async function makePhotoImage(item, file){
   const n = wrapText(c, item.song, W/2, PH + 130, W - 140, 96);
   let y = PH + 130 + n * 96;
   if(item.artist){ c.fillStyle = "#9fae9f"; c.font = "500 46px Outfit, system-ui, sans-serif"; c.fillText(item.artist, W/2, y); y += 80; }
-  if(item.rating){c.fillStyle = "#ffc93c"; c.font = "88px system-ui, sans-serif"; c.fillText("★".repeat(item.rating || 0) + "☆".repeat(5 - (item.rating || 0)), W/2, y + 50); }
+  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = "64px system-ui, sans-serif"; c.fillText("❤️ " + item.likesShown + (item.likesShown === 1 ? " like" : " likes"), W/2, y + 50); }
   c.fillStyle = "#5fd36e"; c.font = "800 52px 'Roboto Slab', Georgia, serif"; c.fillText(item.name, W/2, Math.min(y + 160, H - 190));
   c.fillStyle = "#eef3ee"; c.font = "500 40px Outfit, system-ui, sans-serif"; c.fillText("Karaoke at The Dive on 495 · McAllen, TX", W/2, H - 110);
   c.fillStyle = "#5fd36e"; c.font = "600 36px Outfit, system-ui, sans-serif"; c.fillText("#TheDiveOn495  #Karaoke  #McAllen", W/2, H - 55);
@@ -978,14 +977,14 @@ async function makePhotoImage(item, file){
 }
 let postItem = null, postPic = null, vidFile = null;
 let postMode = "dive", photoFile = null;
-const shown = item => ({ ...item, rating: $("showStars").checked ? (item.rating || 0) : 0 });
+const shown = item => ({ ...item, likesShown: $("showStars").checked ? (item.likes || 0) : 0 });
 // make the picture first; the Post button only turns on when it's ready, so the tap opens the share menu instantly
 async function openPost(item){
   postItem = item; postPic = null; $("postLinkBox").hidden = true;
   $("postCard").hidden = false; $("shareMsg").textContent = "";
   $("postSong").textContent = item.song + (item.artist ? " – " + item.artist : "");
   $("postBtn").disabled = true; $("postBtn").textContent = "Getting it ready…"; $("postPreview").hidden = true;
-  $("showStars").checked = !!item.rating; $("showStars").disabled = !item.rating; postMode = "dive"; photoFile = null;
+  $("showStars").checked = !!item.likes; $("showStars").disabled = !item.likes; postMode = "dive"; photoFile = null;
   $("ownPhoto").textContent = "📷 Use my own photo"; $("divePhoto").hidden = true; $("postVidPreview").hidden = true; $("vidWork").hidden = true; vidFile = null;
   const pic = await makeImage(shown(item));
   if(postItem !== item) return;
@@ -1050,7 +1049,7 @@ netBtns.forEach(btn => btn.addEventListener("click", () => {
   const net = btn.dataset.net;
   if(navigator.clipboard) navigator.clipboard.writeText(caption(postItem, net)).catch(() => {});
   // Facebook with The Dive picture: open Facebook's post box with the song card, they just tap Post
-  if(net === "Facebook" && postMode === "dive" && postItem.public && postItem.id && ($("showStars").checked || !postItem.rating)){
+  if(net === "Facebook" && postMode === "dive" && postItem.public && postItem.id && ($("showStars").checked || !postItem.likes)){
     const u = location.origin + "/s/" + postItem.id;
     window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(u), "_blank");
     markPosted(net); offerFollow(net); $("shareMsg").textContent = "✓ Facebook opened. Tap Post to finish.";
@@ -1105,7 +1104,7 @@ async function makeOverlay(item, W, H){
   c.fillStyle = "#fff"; c.font = `800 ${54 * k}px 'Roboto Slab', Georgia, serif`;
   const n = wrapText(c, item.song, W/2, y + 62 * k, W - 80 * k, 62 * k); y += 62 * k + n * 62 * k;
   if(item.artist){ c.fillStyle = "#cfd8cf"; c.font = `500 ${30 * k}px Outfit, system-ui, sans-serif`; c.fillText(item.artist, W/2, y); y += 50 * k; }
-  if(item.rating){c.fillStyle = "#ffc93c"; c.font = `${52 * k}px system-ui, sans-serif`; c.fillText("★".repeat(item.rating || 0) + "☆".repeat(5 - (item.rating || 0)), W/2, y + 20 * k); }
+  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = `${40 * k}px system-ui, sans-serif`; c.fillText("❤️ " + item.likesShown + (item.likesShown === 1 ? " like" : " likes"), W/2, y + 20 * k); }
   c.fillStyle = "#5fd36e"; c.font = `800 ${34 * k}px 'Roboto Slab', Georgia, serif`; c.fillText(item.name + "  ·  The Dive on 495", W/2, Math.min(y + 80 * k, H - 30 * k));
   return o;
 }
@@ -1232,26 +1231,16 @@ async function loadLists(){ try{ lists = await (await fetch("/api/lists", { cach
 async function loadMine(force){
   try{
     const j = await (await fetch("/api/mine?sort=" + mSort, { cache: "no-store" })).json();
-    const sig = mSort + JSON.stringify(j.items.map(x => [x.id, x.rating, (x.posted || []).length, JSON.stringify(x.links || {})])) + JSON.stringify(lists.fav.map(x => sKey(x.song, x.artist)));
+    const sig = mSort + JSON.stringify(j.items.map(x => [x.id, x.likes, (x.posted || []).length, JSON.stringify(x.links || {})])) + JSON.stringify(lists.fav.map(x => sKey(x.song, x.artist)));
     if(!force && sig === mineSig) return; mineSig = sig; mineItems = j.items; paintFor();
     $("cAll").textContent = j.items.length ? "(" + j.items.length + ")" : ""; $("allEmpty").hidden = !!j.items.length;
     $("mTop").setAttribute("aria-pressed", mSort === "top"); $("mNew").setAttribute("aria-pressed", mSort === "new");
     const ol = $("mineList"); ol.innerHTML = "";
     j.items.forEach(x => {
-      const st = document.createElement("div"); st.className = "mini"; st.setAttribute("role", "radiogroup"); st.setAttribute("aria-label", "Rate " + x.song);
-      for(let i = 1; i <= 5; i++){
-        const s = document.createElement("button"); s.type = "button"; s.textContent = "★"; s.className = i <= (x.rating || 0) ? "on" : "";
-        s.setAttribute("aria-label", i + " stars");
-        s.addEventListener("click", async () => {
-          const r = await fetch("/api/rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: x.id, rating: i, public: x.public }) }).catch(() => null);
-          $("mineMsg").textContent = r && r.ok ? "Rating saved." : "Couldn't save. Try again.";
-          loadMine(true);
-        });
-        st.appendChild(s);
-      }
+      const st = document.createElement("span"); st.className = "mylk"; st.textContent = "❤️ " + (x.likes || 0); st.title = (x.likes || 0) + " likes from the crowd";
       const sh = document.createElement("button"); sh.type = "button"; sh.className = "sm"; sh.textContent = "📣 Post"; sh.title = "Post this song with The Dive picture, your photo, or your video"; sh.setAttribute("aria-label", "Post " + x.song);
       sh.addEventListener("click", () => {
-        openPost({ id: x.id, name: x.name, song: x.song, artist: x.artist, rating: x.rating, public: x.public });
+        openPost({ id: x.id, name: x.name, song: x.song, artist: x.artist, likes: x.likes, public: x.public });
         $("postCard").scrollIntoView({ behavior: "smooth", block: "center" });
       });
       const li = songRow(x, { date: x.at, left: st, extra: [sh] });
@@ -1295,7 +1284,7 @@ function libFind(song, artist){ const t = norm(song), a = norm(artist || ""); re
 function rand(seed){ let x = Math.sin(seed) * 10000; return x - Math.floor(x); }
 function paintFor(){
   if(!songs.length) return;
-  const mineSongs = [...mineItems.map(x => ({ song: x.song, artist: x.artist, w: 1 + (x.rating >= 4 ? 1 : 0) })), ...lists.fav.map(x => ({ ...x, w: 2 })), ...lists.practice.map(x => ({ ...x, w: 1 }))];
+  const mineSongs = [...mineItems.map(x => ({ song: x.song, artist: x.artist, w: 1 + ((x.likes || 0) >= 3 ? 1 : 0) })), ...lists.fav.map(x => ({ ...x, w: 2 })), ...lists.practice.map(x => ({ ...x, w: 1 }))];
   const known = new Set(mineSongs.map(x => sKey(x.song, x.artist)));
   const artistW = {}, genreW = {}, langW = {};
   mineSongs.forEach(x => {
@@ -1776,6 +1765,28 @@ try{ popOn = localStorage.getItem("dive_singalong") === "1"; }catch(e){}
 $("nowPop").checked = popOn;
 $("nowPop").addEventListener("change", () => { popOn = $("nowPop").checked; try{ localStorage.setItem("dive_singalong", popOn ? "1" : "0"); }catch(e){} });
 let prevUp = null;   // who was singing, so we know when their song ends
+/* crowd likes */
+let likeBusy = false;
+async function sendLike(id, on){
+  if(likeBusy) return; likeBusy = true;
+  try{ const r = await fetch("/api/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, on }) }); const j = await r.json(); if(!r.ok && j.error) alert(j.error); }catch(e){}
+  likeBusy = false; try{ refresh(); }catch(e){}
+}
+function paintLikes(list){
+  list = list || []; const box = $("likeList"); box.innerHTML = "";
+  const others = list.filter(x => !x.mine);
+  $("likeCard").hidden = !others.length;
+  others.forEach(x => {
+    const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
+    const b = document.createElement("b"); b.textContent = x.name; if(x.up){ const u = document.createElement("span"); u.className = "upnow"; u.textContent = "NOW"; b.appendChild(u); }
+    const sp = document.createElement("span"); sp.textContent = x.song + (x.artist ? " – " + x.artist : ""); t.append(b, sp);
+    const btn = document.createElement("button"); btn.type = "button"; btn.className = "likebtn" + (x.liked ? " on" : ""); btn.textContent = "❤️ " + x.likes;
+    btn.setAttribute("aria-label", (x.liked ? "Unlike " : "Like ") + x.name); btn.addEventListener("click", () => sendLike(x.id, !x.liked));
+    li.append(t, btn); box.appendChild(li);
+  });
+  const up = list.find(x => x.up), nb = $("nowLike");
+  nb.hidden = !up || up.mine; if(up && !up.mine){ $("nowLikes").textContent = up.likes; nb.classList.toggle("on", !!up.liked); nb.onclick = () => sendLike(up.id, !up.liked); }
+}
 function paintNow(up){
   if(prevUp && (!up || up.id !== prevUp.id) && window.diveTipNudge) window.diveTipNudge(prevUp.name);
   prevUp = up ? { id: up.id, name: up.name } : null;

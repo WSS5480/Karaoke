@@ -38,7 +38,7 @@ li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywher
   <img class="logo" src="/logo.png" alt="The Dive on 495">
   <h1>Wall of fame</h1>
   <div class="seg">
-    <button id="top" aria-pressed="true">Top rated</button>
+    <button id="top" aria-pressed="true">Most liked</button>
     <button id="new" aria-pressed="false">Newest</button>
   </div>
   <ol id="list"><li class="empty">Loading…</li></ol>
@@ -58,8 +58,8 @@ async function load(){
       const b = document.createElement("b"); b.textContent = r.name;
       const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "") + " · " + fmt(r.at);
       t.append(b, s);
-      const st = document.createElement("span"); st.className = "st"; st.textContent = r.rating ? "★".repeat(r.rating) + "☆".repeat(5 - r.rating) : "";
-      st.setAttribute("aria-label", (r.rating || 0) + " out of 5 stars");
+      const st = document.createElement("span"); st.className = "st"; st.textContent = r.likes ? "❤️ " + r.likes : "";
+      st.setAttribute("aria-label", (r.likes || 0) + " likes");
       li.append(t, st); ol.appendChild(li);
     });
   }catch(e){ $("list").innerHTML = '<li class="empty">Couldn\'t load. Check your connection.</li>'; }
