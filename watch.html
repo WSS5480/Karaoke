@@ -92,6 +92,8 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <span class="live"><i></i>Live</span>
     </header>
 
+    <button type="button" class="kill off" id="djCtl" style="font-size:18px">🎧 Open DJ controls (add, move, remove singers)</button>
+
     <section class="card" id="moneyCard">
       <h2>Tips &amp; lock-your-spot <span id="moneyState"></span></h2>
       <button type="button" class="kill on" id="moneyKill">⛔ Kill all tips &amp; lock-your-spot now</button>
@@ -337,6 +339,7 @@ function paintDjLog(list){
   });
 }
 $("djnFilter").addEventListener("change", () => paintDjLog(djLogData));
+$("djCtl").addEventListener("click", () => { try{ sessionStorage.setItem("kj_pin", pin); sessionStorage.removeItem("kj_name"); }catch(e){} location.href = "/kj"; });
 let timer = null;
 window.diveRefresh = () => !$("view").hidden ? refresh() : location.reload();
 async function refresh(){

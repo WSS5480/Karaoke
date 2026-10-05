@@ -93,6 +93,8 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <span class="live"><i></i>Live</span>
     </header>
 
+    <button type="button" class="kill off" id="djCtl" style="font-size:18px">🎧 Open DJ controls (add, move, remove singers)</button>
+
     <section class="card" id="newPinCard" hidden style="border:2px solid var(--gold)">
       <h2>Make your own Bar Owner PIN</h2>
       <p class="sub" style="margin:0">You're on the starting PIN. Pick one only you know, and add your phone so you can reset it by text if you forget.</p>
@@ -406,6 +408,7 @@ function paintDjLog(list){
   });
 }
 $("djnFilter").addEventListener("change", () => paintDjLog(djLogData));
+$("djCtl").addEventListener("click", () => { try{ sessionStorage.setItem("kj_pin", pin); sessionStorage.removeItem("kj_name"); }catch(e){} location.href = "/kj"; });
 let timer = null;
 window.diveRefresh = () => !$("view").hidden ? refresh() : location.reload();
 async function refresh(){

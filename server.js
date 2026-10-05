@@ -773,6 +773,9 @@ const TEMP_PIN = String(process.env.HOST_TEMP_PIN || "").replace(/\D/g, "");
 async function whoIs(pin, name) {
   if (!pin) return null;
   if (await pinIs("house", pin)) return { name: "Owner", admin: true, role: "house" };
+  // the Bar Owner PIN (and the app owner's list PIN at The Dive) can run the host page with the house controls
+  if (await pinIs("bar", pin)) return { name: "Bar owner", admin: true, role: "house", ownerLogin: true };
+  if (T() === "dive" && await pinIs("list", pin)) return { name: "App owner", admin: true, role: "house", ownerLogin: true };
   const hs = (await getHosts()).filter(x => same(pin, x.pin));
   let h = hs[0];
   if (hs.length > 1) { h = name ? hs.find(x => x.name === name) : null; if (!h) return { pick: hs.map(x => x.name) }; }
@@ -912,7 +915,7 @@ async function describeKj(req) {
 }
 function auditKj(req, res, next) {
   if (req.method === "POST" && !/\/api\/kj\/(where|state)(\?|$)/.test(req.originalUrl)) {
-    res.on("finish", () => { if (res.statusCode < 400 && req.kj) describeKj(req).then(t => { if (t) audit(req.kj.admin ? "House PIN" : req.kj.name, req.kj.admin ? "house" : req.kj.manager ? "manager" : req.kj.role, t); }).catch(() => {}); });
+    res.on("finish", () => { if (res.statusCode < 400 && req.kj) describeKj(req).then(t => { if (t) audit(req.kj.ownerLogin ? req.kj.name : req.kj.admin ? "House PIN" : req.kj.name, req.kj.admin ? "house" : req.kj.manager ? "manager" : req.kj.role, t); }).catch(() => {}); });
   }
   next();
 }
