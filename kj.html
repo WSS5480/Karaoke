@@ -108,6 +108,10 @@ li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
 .nosongtag{display:inline-block;margin-left:8px;font-size:12px;font-weight:800;color:#fff;background:#c0392b;border-radius:6px;padding:1px 6px;vertical-align:middle}
 .paidtag{display:inline-block;margin-left:8px;font-size:12px;font-weight:800;color:#111;background:#ffc93c;border-radius:6px;padding:1px 6px;vertical-align:middle}
 #undoNext{flex:none;font-weight:800;border:2px solid #ffc93c;color:#ffc93c;background:transparent;border-radius:12px;padding:12px 16px}
+.afield{position:relative;width:100%}.afield input{width:100%;box-sizing:border-box}
+.asug{position:absolute;left:0;right:0;top:100%;z-index:20;margin-top:4px;background:var(--panel-2,#1b211b);border:1px solid var(--line);border-radius:10px;overflow:hidden;max-height:300px;overflow-y:auto}
+.asug button{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);color:var(--ink);padding:10px 12px;font:inherit;cursor:pointer;border-radius:0}
+.asug button:first-child{border-top:0}.asug button span{display:block;font-size:13px;color:var(--ink-2)}
 #queue li .t b{font-size:21px;font-weight:700;color:#ffc93c;line-height:1.2}
 li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
 li .acts{display:flex;gap:6px;flex-wrap:wrap}
@@ -248,9 +252,9 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
     <section class="card">
       <h2>Add a singer <span>for guests without the app</span></h2>
       <form id="addForm" class="addform" novalidate>
-        <input id="addName" maxlength="30" placeholder="Name" aria-label="Singer name" autocomplete="off">
-        <input id="addSong" maxlength="80" placeholder="Song" aria-label="Song" autocomplete="off">
-        <input id="addArtist" maxlength="60" placeholder="Artist (optional)" aria-label="Artist" autocomplete="off">
+        <div class="afield"><input id="addName" maxlength="30" placeholder="Name" aria-label="Singer name" autocomplete="off"><div class="asug" id="nameSug" hidden></div></div>
+        <div class="afield"><input id="addSong" maxlength="80" placeholder="Song" aria-label="Song" autocomplete="off"><div class="asug" id="songSug" hidden></div></div>
+        <div class="afield"><input id="addArtist" maxlength="60" placeholder="Artist (optional)" aria-label="Artist" autocomplete="off"><div class="asug" id="artSug" hidden></div></div>
         <label class="addspot">Spot in line <select id="addSpot" aria-label="Spot in line"></select></label>
         <button type="submit" class="next">Add to line</button>
         <p class="err" id="addErr" role="alert" style="margin:0"></p>
@@ -638,6 +642,53 @@ $("refreshBtn").addEventListener("click", async () => {
   b.disabled = false; b.textContent = "✓ Updated"; setTimeout(() => b.textContent = "↻ Refresh", 1500);
 });
 $("toggleOpen").addEventListener("click", () => act("/api/kj-open", { open: !state.open }));
+/* Add a singer: search people who signed up before, and songs/artists like the customer app
+   (our song list first, then Apple Music / MusicBrainz) */
+(function(){
+  let lib = []; fetch("/songs.json").then(r => r.json()).then(j => lib = j).catch(() => {});
+  const nz = v => String(v || "").replace(/[\u2018\u2019\u02bc]/g, "'").replace(/\s+/g, " ").trim().toLowerCase();
+  const box = id => $(id), hide = () => { ["nameSug", "songSug", "artSug"].forEach(i => $(i).hidden = true); };
+  function fill(id, items){
+    const b = box(id); b.innerHTML = "";
+    items.forEach(([title, sub, pick]) => { const x = document.createElement("button"); x.type = "button"; x.textContent = title; if(sub){ const s = document.createElement("span"); s.textContent = sub; x.appendChild(s); } x.addEventListener("click", () => { pick(); hide(); }); b.appendChild(x); });
+    b.hidden = !items.length;
+  }
+  const deb = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+  const people = deb(async () => {
+    const q = $("addName").value.trim(); if(q.length < 2){ $("nameSug").hidden = true; return; }
+    let j = { people: [] }; try{ j = await api("/api/kj/people?q=" + encodeURIComponent(q)); }catch(e){ return; }
+    if($("addName").value.trim() !== q) return;
+    fill("nameSug", j.people.map(p => [p.name, (p.inLine ? "In line now: " : "Last sang: ") + p.song + (p.artist ? " – " + p.artist : ""), () => { $("addName").value = p.name; $("addSong").focus(); }]));
+  }, 250);
+  const songs = deb(async () => {
+    const q = nz($("addSong").value), art = nz($("addArtist").value); if(q.length < 2){ $("songSug").hidden = true; return; }
+    const hits = lib.filter(x => nz(x.t).includes(q) && (!art || nz(x.a) === art)).slice(0, 6).map(x => [x.t, x.a, () => { $("addSong").value = x.t; $("addArtist").value = x.a; }]);
+    fill("songSug", hits);
+    if(q.length >= 3 && hits.length < 6){
+      let more = []; try{ more = (await (await fetch("/api/songsearch?q=" + encodeURIComponent(q + (art ? " " + art : "")))).json()).songs || []; }catch(e){}
+      if(nz($("addSong").value) !== q) return;
+      const have = new Set(hits.map(h => nz(h[0] + h[1])));
+      fill("songSug", hits.concat(more.filter(x => !have.has(nz(x.t + x.a))).slice(0, 8 - hits.length).map(x => [x.t, x.a, () => { $("addSong").value = x.t; $("addArtist").value = x.a; }])));
+    }
+  }, 300);
+  const artists = deb(async () => {
+    const q = nz($("addArtist").value); if(q.length < 2){ $("artSug").hidden = true; return; }
+    const c = new Map(); lib.forEach(x => { if(nz(x.a).includes(q)) c.set(x.a, (c.get(x.a) || 0) + 1); });
+    let list = [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([a, n]) => [a, n + " song" + (n > 1 ? "s" : ""), () => { $("addArtist").value = a; $("addSong").focus(); }]);
+    fill("artSug", list);
+    if(q.length >= 3 && list.length < 6){
+      let more = []; try{ more = (await (await fetch("/api/songsearch?by=artist&q=" + encodeURIComponent(q))).json()).songs || []; }catch(e){}
+      if(nz($("addArtist").value) !== q) return;
+      const names = [...new Set(more.map(x => x.a))].filter(a => !c.has(a)).slice(0, 6 - list.length);
+      fill("artSug", list.concat(names.map(a => [a, "", () => { $("addArtist").value = a; $("addSong").focus(); }])));
+    }
+  }, 300);
+  $("addName").addEventListener("input", people);
+  $("addSong").addEventListener("input", songs);
+  $("addArtist").addEventListener("input", artists);
+  document.addEventListener("click", e => { if(!e.target.closest(".afield")) hide(); });
+  $("addForm").addEventListener("submit", hide, true);
+})();
 $("addForm").addEventListener("submit", async e => {
   e.preventDefault(); $("addErr").textContent = "";
   const body = { name: $("addName").value.trim(), song: $("addSong").value.trim(), artist: $("addArtist").value.trim(), spot: $("addSpot").value };

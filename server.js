@@ -1437,6 +1437,15 @@ async function placeAt(id, spot, fresh) {
   for (let k = 0; k < N; k++) await db.setPos(out[k].id, k + 1);
 }
 // DJ/staff add a singer by hand (for guests without the app), optionally at a spot in line
+// "Add a singer": find people who have signed up before (name match), newest first, with their last song
+app.get("/api/kj/people", wrap(async (req, res) => {
+  const q = String(req.query.q || "").trim().toLowerCase().slice(0, 30);
+  if (q.length < 2) return res.json({ people: [] });
+  const rows = await db.history({ q, limit: 300 }), seen = new Map();
+  for (const r of rows) { const k = String(r.name || "").toLowerCase(); if (!k.includes(q) || seen.has(k)) continue; seen.set(k, { name: r.name, song: r.song, artist: r.artist || "", at: r.done_at }); if (seen.size >= 8) break; }
+  for (const r of await db.active()) { const k = String(r.name || "").toLowerCase(); if (k.includes(q) && !seen.has(k)) seen.set(k, { name: r.name, song: r.song, artist: r.artist || "", inLine: true }); }
+  res.json({ people: [...seen.values()].slice(0, 8) });
+}));
 app.post("/api/kj/add", wrap(async (req, res) => {
   const name = cleanName(req.body.name, 30), song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!name) return res.status(400).json({ error: "Enter the singer's name." });
