@@ -857,6 +857,7 @@ async function endDj(name, why, how, at) {
     row.how = how || (why ? why.replace(/ closed your DJ session\.$/, "").replace(/^Your /, "") : "signed out");
     if (!how && why && / closed your DJ session\.$/.test(why)) row.how = "closed by " + why.replace(/ closed your DJ session\.$/, "");
     const log = await getDjLog(); log.push(row); await db.setSetting("dj_log", JSON.stringify(log.slice(-1000)));
+    if (how) audit("System", "auto", ds.name + "'s DJ night " + how);
   } catch (e) { console.error("dj log:", e.message); }
   if (why) await db.setSetting("dj_kicked", JSON.stringify({ name: ds.name, at: Date.now(), why }));
   if ((await db.getSetting("tip_host")) === ds.name) await db.setSetting("tip_host", "");
@@ -864,6 +865,52 @@ async function endDj(name, why, how, at) {
 }
 const djStrikes = new Map();
 app.use("/api/kj", kjAuth);
+/* ---------- change log: every change on the host page, Bar Owner app and owner views, and who made it ---------- */
+async function getAudit(night) { try { return JSON.parse((await db.getSetting("audit:" + night)) || "[]"); } catch (e) { return []; } }
+let auditChain = Promise.resolve();
+function audit(who, role, text) {
+  if (who === "Owner" && role === "bar owner") who = "Bar owner";
+  const t = T(), tenant = TEN(), base = BASE();
+  auditChain = auditChain.then(() => ctx.run({ t, tenant, base }, async () => {
+    const night = barDay().date, l = await getAudit(night);
+    l.push({ at: Date.now(), who: who || "?", role: role || "", text });
+    await db.setSetting("audit:" + night, JSON.stringify(l.slice(-3000)));
+    let ns = []; try { ns = JSON.parse((await db.getSetting("audit_nights")) || "[]"); } catch (e) {}
+    if (!ns.includes(night)) { ns.push(night); await db.setSetting("audit_nights", JSON.stringify(ns.slice(-120))); }
+  })).catch(e => console.error("audit:", e.message));
+}
+const ACT_NAMES = { remove: "removed", done: "marked done", up: "put up to sing (Sing now)", raise: "moved up one", lower: "moved down one", readd: "put back in line", move: "moved", nosong: "marked \"don't have the song\" for", hassong: "undid \"don't have the song\" for", lock: "locked the spot of", unlock: "unlocked the spot of" };
+async function describeKj(req) {
+  const u = req.originalUrl.split("?")[0], b = req.body || {}, on = v => v ? "on" : "off";
+  const nm = async id => { try { const r = await db.get(parseInt(id, 10)); return r ? r.name + (r.song ? " (" + r.song + ")" : "") : "#" + id; } catch (e) { return "#" + id; } };
+  let m;
+  if (u === "/api/kj/next") return "Next singer";
+  if (u === "/api/kj/undo-next") return "Undo next singer";
+  if (u === "/api/kj/add") return "Added singer " + (b.name || "") + " – " + (b.song || "") + (b.spot ? " at #" + b.spot : "") + (b.lock ? " (locked)" : "");
+  if ((m = u.match(/^\/api\/kj\/(\d+)\/song$/))) return "Changed song for " + ((await db.get(parseInt(m[1], 10))) || {}).name + " to " + (b.song || "") + (b.artist ? " – " + b.artist : "");
+  if ((m = u.match(/^\/api\/kj\/(\d+)\/rename$/))) return "Renamed " + await nm(m[1]) + " to " + (b.name || "");
+  if ((m = u.match(/^\/api\/kj\/bump\/(\w+)$/))) return (b.ok ? "Approved" : "Denied") + " a paid move-up";
+  if ((m = u.match(/^\/api\/kj\/(\d+)\/(\w+)$/))) return (ACT_NAMES[m[2]] || m[2]).replace(/^./, c => c.toUpperCase()) + " " + await nm(m[1]) + (b.spot ? " to #" + b.spot : "");
+  if ((m = u.match(/^\/api\/kj\/photo\/(\d+)\/(\w+)$/))) return "Photo " + m[2] + " for " + await nm(m[1]);
+  const fixed = {
+    "/api/kj/kick": "Closed the DJ's session", "/api/kj/logout": "Signed out", "/api/kj/my-pin": "Changed " + (req.kj && req.kj.admin ? "the house PIN" : "their own PIN"),
+    "/api/kj/my-phone": "Saved a Forgot-PIN phone", "/api/kj/host-terms": "Agreed to the host terms", "/api/kj/tips/links": "Updated their payment links",
+    "/api/kj/tips/take": (b.on ? "Started" : "Stopped") + " taking tips", "/api/kj/tips/staff": (b.on ? "Turned tips back on" : "Stopped tips tonight"),
+    "/api/kj/bump-price": "Set move-up price to $" + b.price + " a spot", "/api/kj/hosts": "Added login " + (b.name || ""), "/api/kj/hosts/reset": "Reset the PIN for " + (b.name || ""),
+    "/api/kj/hosts/remove": "Removed login " + (b.name || ""), "/api/kj/hosts/role": "Made " + (b.name || "") + " " + (b.role || ""), "/api/kj/hosts/manager": (b.on ? "Made " : "Removed manager from ") + (b.name || "") + (b.on ? " a manager" : ""),
+    "/api/kj/promos": "Saved an ad", "/api/kj/promos/remove": "Removed an ad", "/api/kj/venue": "Set tonight's venue",
+    "/api/kj-open": "Sign-ups " + (b.open ? "opened" : "closed"), "/api/kj-lyrics": "Lyrics " + on(b.on), "/api/kj-multi": "One song per person on the queue " + on(!b.on),
+    "/api/kj-photoreview": "Approve photos first " + on(b.on), "/api/kj-phone": "Phone sign-in " + on(b.on), "/api/kj-pause": b.minutes ? "Paused sign-ups" + (b.minutes > 0 ? " for " + b.minutes + " min" : "") : "Resumed sign-ups", "/api/kj-newnight": "Started a new night"
+  };
+  return fixed[u] || null;
+}
+function auditKj(req, res, next) {
+  if (req.method === "POST" && !/\/api\/kj\/(where|state)(\?|$)/.test(req.originalUrl)) {
+    res.on("finish", () => { if (res.statusCode < 400 && req.kj) describeKj(req).then(t => { if (t) audit(req.kj.admin ? "House PIN" : req.kj.name, req.kj.admin ? "house" : req.kj.manager ? "manager" : req.kj.role, t); }).catch(() => {}); });
+  }
+  next();
+}
+app.use("/api/kj", auditKj);
 /* ---------- daily ads / promos ---------- */
 async function getPromos() { try { return JSON.parse((await db.getSetting("promos")) || "[]"); } catch (e) { return []; } }
 // the bar's "day" runs 6 AM to 6 AM, McAllen time
@@ -1426,7 +1473,7 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   } else return res.status(400).json({ error: "Unknown action." });
   res.json({ ok: true });
 }));
-app.post("/api/kj-open", kjAuth, wrap(async (req, res) => {
+app.post("/api/kj-open", kjAuth, auditKj, wrap(async (req, res) => {
   await db.setSetting("open", req.body.open ? "yes" : "no");
   if (req.body.open) { const day = barDay().date; let cur = null; try { cur = JSON.parse((await db.getSetting("open_at")) || "null"); } catch (e) {} if (!cur || cur.night !== day) await db.setSetting("open_at", JSON.stringify({ night: day, at: Date.now() })); }
   res.json({ ok: true });
@@ -1517,7 +1564,7 @@ app.get("/api/bar", wrap(async (req, res) => {
   const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active(), off = await tipsOff();
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   res.json({
-    djLog: await djLogView(), moneyOff: await moneyOff(), who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
+    audit: await auditView(), djLog: await djLogView(), moneyOff: await moneyOff(), who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
     dj: djNow ? { name: djNow.name, since: djNow.since || null } : null, tipsStopped: !!(djNow && off && off.name === djNow.name && off.night === barDay().date),
     state: { lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
@@ -1528,10 +1575,11 @@ app.get("/api/bar", wrap(async (req, res) => {
 }));
 app.post("/api/bar/close-dj", wrap(async (req, res) => {
   const who = await barAuth(req, res); if (!who) return;
-  const ds = await endDj(null, (who.owner ? "The bar owner" : who.name) + " closed your DJ session."); res.json({ ok: true, closed: ds ? ds.name : null });
+  const ds = await endDj(null, (who.owner ? "The bar owner" : who.name) + " closed your DJ session."); if (ds) audit(who.name, who.owner ? "bar owner" : "manager", "Closed " + ds.name + "'s DJ night (Bar Owner app)"); res.json({ ok: true, closed: ds ? ds.name : null });
 }));
 app.post("/api/bar/tips", wrap(async (req, res) => {
   const who = await barAuth(req, res); if (!who) return;
+  audit(who.name, who.owner ? "bar owner" : "manager", req.body.on ? "Turned tips back on" : "Stopped tips tonight");
   const ds = await djSession(), s = await tipState();
   if (req.body.on) { await setTipsOff(null); return res.json({ ok: true }); }
   const name = s.on ? s.host : ds ? ds.name : null; if (!name) return res.json({ ok: true });
@@ -1540,6 +1588,7 @@ app.post("/api/bar/tips", wrap(async (req, res) => {
 }));
 app.post("/api/bar/bump", wrap(async (req, res) => {
   const who = await barAuth(req, res); if (!who) return;
+  audit(who.name, who.owner ? "bar owner" : "manager", "Move-ups " + (req.body.on ? "on" : "off"));
   await db.setSetting("bump", req.body.on ? "on" : "off");
   if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = (who.owner ? "owner" : who.name) + " turned move-ups off"; } }); await saveBumps(all); }
   res.json({ ok: true });
@@ -1552,7 +1601,7 @@ app.post("/api/bar/pin", wrap(async (req, res) => {
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
   if (T() === "dive" && pin === startPin("bar")) return res.status(409).json({ error: "That's the starting PIN. Pick your own." });
   if (pin === TEMP_PIN || (await getHosts()).some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
-  await setOwnerPin("bar", pin); res.json({ ok: true });
+  await setOwnerPin("bar", pin); audit(who.name, "bar owner", "Changed the Bar Owner PIN"); res.json({ ok: true });
 }));
 async function recoveryPhone(kind) { return (await db.getSetting("recover:" + kind)) || ""; }
 const maskPhone = p => p ? "•••-•••-" + p.slice(-4) : "";
@@ -1560,13 +1609,13 @@ app.post("/api/bar/phone", wrap(async (req, res) => {
   const who = await barAuth(req, res); if (!who) return;
   if (!who.owner) return res.status(403).json({ error: "Only the bar owner can set this." });
   const ph = normPhone(req.body.phone); if (!ph) return res.status(400).json({ error: "Enter a 10-digit phone number." });
-  await db.setSetting("recover:bar", ph); res.json({ ok: true, phone: maskPhone(ph) });
+  await db.setSetting("recover:bar", ph); audit(who.name, "bar owner", "Saved the Bar Owner Forgot-PIN phone"); res.json({ ok: true, phone: maskPhone(ph) });
 }));
 // app owner list + house PIN recovery phones (set while signed in)
 app.post("/api/staff-list/phone", wrap(async (req, res) => {
   if (!(await pinIs("list", req.body.pin))) return res.status(401).json({ error: "Wrong PIN." });
   const ph = normPhone(req.body.phone); if (!ph) return res.status(400).json({ error: "Enter a 10-digit phone number." });
-  await db.setSetting("recover:list", ph); res.json({ ok: true, phone: maskPhone(ph) });
+  await db.setSetting("recover:list", ph); audit("App owner", "app owner", "Saved the owner list Forgot-PIN phone"); res.json({ ok: true, phone: maskPhone(ph) });
 }));
 app.post("/api/staff-list/info", wrap(async (req, res) => {
   if (!(await pinIs("list", req.body.pin))) return res.status(401).json({ error: "Wrong PIN." });
@@ -1609,6 +1658,7 @@ app.post("/api/forgot/finish", wrap(async (req, res) => {
     return res.status(409).json({ error: "That PIN is taken. Pick another." });
   if (kind === "host") { const me = hosts.find(h => h.name === tg.host.name); me.pin = pin; me.own = true; await db.setSetting("hosts", JSON.stringify(hosts)); }
   else await setOwnerPin(kind, pin);
+  audit(kind === "host" ? tg.host.name : ({ house: "House PIN", list: "App owner", bar: "Bar owner" })[kind], kind, "Reset a forgotten PIN by text code");
   res.json({ ok: true });
 }));
 // host page: each login (and the house PIN) can save the phone used for "Forgot PIN"
@@ -1618,6 +1668,11 @@ app.post("/api/kj/my-phone", wrap(async (req, res) => {
   const hosts = await getHosts(), me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Login not found." });
   me.phone = ph; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true, phone: maskPhone(ph) });
 }));
+async function auditView() {
+  let ns = []; try { ns = JSON.parse((await db.getSetting("audit_nights")) || "[]"); } catch (e) {}
+  let out = []; for (const n of ns.slice(-7).reverse()) { out = out.concat((await getAudit(n)).slice().reverse()); if (out.length > 800) break; }
+  return out.slice(0, 800);
+}
 async function djLogView() {
   await djIdleCheck();
   const log = (await getDjLog()).slice().reverse(), ds = await djSession();
@@ -1631,10 +1686,10 @@ async function setMoney(on, who) {
   if (!on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = who + " turned tips & move-ups off"; } }); await saveBumps(all); }
   else { await setTipsOff(null); await db.setSetting("bump", "on"); }
 }
-app.post("/api/bar/money", wrap(async (req, res) => { const who = await barAuth(req, res); if (!who) return; await setMoney(!!req.body.on, who.name); res.json({ ok: true, off: !req.body.on }); }));
+app.post("/api/bar/money", wrap(async (req, res) => { const who = await barAuth(req, res); if (!who) return; await setMoney(!!req.body.on, who.name); audit(who.name, who.owner ? "bar owner" : "manager", req.body.on ? "Turned tips & lock-your-spot back on" : "Killed all tips & lock-your-spot"); res.json({ ok: true, off: !req.body.on }); }));
 app.post("/api/watch/money", wrap(async (req, res) => {
   if (!(await pinIs("list", req.headers["x-watch-pin"]))) return res.status(401).json({ error: "Wrong PIN." });
-  await setMoney(!!req.body.on, "App owner"); res.json({ ok: true, off: !req.body.on });
+  await setMoney(!!req.body.on, "App owner"); audit("App owner", "app owner", req.body.on ? "Turned tips & lock-your-spot back on" : "Killed all tips & lock-your-spot"); res.json({ ok: true, off: !req.body.on });
 }));
 // owner's live view (/watch): opens with the owner list PIN, never the house PIN
 app.get("/api/watch", wrap(async (req, res) => {
@@ -1648,7 +1703,7 @@ app.get("/api/watch", wrap(async (req, res) => {
   res.json({
     state: { djOn: djNow ? djNow.name : null, lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
-    djLog: await djLogView(), moneyOff: await moneyOff(), signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
+    audit: await auditView(), djLog: await djLogView(), moneyOff: await moneyOff(), signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 }
   });
 }));
@@ -1659,27 +1714,27 @@ app.post("/api/staff-list", wrap(async (req, res) => {
   if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ ok: false, error: "Wrong PIN." }); }
   res.json({ ok: true });
 }));
-app.post("/api/kj-lyrics", kjAuth, wrap(async (req, res) => {
+app.post("/api/kj-lyrics", kjAuth, auditKj, wrap(async (req, res) => {
   await db.setSetting("lyrics", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
-app.post("/api/kj-multi", kjAuth, wrap(async (req, res) => {
+app.post("/api/kj-multi", kjAuth, auditKj, wrap(async (req, res) => {
   await db.setSetting("multi", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
 app.post("/api/kj-geofence", kjAuth, wrap(async (req, res) => {
   res.status(403).json({ error: "The location check is always on. Singers must be at the bar to sign up." });
 }));
-app.post("/api/kj-photoreview", kjAuth, wrap(async (req, res) => {
+app.post("/api/kj-photoreview", kjAuth, auditKj, wrap(async (req, res) => {
   await db.setSetting("photo_review", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
-app.post("/api/kj-phone", kjAuth, wrap(async (req, res) => {
+app.post("/api/kj-phone", kjAuth, auditKj, wrap(async (req, res) => {
   await db.setSetting("phone_signin", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
-app.post("/api/kj-pause", kjAuth, wrap(async (req, res) => {
+app.post("/api/kj-pause", kjAuth, auditKj, wrap(async (req, res) => {
   const m = Number(req.body.minutes);
   await db.setSetting("paused", m === 0 ? "off" : m > 0 ? String(Date.now() + Math.min(m, 240) * 60000) : "on");
   res.json({ ok: true });
 }));
-app.post("/api/kj-newnight", kjAuth, wrap(async (req, res) => {
+app.post("/api/kj-newnight", kjAuth, auditKj, wrap(async (req, res) => {
   await db.newNight(); res.json({ ok: true });
 }));
 

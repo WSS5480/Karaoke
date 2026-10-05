@@ -114,6 +114,13 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <p class="sub" style="margin:0">Guests pay the DJ $<span id="bumpPrice">1</span> a spot. They only move after the DJ confirms the payment. Approved move-ups also count in the DJ's tips.</p>
     </section>
 
+    <section class="card" id="auditCard">
+      <h2>Change log <span class="sub" id="auditSum"></span></h2>
+      <select id="auditFilter" aria-label="Show changes by" style="font:inherit;padding:10px;border-radius:10px;background:var(--panel-2,#1b211b);color:var(--ink);border:1px solid var(--line)"><option value="">Everyone</option></select>
+      <ol id="auditList" style="max-height:420px;overflow:auto"></ol>
+      <p class="sub" style="margin:0">Every change made on the host page, the Bar Owner app and the owner views, newest first, last 7 nights.</p>
+    </section>
+
     <section class="card" id="djNights">
       <h2>DJ nights <span class="sub" id="djnSum"></span></h2>
       <select id="djnFilter" aria-label="Show DJ" style="font:inherit;padding:10px;border-radius:10px;background:var(--panel-2,#1b211b);color:var(--ink);border:1px solid var(--line)"><option value="">All DJs</option></select>
@@ -282,6 +289,27 @@ $("moneyKill").addEventListener("click", async () => {
   try{ const r = await fetch("/api/watch/money", { method: "POST", headers: { "Content-Type": "application/json", "x-watch-pin": pin }, body: JSON.stringify({ on: moneyIsOff }) }); if(r.status === 401){ showLock("Wrong PIN."); return; } }catch(e){}
   refresh();
 });
+let auditData = [];
+function paintAudit(list){
+  if(!list) return; auditData = list;
+  const sel = $("auditFilter"), keep = sel.value, names = [...new Set(list.map(x => x.who))].sort();
+  sel.innerHTML = '<option value="">Everyone</option>'; names.forEach(n => { const o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o); }); if(names.includes(keep)) sel.value = keep;
+  const rows = list.filter(x => !sel.value || x.who === sel.value);
+  $("auditSum").textContent = rows.length + (rows.length === 1 ? " change" : " changes");
+  const ol = $("auditList"); ol.innerHTML = "";
+  if(!rows.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No changes yet."; ol.appendChild(li); return; }
+  let lastDay = "";
+  rows.slice(0, 400).forEach(x => {
+    const d = new Date(x.at), day = d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    if(day !== lastDay){ lastDay = day; const h = document.createElement("li"); h.className = "empty"; h.style.fontWeight = "700"; h.textContent = day; ol.appendChild(h); }
+    const li = document.createElement("li"); li.className = "tip"; li.style.display = "block";
+    const b = document.createElement("b"); b.textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " · " + x.who;
+    const r = document.createElement("span"); r.className = "sub"; r.textContent = x.role ? "  (" + x.role + ")" : "";
+    const t = document.createElement("span"); t.style.display = "block"; t.textContent = x.text;
+    li.append(b, r, t); ol.appendChild(li);
+  });
+}
+$("auditFilter").addEventListener("change", () => paintAudit(auditData));
 let djLogData = [];
 function paintDjLog(list){
   if(!list) return; djLogData = list;
@@ -314,7 +342,7 @@ window.diveRefresh = () => !$("view").hidden ? refresh() : location.reload();
 async function refresh(){
   try{
     const j = await get("/api/watch");
-    paintQueue(j.state); paintTips(j.tips); paintMoney(j.moneyOff); paintDjLog(j.djLog); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
+    paintQueue(j.state); paintTips(j.tips); paintMoney(j.moneyOff); paintDjLog(j.djLog); paintAudit(j.audit); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
   }catch(e){}
 }
 async function open(){
