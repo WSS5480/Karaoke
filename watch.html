@@ -114,6 +114,14 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <p class="sub" style="margin:0">Guests pay the DJ $<span id="bumpPrice">1</span> a spot. They only move after the DJ confirms the payment. Approved move-ups also count in the DJ's tips.</p>
     </section>
 
+    <section class="card" id="djNights">
+      <h2>DJ nights <span class="sub" id="djnSum"></span></h2>
+      <select id="djnFilter" aria-label="Show DJ" style="font:inherit;padding:10px;border-radius:10px;background:var(--panel-2,#1b211b);color:var(--ink);border:1px solid var(--line)"><option value="">All DJs</option></select>
+      <div class="tiles" id="djnTiles" style="grid-template-columns:repeat(3,1fr)"></div>
+      <ol id="djnList"></ol>
+      <p class="sub" style="margin:0">Each DJ session from sign-in to close: songs sung, tips and paid move-ups tapped to that DJ, and how it closed. A session with no activity for 5 hours closes on its own.</p>
+    </section>
+
     <section class="card">
       <h2>Tonight's crowd</h2>
       <div class="crowd" id="crowd"></div>
@@ -274,12 +282,39 @@ $("moneyKill").addEventListener("click", async () => {
   try{ const r = await fetch("/api/watch/money", { method: "POST", headers: { "Content-Type": "application/json", "x-watch-pin": pin }, body: JSON.stringify({ on: moneyIsOff }) }); if(r.status === 401){ showLock("Wrong PIN."); return; } }catch(e){}
   refresh();
 });
+let djLogData = [];
+function paintDjLog(list){
+  if(!list) return; djLogData = list;
+  const sel = $("djnFilter"), keep = sel.value, names = [...new Set(list.map(x => x.dj))].sort();
+  sel.innerHTML = '<option value="">All DJs</option>'; names.forEach(n => { const o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o); }); if(names.includes(keep)) sel.value = keep;
+  const rows = list.filter(x => !sel.value || x.dj === sel.value);
+  const sum = (k) => Math.round(rows.reduce((a, x) => a + (x[k] || 0), 0) * 100) / 100;
+  const tb = $("djnTiles"); tb.innerHTML = "";
+  [[rows.length, rows.length === 1 ? "night" : "nights"], [sum("songs"), "songs"], [money(sum("tips") + sum("moveups")), "tips + move-ups"]].forEach(([v, l]) => { const d = document.createElement("div"); d.className = "tile"; const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(b, sp); tb.appendChild(d); });
+  $("djnSum").textContent = sel.value ? "· " + sel.value : "";
+  const ol = $("djnList"); ol.innerHTML = "";
+  if(!rows.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No DJ nights yet."; ol.appendChild(li); return; }
+  const t = ms => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const day = ms => new Date(ms).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  rows.slice(0, 120).forEach(x => {
+    const li = document.createElement("li"); li.className = "tip"; li.style.display = "block";
+    const b = document.createElement("b"); b.textContent = (x.live ? "🎧 " : "") + x.dj + " · " + day(x.start);
+    const hrs = Math.max(0, (x.end - x.start) / 3600e3);
+    const s1 = document.createElement("span"); s1.className = "sub"; s1.style.display = "block";
+    s1.textContent = t(x.start) + " – " + (x.live ? "now" : t(x.end)) + " (" + (hrs >= 1 ? Math.floor(hrs) + " h " : "") + Math.round((hrs % 1) * 60) + " min) · " + x.songs + (x.songs === 1 ? " song" : " songs");
+    const s2 = document.createElement("span"); s2.className = "sub"; s2.style.display = "block";
+    s2.textContent = "Tips " + money(x.tips || 0) + " (" + (x.tipCount || 0) + ")" + ((x.moveupCount || 0) ? " · move-ups " + money(x.moveups) + " (" + x.moveupCount + ")" : "") + " · " + (x.live ? "on now" : x.how || "closed");
+    if(x.how && /auto-closed/.test(x.how)) s2.style.color = "var(--gold)";
+    li.append(b, s1, s2); ol.appendChild(li);
+  });
+}
+$("djnFilter").addEventListener("change", () => paintDjLog(djLogData));
 let timer = null;
 window.diveRefresh = () => !$("view").hidden ? refresh() : location.reload();
 async function refresh(){
   try{
     const j = await get("/api/watch");
-    paintQueue(j.state); paintTips(j.tips); paintMoney(j.moneyOff); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
+    paintQueue(j.state); paintTips(j.tips); paintMoney(j.moneyOff); paintDjLog(j.djLog); paintBump(j.bump); paintCrowd($("crowd"), j.signups, j.phones);
   }catch(e){}
 }
 async function open(){

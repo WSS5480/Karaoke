@@ -792,7 +792,10 @@ async function kjAuth(req, res, next) {
     // ...and agree to the Host, DJ & Staff Terms
     if (!who.admin && (!who.own || !who.agreed) && !/\/api\/kj\/(state|my-pin|my-phone|logout|host-terms)(\?|$)/.test(req.originalUrl))
       return res.status(403).json({ error: !who.own ? "Set your own PIN first." : "Agree to the Host, DJ & Staff Terms first.", needNewPin: true });
-    req.kj = who; next();
+    req.kj = who;
+    await djIdleCheck();
+    if (req.method === "POST" && !/\/api\/kj\/(where|logout|state)(\?|$)/.test(req.originalUrl)) await djTouch();
+    next();
   } catch (e) { console.error(e); res.status(500).json({ error: "Something went wrong. Try again." }); }
 }
 // one DJ logged in at a time, live until they sign out. DJs must be at the bar to sign in, and the
@@ -821,10 +824,40 @@ async function djGate(req, who) {
   await db.setSetting("dj_session", JSON.stringify({ name: who.name, since: Date.now() }));
   return null;
 }
-async function endDj(name, why) {
+/* ---------- DJ nights log: every DJ session that ends (signed out, closed by staff/owner, left the bar,
+   or auto-closed after 5 hours with no activity), with songs sung and tips collected ---------- */
+const DJ_IDLE = 5 * 3600e3;
+async function djNightSummary(ds, end) {
+  const start = ds.since || end, days = [...new Set([barDay(start).date, barDay(end).date])];
+  let tips = [];
+  for (const d of days) tips = tips.concat((await getTips(d)).filter(x => x.to === ds.name && x.at >= start && x.at <= end));
+  const r2 = v => Math.round(v * 100) / 100, bump = tips.filter(x => x.bump), plain = tips.filter(x => !x.bump);
+  let songs = 0; try { songs = (await db.sungSince(start)).filter(r => Date.parse(r.done_at) <= end).length; } catch (e) {}
+  return { dj: ds.name, start, end, night: barDay(start).date, songs, tips: r2(plain.reduce((a, x) => a + x.amount, 0)), tipCount: plain.length, moveups: r2(bump.reduce((a, x) => a + x.amount, 0)), moveupCount: bump.length };
+}
+async function getDjLog() { try { return JSON.parse((await db.getSetting("dj_log")) || "[]"); } catch (e) { return []; } }
+async function djTouch() {   // any host action keeps the night alive
+  const ds = await djSession(); if (!ds) return;
+  if (!ds.last || Date.now() - ds.last > 60000) { ds.last = Date.now(); await db.setSetting("dj_session", JSON.stringify(ds)); }
+}
+async function djIdleCheck() {
+  const ds = await djSession(); if (!ds) return;
+  // sessions started before this check existed get a fresh 5 hours instead of closing mid-show
+  if (!ds.last) { ds.last = Date.now(); await db.setSetting("dj_session", JSON.stringify(ds)); return; }
+  const last = ds.last;
+  if (Date.now() - last > DJ_IDLE) await endDj(ds.name, "Your DJ session closed after 5 hours with no activity.", "auto-closed after 5 hours with no activity", last + DJ_IDLE);
+}
+setInterval(() => { ctx.run({ t: "dive", tenant: DIVE, base: "" }, () => djIdleCheck().catch(() => {})); }, 5 * 60000);
+async function endDj(name, why, how, at) {
   const ds = await djSession();
   if (!ds || (name && ds.name !== name)) return null;
   await db.setSetting("dj_session", "");
+  try {
+    const end = at || Date.now(), row = await djNightSummary(ds, end);
+    row.how = how || (why ? why.replace(/ closed your DJ session\.$/, "").replace(/^Your /, "") : "signed out");
+    if (!how && why && / closed your DJ session\.$/.test(why)) row.how = "closed by " + why.replace(/ closed your DJ session\.$/, "");
+    const log = await getDjLog(); log.push(row); await db.setSetting("dj_log", JSON.stringify(log.slice(-1000)));
+  } catch (e) { console.error("dj log:", e.message); }
   if (why) await db.setSetting("dj_kicked", JSON.stringify({ name: ds.name, at: Date.now(), why }));
   if ((await db.getSetting("tip_host")) === ds.name) await db.setSetting("tip_host", "");
   return ds;
@@ -834,8 +867,8 @@ app.use("/api/kj", kjAuth);
 /* ---------- daily ads / promos ---------- */
 async function getPromos() { try { return JSON.parse((await db.getSetting("promos")) || "[]"); } catch (e) { return []; } }
 // the bar's "day" runs 6 AM to 6 AM, McAllen time
-function barDay() {
-  const t = new Date(Date.now() - 6 * 3600 * 1000);
+function barDay(at) {
+  const t = new Date((at || Date.now()) - 6 * 3600 * 1000);
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: ZONE(), year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).formatToParts(t).map(x => [x.type, x.value]));
   return { date: `${parts.year}-${parts.month}-${parts.day}`, dow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday) };
 }
@@ -1267,7 +1300,7 @@ app.post("/api/kj/where", wrap(async (req, res) => {
   const n = (djStrikes.get(k) || 0) + 1; djStrikes.set(k, n);
   if (n < 2) return res.json({ ok: true, warn: true });
   djStrikes.delete(k);
-  await endDj(req.kj.name, "You left " + (TEN().short || "the bar") + ", so your DJ session closed.");
+  await endDj(req.kj.name, "You left " + (TEN().short || "the bar") + ", so your DJ session closed.", "left the bar");
   res.status(401).json({ error: "You left " + (TEN().short || "the bar") + ", so your DJ session closed.", kicked: true });
 }));
 // "Done, next singer" keeps a short undo list for tonight, so a double tap can be put right
@@ -1480,10 +1513,11 @@ async function barAuth(req, res) {
 }
 app.get("/api/bar", wrap(async (req, res) => {
   const who = await barAuth(req, res); if (!who) return;
+  await djIdleCheck();
   const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active(), off = await tipsOff();
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   res.json({
-    moneyOff: await moneyOff(), who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
+    djLog: await djLogView(), moneyOff: await moneyOff(), who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
     dj: djNow ? { name: djNow.name, since: djNow.since || null } : null, tipsStopped: !!(djNow && off && off.name === djNow.name && off.night === barDay().date),
     state: { lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
@@ -1584,6 +1618,12 @@ app.post("/api/kj/my-phone", wrap(async (req, res) => {
   const hosts = await getHosts(), me = hosts.find(h => h.name === req.kj.name); if (!me) return res.status(404).json({ error: "Login not found." });
   me.phone = ph; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true, phone: maskPhone(ph) });
 }));
+async function djLogView() {
+  await djIdleCheck();
+  const log = (await getDjLog()).slice().reverse(), ds = await djSession();
+  if (ds) { const now = await djNightSummary(ds, Date.now()); now.live = true; now.how = "on now"; now.last = ds.last || ds.since; log.unshift(now); }
+  return log.slice(0, 300);
+}
 // one button (Bar Owner app or the app owner's live view): kill tips and lock-your-spot now, or turn them back on.
 // Spots people already paid for stay locked.
 async function setMoney(on, who) {
@@ -1602,12 +1642,13 @@ app.get("/api/watch", wrap(async (req, res) => {
   if (l.length >= 10) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." });
   const ok = await pinIs("list", req.headers["x-watch-pin"]);
   if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
+  await djIdleCheck();
   const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active();
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   res.json({
     state: { djOn: djNow ? djNow.name : null, lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
       geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
-    moneyOff: await moneyOff(), signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
+    djLog: await djLogView(), moneyOff: await moneyOff(), signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 }
   });
 }));
