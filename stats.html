@@ -105,18 +105,24 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
 </main>
 <div class="tip" id="tip" hidden></div>
 <script>
+/* chart labels: on phones a tap shows the label briefly; it hides when you scroll or tap anywhere else */
+let tipTimer = 0, tipShownAt = 0;
+addEventListener("scroll", () => { const t = document.getElementById("tip"); if(t && Date.now() - tipShownAt > 500) t.hidden = true; }, { passive: true });
+document.addEventListener("click", () => { const t = document.getElementById("tip"); if(t) t.hidden = true; });
+document.addEventListener("touchmove", () => { const t = document.getElementById("tip"); if(t) t.hidden = true; }, { passive: true });
+
 const $ = id => document.getElementById(id);
 let pin = "", range = "all";
 try{ pin = sessionStorage.getItem("kj_pin") || ""; }catch(e){}
 const fmtNight = n => new Date(n + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric" });
 const hourLbl = h => (h % 12 || 12) + (h < 12 ? "a" : "p");
 function tip(el, text){
-  el.addEventListener("mouseenter", () => { $("tip").textContent = text; $("tip").hidden = false; });
-  el.addEventListener("mousemove", e => { $("tip").style.left = (e.clientX + 12) + "px"; $("tip").style.top = (e.clientY - 34) + "px"; });
-  el.addEventListener("mouseleave", () => $("tip").hidden = true);
+  el.addEventListener("pointerenter", e => { if(e.pointerType !== "mouse") return; $("tip").textContent = text; $("tip").hidden = false; });
+  el.addEventListener("pointermove", e => { if(e.pointerType !== "mouse") return; $("tip").style.left = (e.clientX + 12) + "px"; $("tip").style.top = (e.clientY - 34) + "px"; });
+  el.addEventListener("pointerleave", e => { if(e.pointerType === "mouse") $("tip").hidden = true; });
   el.addEventListener("focus", () => { const r = el.getBoundingClientRect(); $("tip").textContent = text; $("tip").style.left = r.left + "px"; $("tip").style.top = (r.top - 34) + "px"; $("tip").hidden = false; });
   el.addEventListener("blur", () => $("tip").hidden = true);
-  el.addEventListener("click", () => { const r = el.getBoundingClientRect(); $("tip").textContent = text; $("tip").style.left = r.left + "px"; $("tip").style.top = (r.top - 34) + "px"; $("tip").hidden = false; });
+  el.addEventListener("click", e => { e.stopPropagation(); const r = el.getBoundingClientRect(); $("tip").textContent = text; $("tip").style.left = Math.max(8, Math.min(r.left, innerWidth - 180)) + "px"; $("tip").style.top = Math.max(8, r.top - 34) + "px"; $("tip").hidden = false; tipShownAt = Date.now(); clearTimeout(tipTimer); tipTimer = setTimeout(() => $("tip").hidden = true, 2500); });
 }
 function bars(box, items, labelEvery){
   box.innerHTML = "";
