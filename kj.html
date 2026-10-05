@@ -19,6 +19,14 @@
 [hidden]{display:none!important}
 body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
 main{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-top:16px}
+.lastclk{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);right:8px;z-index:900;background:rgba(10,12,10,.92);border:2px solid #39b54a;border-radius:14px;padding:6px 10px;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.5);pointer-events:none;min-width:92px}
+.lastclk .k{display:block;font-size:10px;font-weight:800;letter-spacing:.06em;color:#9fae9f;text-transform:uppercase}
+.lastclk .v{display:block;font-size:22px;font-weight:900;color:#5fd36e;font-variant-numeric:tabular-nums;line-height:1.1}
+.lastclk .s{display:block;font-size:11px;color:#9fae9f}
+.lastclk.warn{border-color:#f5c518}.lastclk.warn .v{color:#f5c518}
+.lastclk.over{border-color:#ff5050;animation:clkp 1.6s infinite}.lastclk.over .v{color:#ff6b6b}
+@keyframes clkp{50%{box-shadow:0 0 0 4px rgba(255,80,80,.35)}}
+@media (prefers-reduced-motion:reduce){.lastclk.over{animation:none}}
 header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 header img{width:56px}
 header h1{font-family:var(--slab);font-weight:800;font-size:22px;margin:0;flex:1}
@@ -177,6 +185,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
     <button id="installBtn" type="button">Add</button>
     <button class="x" id="installX" type="button" aria-label="Hide">×</button>
   </div>
+  <div class="lastclk" id="lastClk" hidden aria-live="polite"><span class="k">Last song ends</span><span class="v" id="lastClkV">–</span><span class="s" id="lastClkS"></span></div>
   <header>
     <img src="/logo.png" alt="The Dive on 495">
     <h1>KJ queue</h1>
@@ -384,10 +393,10 @@ async function api(path, body){
   if(!r.ok){ const er = new Error(j.error || "Something went wrong. Try again."); er.data = j; throw er; }
   return j;
 }
-function logout(msg){ stopDjWatch(); pin = ""; pinName = ""; try{ sessionStorage.removeItem("kj_name"); }catch(e){} $("forcePin").hidden = true; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
+function logout(msg){ if($("lastClk")) $("lastClk").hidden = true; stopDjWatch(); pin = ""; pinName = ""; try{ sessionStorage.removeItem("kj_name"); }catch(e){} $("forcePin").hidden = true; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("pinErr").textContent = msg || ""; clearInterval(timer); }
 window.diveRefresh = () => pin && !$("panel").hidden ? Promise.all([load(), typeof loadTips === "function" ? loadTips() : null]) : location.reload();
 async function load(){
-  try{ state = await api("/api/kj/state"); render(); startDjWatch(); if(Date.now() > errUntil) $("err").textContent = ""; }
+  try{ state = await api("/api/kj/state"); render(); paintLastClk(); startDjWatch(); if(Date.now() > errUntil) $("err").textContent = ""; }
   catch(e){ if(e.message !== "pin") $("err").textContent = "Lost connection. Retrying…"; }
 }
 var errUntil = 0;
@@ -553,6 +562,18 @@ function paintCrowd(box, su, ph){
   const tile = (v, l) => { const d = document.createElement("div"); d.className = "ctile"; const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(b, sp); box.appendChild(d); };
   if(ph){ tile(ph.now, "phones open now"); tile(ph.tonight, "phones tonight" + (ph.since ? " (since " + new Date(ph.since).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ")" : "")); if(ph.today != null) tile(ph.today, "opened the app today (since 6 AM)"); tile(ph.app, "installed the app"); }
   if(su){ tile(su.total, "sign-ups tonight"); tile(su.qr, "scanned the QR"); tile(su.app, "from the app"); tile(su.link, "from the link"); tile(su.dj, "added by the DJ"); if(su.untracked) tile(su.untracked, "before tracking"); }
+}
+function paintLastClk(){
+  const el = $("lastClk"), L = state && state.lastSong; if(!el) return;
+  if(!L || $("panel").hidden){ el.hidden = true; return; }
+  el.hidden = false;
+  const f = t => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if(!L.at){ $("lastClkV").textContent = "—"; $("lastClkS").textContent = "list empty"; el.className = "lastclk"; return; }
+  const left = (L.closeAt - L.at) / 60000;
+  $("lastClkV").textContent = f(L.at);
+  $("lastClkS").textContent = left < 0 ? Math.round(-left) + " min past close" : "close " + f(L.closeAt);
+  el.className = "lastclk" + (left < 0 ? " over" : left < 20 ? " warn" : "");
+  el.setAttribute("aria-label", "Last song ends about " + f(L.at) + ". " + $("lastClkS").textContent);
 }
 function render(){
   if(state && state.me && !state.me.admin && (!state.me.own || !state.me.agreed)) showForcePin();
