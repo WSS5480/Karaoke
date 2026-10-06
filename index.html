@@ -864,6 +864,7 @@ function render(data){
     if(window.paintBump) window.paintBump(data.bump || { on: false }, mine);
     $("editSong").hidden = mine.status === "up"; if(mine.status === "up") $("editForm").hidden = true;
     $("noSongMsg").hidden = !mine.nosong;
+    $("noSongMsg").textContent = mine.repeat ? "🔁 That song was already sung tonight. The DJ asks you to pick a different one. You keep your spot. / Esa canción ya se cantó hoy. Escoge otra; no pierdes tu lugar." : "🎵 The DJ doesn't have that song. Pick another one. You keep your spot. / El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.";
     if(mine.nosong && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; $("editForm").hidden = false; $("editSongIn").value = ""; $("editArtistIn").value = ""; $("editErr").textContent = ""; try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
     // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
     { const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);

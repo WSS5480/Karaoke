@@ -371,6 +371,26 @@ if (DB_OK) {
 const clean = (s, max) => String(s || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 // songs the DJ doesn't have: the singer keeps their spot and is asked to pick another
 async function noSongs() { try { return new Set(JSON.parse((await db.getSetting("nosong")) || "[]")); } catch (e) { return new Set(); } }
+/* repeat songs: a song already sung tonight (or earlier in line) gets a yes/no for the DJ.
+   "Ask to change" uses the don't-have-it flow, with its own message to the singer. */
+const songKey = x => String(x || "").toLowerCase().replace(/\(.*?\)|\[.*?\]/g, " ").replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, "");
+async function idSet(k) { try { return new Set(JSON.parse((await db.getSetting(k)) || "[]")); } catch (e) { return new Set(); } }
+async function idSetPut(k, id, on) { const s = await idSet(k); if (on) s.add(id); else s.delete(id); await db.setSetting(k, JSON.stringify([...s].slice(-300))); }
+async function clearRepeat(id) { await idSetPut("repeat_ok", id, false); await idSetPut("repeat_ask", id, false); }
+async function repeatsFor(list) {
+  const out = new Map(), seen = new Map(), add = (r, info) => { const k = songKey(r.song); if (k.length < 2) return; (seen.get(k) || seen.set(k, []).get(k)).push({ ...info, artist: songKey(r.artist), id: r.id }); };
+  let sung = []; try { sung = await db.sungSince(await nightStart()); } catch (e) {}
+  sung.forEach(r => add(r, { by: r.name, at: r.done_at, where: "sung" }));
+  const up = list.find(r => r.status === "up"); if (up) add(up, { by: up.name, where: "singing now" });
+  const q = list.filter(r => r.status === "queued");
+  q.forEach((r, i) => {
+    const k = songKey(r.song), a = songKey(r.artist);
+    const hit = (seen.get(k) || []).find(x => x.id !== r.id && (!a || !x.artist || a === x.artist));
+    if (hit) out.set(r.id, { by: hit.by, at: hit.at || null, where: hit.where });
+    add(r, { by: r.name, where: "#" + (i + 1) + " in line" });
+  });
+  return out;
+}
 async function setNoSong(id, on) { const s = await noSongs(); if (on) s.add(id); else s.delete(id); await db.setSetting("nosong", JSON.stringify([...s].slice(-300))); }
 /* ---------- estimated time to sing: song lengths + tonight's DJ rhythm ----------
    Song lengths come from Apple Music's catalog (cached). Rhythm = the average time between songs tonight beyond
@@ -589,7 +609,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), eta: await etaFor(list, mine) } : null,
+  res.json({ venue: TEN().venue || "", lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
     last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, mine) });
 }));
 
@@ -641,7 +661,7 @@ app.post("/api/mysong", wrap(async (req, res) => {
   if (mine.status === "up") return res.status(409).json({ error: "You're up! Ask the DJ to change it." });
   const song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!song) return res.status(400).json({ error: "Enter the song." });
-  await db.setSong(mine.id, song, artist); await setNoSong(mine.id, false); res.json({ ok: true });
+  await db.setSong(mine.id, song, artist); await setNoSong(mine.id, false); await clearRepeat(mine.id); res.json({ ok: true });
 }));
 app.post("/api/cancel", wrap(async (req, res) => {
   const d = owner(req, res), mine = await db.byDevice(d);
@@ -968,7 +988,7 @@ function audit(who, role, text) {
     if (!ns.includes(night)) { ns.push(night); await db.setSetting("audit_nights", JSON.stringify(ns.slice(-120))); }
   })).catch(e => console.error("audit:", e.message));
 }
-const ACT_NAMES = { remove: "removed", done: "marked done", up: "put up to sing (Sing now)", raise: "moved up one", lower: "moved down one", readd: "put back in line", move: "moved", nosong: "marked \"don't have the song\" for", hassong: "undid \"don't have the song\" for", lock: "locked the spot of", unlock: "unlocked the spot of" };
+const ACT_NAMES = { remove: "removed", done: "marked done", up: "put up to sing (Sing now)", raise: "moved up one", lower: "moved down one", readd: "put back in line", move: "moved", repeatok: "OK'd a repeat song for", repeatno: "asked for a different (repeat) song from", nosong: "marked \"don't have the song\" for", hassong: "undid \"don't have the song\" for", lock: "locked the spot of", unlock: "unlocked the spot of" };
 async function describeKj(req) {
   const u = req.originalUrl.split("?")[0], b = req.body || {}, on = v => v ? "on" : "off";
   const nm = async id => { try { const r = await db.get(parseInt(id, 10)); return r ? r.name + (r.song ? " (" + r.song + ")" : "") : "#" + id; } catch (e) { return "#" + id; } };
@@ -1033,7 +1053,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ lastSong: await lastSongEnd().catch(() => null), myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ lastSong: await lastSongEnd().catch(() => null), myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), rp = await repeatsFor(l), rOk = await idSet("repeat_ok"), rAsk = await idSet("repeat_ask"), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}), ...(rAsk.has(r.id) && ns.has(r.id) ? { repeatAsk: true } : rp.has(r.id) && !rOk.has(r.id) && r.status === "queued" ? { repeat: rp.get(r.id) } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -1470,7 +1490,7 @@ app.post("/api/kj/:id/song", wrap(async (req, res) => {
   if (!row) return res.status(404).json({ error: "That singer isn't on the list anymore." });
   const song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!song) return res.status(400).json({ error: "Enter the song." });
-  await db.setSong(id, song, artist); await setNoSong(id, false); res.json({ ok: true });
+  await db.setSong(id, song, artist); await setNoSong(id, false); await clearRepeat(id); res.json({ ok: true });
 }));
 app.post("/api/kj/:id/rename", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), row = await db.get(id), n = clean(req.body.name, 30);
@@ -1562,6 +1582,10 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
     const q = (await db.active()).filter(r => r.status === "queued"), i = q.findIndex(r => r.id === id);
     const j = action === "raise" ? i - 1 : i + 1;
     if (i > -1 && j >= 0 && j < q.length) { const r = await djPlace(id, j + 1, req.kj.name); if (r.locked) return res.json({ ok: true, autoLocked: true, note: row.name + " moved into the locked group, so their spot is locked too." }); }
+  } else if (action === "repeatok" || action === "repeatno") {
+    if (row.status !== "queued") return res.status(400).json({ error: "They're not waiting in line." });
+    if (action === "repeatok") { await idSetPut("repeat_ok", id, true); await idSetPut("repeat_ask", id, false); await setNoSong(id, false); }
+    else { await idSetPut("repeat_ask", id, true); await setNoSong(id, true); }
   } else if (action === "nosong" || action === "hassong") {
     if (row.status !== "queued" && row.status !== "up") return res.status(400).json({ error: "They're not in line." });
     await setNoSong(id, action === "nosong");

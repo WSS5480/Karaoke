@@ -113,6 +113,9 @@ li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
 .bumplist .bt span{display:block;font-size:14px;color:var(--ink-2)}
 .bumplist button{font:inherit;font-weight:700;border-radius:10px;padding:10px 14px;cursor:pointer;border:1px solid var(--line)}
 .bumplist .yes{background:var(--green,#39b54a);color:#fff;border-color:transparent}.bumplist .no{background:transparent;color:var(--ink)}
+.rpt{margin-top:8px;padding:10px;border-radius:12px;background:rgba(245,197,24,.14);border:2px solid #f5c518;display:flex;flex-direction:column;gap:8px}
+.rpt p{margin:0;color:#ffe27a;font-weight:800;font-size:15px}.rpt .row{display:flex;gap:8px;flex-wrap:wrap}
+.rpt button{flex:1;min-width:120px;font-weight:800}.rpt .yes{background:#39b54a;color:#041206;border-color:#39b54a}.rpt .no{background:#f5c518;color:#111;border-color:#f5c518}
 .nosongtag{display:inline-block;margin-left:8px;font-size:12px;font-weight:800;color:#fff;background:#c0392b;border-radius:6px;padding:1px 6px;vertical-align:middle}
 .paidtag{display:inline-block;margin-left:8px;font-size:12px;font-weight:800;color:#111;background:#ffc93c;border-radius:6px;padding:1px 6px;vertical-align:middle}
 #undoNext{flex:none;font-weight:800;border:2px solid #ffc93c;color:#ffc93c;background:transparent;border-radius:12px;padding:12px 16px}
@@ -506,7 +509,7 @@ function item(r, i, waiting){
   const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
   if(r.likes){ const st = document.createElement("span"); st.className = "stars"; st.textContent = likeStr(r.likes); b.appendChild(st); }
   if(r.posted && r.posted.length) b.appendChild(chips(r.posted));
-  if(r.nosong){ const ns = document.createElement("span"); ns.className = "nosongtag"; ns.textContent = "✗ NO SONG · waiting for a new pick"; b.appendChild(ns); }
+  if(r.nosong){ const ns = document.createElement("span"); ns.className = "nosongtag"; ns.textContent = r.repeatAsk ? "🔁 REPEAT · waiting for a new pick" : "✗ NO SONG · waiting for a new pick"; b.appendChild(ns); }
   if(r.paid && waiting){ const pd = document.createElement("span"); pd.className = "paidtag"; pd.textContent = r.djLock ? "DJ LOCK" : "PAID"; pd.title = "Paid to lock this spot. Others flow around them; it can't be moved down."; b.appendChild(pd); }
   t.append(b, s); li.append(n);
   if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av" + (r.photoSt === "pending" ? " blur pend" : r.photoSt === "hidden" ? " blur hid" : ""); av.alt = "Photo of " + r.name + (r.photoSt === "pending" ? ", waiting for your OK" : r.photoSt === "hidden" ? ", blurred" : "") + ". Tap to check it."; kjPic(av, r); av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
@@ -541,6 +544,15 @@ function item(r, i, waiting){
     a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mv, fix, fs, info, mk("Remove", "remove", "danger"));
     a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
     a.appendChild(nsb);
+    if(r.repeat){
+      const box = document.createElement("div"); box.className = "rpt"; box.setAttribute("role", "alert");
+      const when = r.repeat.at ? " at " + new Date(r.repeat.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+      const p = document.createElement("p"); p.textContent = "🔁 Repeat song: " + (r.repeat.where === "sung" ? "sung tonight" + when + " by " + r.repeat.by : r.repeat.by + " has it (" + r.repeat.where + ")") + ". Let it play?";
+      const row = document.createElement("div"); row.className = "row";
+      const y = mk("✓ Yes, play it", "repeatok", "yes"), no = mk("↻ No, ask to change", "repeatno", "no");
+      no.title = "The singer keeps their spot and gets a pop-up to pick a different song.";
+      row.append(y, no); box.append(p, row); li.appendChild(box);
+    }
     if(r.djLock) a.appendChild(mk("🔓 Unlock", "unlock")); else if(!r.paid) a.appendChild(mk("🔒 Lock", "lock"));
     li.appendChild(a);
   }
