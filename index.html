@@ -1926,8 +1926,9 @@ loadMe(); setInterval(refresh, 5000);
   let hiddenAt = 0;
   const back = () => {
     if(hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000){ location.reload(); return; }
-    hiddenAt = 0; if(true) refresh();
+    hiddenAt = 0; refresh(); setTimeout(refresh, 1500);   // second try: phones often wake up before the network does
   };
+  if(navigator.serviceWorker) navigator.serviceWorker.addEventListener("message", e => { if(e.data && e.data.type === "refresh") back(); });
   document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") hiddenAt = Date.now(); else back(); });
   window.addEventListener("pageshow", e => { if(e.persisted) location.reload(); });
   window.addEventListener("focus", back);

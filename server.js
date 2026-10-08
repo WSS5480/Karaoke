@@ -998,6 +998,11 @@ async function pushTick() {
   if (ns.size) { const ask = await idSet("repeat_ask"); for (const r of q) if (ns.has(r.id)) await pushTo(r, "nosong", ask.has(r.id) ? "🔁 Pick a different song" : "🎵 Pick another song", (ask.has(r.id) ? "That song was already sung tonight." : "The DJ doesn't have " + song(r) + ".") + " You keep your spot. Tap to change it."); }
 }
 setInterval(() => { allBars(pushTick).catch(() => {}); }, 15000);
+// any DJ change (next, sing now, move, don't have it…) sends alerts right away instead of waiting for the 15-second check
+app.use(["/api/kj", "/api/kj-open", "/api/bar"], (req, res, next) => {
+  if (req.method === "POST") { const c = req._ctx || { t: "dive", tenant: DIVE, base: "" }; res.on("finish", () => { if (res.statusCode < 400) setTimeout(() => ctx.run(c, () => pushTick().catch(() => {})), 300); }); }
+  next();
+});
 setTimeout(() => { allBars(async () => { await djIdleCheck(); await nightlyClose(); }).catch(() => {}); }, 20000);
 async function endDj(name, why, how, at) {
   const ds = await djSession();

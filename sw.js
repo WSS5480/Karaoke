@@ -1,5 +1,5 @@
 // The Dive Karaoke: keeps the app shell on the phone so it opens fast; live data always comes from the server.
-const CACHE = "dive-v90";
+const CACHE = "dive-v91";
 const SHELL = ["/", "/kj", "/logo.png", "/songs.json", "/manifest.json", "/icon-192.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
@@ -17,9 +17,11 @@ self.addEventListener("fetch", e => {
 // phone alerts: "you're next" / "you're up" (sound + vibrate come from the phone's notification settings)
 self.addEventListener("push", e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { title: "The Dive", body: e.data ? e.data.text() : "" }; }
+  // tell any open app window to refresh now, so the screen matches the alert
+  self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => ws.forEach(w => w.postMessage({ type: "refresh" }))).catch(() => {});
   e.waitUntil(self.registration.showNotification(d.title || "The Dive", { body: d.body || "", tag: d.tag || "dive", renotify: true, requireInteraction: d.tag === "dive-up", vibrate: [400, 150, 400, 150, 400], icon: "/icon-192.png", badge: "/icon-192.png", data: { url: d.url || "/" } }));
 });
 self.addEventListener("notificationclick", e => {
   e.notification.close(); const url = (e.notification.data && e.notification.data.url) || "/";
-  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => { for (const w of ws) if (new URL(w.url).pathname.startsWith(new URL(url, self.location.origin).pathname)) return w.focus(); return self.clients.openWindow(url); }));
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => { for (const w of ws) if (new URL(w.url).pathname.startsWith(new URL(url, self.location.origin).pathname)) { w.postMessage({ type: "refresh" }); return w.focus(); } return self.clients.openWindow(url); }));
 });
