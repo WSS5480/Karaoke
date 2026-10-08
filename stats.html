@@ -50,11 +50,6 @@ ol.rank .meter{height:6px;border-radius:99px;background:var(--panel-2);margin-to
 ol.rank .meter i{display:block;height:100%;background:var(--green);border-radius:99px}
 ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap}
 .stars{color:var(--gold)}
-.dist{display:flex;flex-direction:column;gap:6px}
-.dist div{display:grid;grid-template-columns:70px minmax(0,1fr) 40px;gap:8px;align-items:center;font-size:14px}
-.dist .track{height:12px;background:var(--panel-2);border-radius:99px;overflow:hidden}
-.dist .track i{display:block;height:100%;background:var(--green);border-radius:99px}
-.dist .c{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-2)}
 </style>
 <script src="/zoom.js" defer></script>
 </head>
@@ -150,7 +145,6 @@ function rank(box, items, main, sub, val, meterOf){
     li.append(n, t, v); box.appendChild(li);
   });
 }
-const starsText = a => { const s = document.createElement("span"); s.className = "stars"; s.textContent = "★ " + a.toFixed(1); return s; };
 async function load(){
   document.querySelectorAll("[data-r]").forEach(b => b.setAttribute("aria-pressed", b.dataset.r === range));
   const r = await fetch("/api/kj/stats?range=" + range, { headers: { "x-kj-pin": pin }, cache: "no-store" });

@@ -73,7 +73,7 @@ load();
   let hiddenAt = 0;
   const back = () => {
     if(hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000){ location.reload(); return; }
-    hiddenAt = 0; if(true) load();
+    hiddenAt = 0; load();
   };
   document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") hiddenAt = Date.now(); else back(); });
   window.addEventListener("pageshow", e => { if(e.persisted) location.reload(); });

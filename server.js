@@ -289,9 +289,8 @@ if (DB_OK) {
     async setCustomerName(id, n) { await Q(`UPDATE customers SET name=$2, last_seen=now() WHERE id=$1`, [id, n]); },
     async moveDevice(from, to) { await Q(`UPDATE signups SET device=$2 WHERE device=$1 AND tenant=$3`, [from, to, T()]); },
     async mineAll(d, sort) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND device=$1 AND done_at IS NOT NULL AND status IN ('done','archived') ORDER BY ${sort === "top" ? "likes DESC, done_at DESC" : "done_at DESC"} LIMIT 200`, [d, T()])).rows; },
-    async sungSince(t) { return (await Q(`SELECT name, song, artist, device, rating, likes, public, done_at FROM signups WHERE tenant=$2 AND done_at IS NOT NULL AND status IN ('done','archived') AND done_at >= $1 ORDER BY done_at`, [new Date(t), T()])).rows; },
+    async sungSince(t) { return (await Q(`SELECT name, song, artist, device, likes, public, done_at FROM signups WHERE tenant=$2 AND done_at IS NOT NULL AND status IN ('done','archived') AND done_at >= $1 ORDER BY done_at`, [new Date(t), T()])).rows; },
     async lastSung(d) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND device=$1 AND status IN ('done','archived') AND done_at > now() - interval '12 hours' ORDER BY done_at DESC LIMIT 1`, [d, T()])).rows[0]; },
-    async rate(id, rating, pub) { await Q(`UPDATE signups SET rating=$2, public=$3 WHERE id=$1 AND tenant=$4`, [id, rating, pub, T()]); },
     async setPublic(id, pub) { await Q(`UPDATE signups SET public=$2 WHERE id=$1 AND tenant=$3`, [id, pub, T()]); },
     async addLike(id, n) { const r = await Q(`UPDATE signups SET likes=GREATEST(0, likes+$2) WHERE id=$1 AND tenant=$3 RETURNING likes`, [id, n, T()]); return r.rows[0] ? r.rows[0].likes : 0; },
     async setPosted(id, v) { await Q(`UPDATE signups SET posted_to=$2 WHERE id=$1 AND tenant=$3`, [id, v, T()]); },
@@ -338,7 +337,6 @@ if (DB_OK) {
     async mineAll(d, sort) { return rows.filter(r => mine(r) && r.device === d && r.done_at && (r.status === "done" || r.status === "archived")).sort(sort === "top" ? (a, b) => (b.likes || 0) - (a.likes || 0) || b.done_at.localeCompare(a.done_at) : (a, b) => b.done_at.localeCompare(a.done_at)).slice(0, 200); },
     async sungSince(t) { return rows.filter(r => mine(r) && r.done_at && (r.status === "done" || r.status === "archived") && Date.parse(r.done_at) >= t).sort((a, b) => a.done_at.localeCompare(b.done_at)); },
     async lastSung(d) { const cut = Date.now() - 12 * 3600e3; return rows.filter(r => mine(r) && r.device === d && (r.status === "done" || r.status === "archived") && r.done_at && Date.parse(r.done_at) > cut).sort((a, b) => b.done_at.localeCompare(a.done_at))[0]; },
-    async rate(id, rating, pub) { const r = rows.find(x => x.id === id && mine(x)); if (r) { r.rating = rating; r.public = pub; } },
     async setPublic(id, pub) { const r = rows.find(x => x.id === id && mine(x)); if (r) r.public = pub; },
     async addLike(id, n) { const r = rows.find(x => x.id === id && mine(x)); if (!r) return 0; r.likes = Math.max(0, (r.likes || 0) + n); return r.likes; },
     async setPosted(id, v) { const r = rows.find(x => x.id === id && mine(x)); if (r) r.posted_to = v; },
@@ -580,10 +578,6 @@ async function setOwnerPin(kind, pin) {
   if (T() !== "dive" && kind === "house") { const t = await db.getTenant(T()); if (t) { t.pinHash = hashPin(pin); await saveTenant(t); return; } }
   await db.setSetting(kind + "_pin", hashPin(pin));
 }
-function pinOk(req) {
-  const p = String(req.headers["x-kj-pin"] || "");
-  return p.length === KJ_PIN.length && crypto.timingSafeEqual(Buffer.from(p), Buffer.from(KJ_PIN));
-}
 const hits = new Map();
 // stops one phone from spamming sign-ups; the per-address cap is high because many phones share a carrier address
 function rateLimited(ip, dev) {
@@ -672,17 +666,7 @@ app.post("/api/cancel", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.post("/api/rate", wrap(async (req, res) => {
-  const d = owner(req, res);
-  let last;
-  if (req.body.id) { const r = await db.get(parseInt(req.body.id, 10)); last = r && r.device === d && r.done_at ? r : null; }
-  else last = await db.lastSung(d);
-  if (!last) return res.status(404).json({ error: "Rate your song after you sing." });
-  const rating = parseInt(req.body.rating, 10);
-  if (!(rating >= 1 && rating <= 5)) return res.status(400).json({ error: "Pick 1 to 5 stars." });
-  await db.rate(last.id, rating, !!req.body.public);
-  res.json({ ok: true, id: last.id });
-}));
+// /api/rate (old self star-rating) removed: crowd likes replaced it
 const histRow = r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, likes: r.likes || 0, public: !!r.public, at: r.done_at, posted: postedList(r) });
 /* ---------- crowd likes: anyone with the app can ❤️ a singer, one like per phone per performance,
    only on the night they sang (while they're up and after). Likes stay with that song forever. ---------- */

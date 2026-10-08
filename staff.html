@@ -258,14 +258,6 @@ function groupText(g){
 function plain(){
   return "THE DIVE KARAOKE – QUICK LIST\n\n" + [...document.querySelectorAll(".group")].map(g => "== " + g.querySelector("h3").textContent.replace(/^\W+/, "").trim().toUpperCase() + " ==\n\n" + [...g.querySelectorAll("section")].map(sectionText).join("\n\n")).join("\n\n\n");
 }
-function oldPlain(){
-  return [...document.querySelectorAll("section")].map(s => {
-    const h = s.querySelector("h2").textContent.trim().toUpperCase();
-    const lines = [...s.querySelectorAll(".ln")].map(l => l.querySelector("b").textContent + ": " + new URL(l.querySelector("a").getAttribute("href"), location.origin).href.replace(/\/$/, ""));
-    const items = [...s.querySelectorAll("li")].map((li, i) => (s.querySelector("ol") ? (i + 1) + ". " : "- ") + li.textContent.trim());
-    return h + "\n" + lines.concat(items).join("\n");
-  }).join("\n\n");
-}
 async function copy(text, btn, label){
   let ok = false;
   try{ await navigator.clipboard.writeText(text); ok = true; }catch(e){
