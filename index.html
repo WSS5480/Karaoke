@@ -389,6 +389,11 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
     <button class="ghost" id="cancel" type="button">Cancel my song</button>
   </section>
 
+  <section class="card" id="upNext">
+    <h2>Up next</h2>
+    <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
+  </section>
+
   <section class="card rate" id="rateCard" hidden>
     <h2>Nice singing! <span style="text-transform:none;letter-spacing:0">/ ¡Bien cantado!</span></h2>
     <div class="song" id="rateSong"></div>
@@ -496,10 +501,6 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
   <a class="wall" href="/wall">See the wall of fame</a>
   <a class="legal" href="/terms">Terms of Use &amp; Privacy</a>
 
-  <section class="card">
-    <h2>Up next</h2>
-    <ol id="queue"><li class="empty">Nobody's signed up yet. Be the first.</li></ol>
-  </section>
 </main>
 <div class="tmodal" id="lyrModal" hidden role="dialog" aria-modal="true" aria-labelledby="lyrTitle">
   <div class="tbox" style="gap:12px;max-width:420px">
@@ -805,7 +806,7 @@ $("editForm").addEventListener("submit", async e => {
   catch(err){ $("editErr").textContent = err.message; }
 });
 // sign-up form sits right under the title so a fresh scan can sign up without scrolling
-(function(){ const v = $("venueLine"), f = $("formCard"), pc = $("picCard"); const mc = $("mineCard"); if(v && f){ v.after(f); if(mc) f.after(mc); if(pc) (mc || f).after(pc); } })();
+(function(){ const v = $("venueLine"), f = $("formCard"), pc = $("picCard"); const mc = $("mineCard"); const un = $("upNext"); if(v && f){ v.after(f); if(mc) f.after(mc); if(un) (mc || f).after(un); if(pc) (un || mc || f).after(pc); } })();
 $("cancel").addEventListener("click", async () => {
   if($("cancel").dataset.armed !== "1"){ $("cancel").dataset.armed = "1"; $("cancel").textContent = "Tap again to cancel"; setTimeout(() => { $("cancel").dataset.armed = ""; $("cancel").textContent = "Cancel my song"; }, 4000); return; }
   await fetch("/api/cancel", { method: "POST" }).catch(() => {});
