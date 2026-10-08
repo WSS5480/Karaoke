@@ -775,6 +775,15 @@ $("artist").addEventListener("input", () => { $("err").textContent = ""; $("arti
 $("name").addEventListener("input", () => { $("err").textContent = ""; });
 document.addEventListener("click", e => { if(!e.target.closest(".field")){ $("sugg").hidden = true; $("asugg").hidden = true; } });
 
+// location help that matches the phone and browser (iPhone Safari / iPhone Chrome / Android Chrome / Samsung)
+const LOC_HELP = (() => {
+  const ua = navigator.userAgent, ios = /iphone|ipad|ipod/i.test(ua), android = /android/i.test(ua), crios = /CriOS/i.test(ua), samsung = /SamsungBrowser/i.test(ua);
+  if(ios && crios) return { allow: "iPhone: Settings → Chrome → Location → While Using the App, then reload.", precise: "Turn on Precise Location: Settings → Chrome → Location → Precise Location ON." };
+  if(ios) return { allow: "iPhone: Settings → Privacy & Security → Location Services → Safari Websites → While Using, then reload.", precise: "Turn on Precise Location: Settings → Privacy & Security → Location Services → Safari Websites → Precise Location ON." };
+  if(android && samsung) return { allow: "Android: tap the lock icon by the web address → Permissions → Location → Allow. Also turn on Location in your phone's quick settings.", precise: "Turn on Location in quick settings and set Samsung Internet's location to Precise." };
+  if(android) return { allow: "Android: tap the icon left of the web address → Permissions → Location → Allow. Also turn on Location in your phone's quick settings.", precise: "Turn on Location in quick settings, then Settings → Location → Google Location Accuracy ON." };
+  return { allow: "Allow location for this site in your browser, then reload.", precise: "Turn on precise location for this site." };
+})();
 async function doSignup(name, song, artist, errEl){
   try{
     let spot = {};
@@ -789,11 +798,11 @@ async function doSignup(name, song, artist, errEl){
     }
     if(!r.ok){
       if(j.error === "far") errEl.textContent = j.acc > 300
-        ? "📍 Your phone is only giving a rough location (about " + j.miles + " miles off). Turn on Precise Location: iPhone Settings → Privacy & Security → Location Services → Safari Websites → Precise Location ON. Or ask the DJ to add you."
+        ? "📍 Your phone is only giving a rough location (about " + j.miles + " miles off). " + LOC_HELP.precise + " Or ask the DJ to add you."
         : "You need to be at The Dive to sign up. Your phone says you're about " + j.miles + " miles away. Inside the bar? Step near the door or a window and try again, or ask the DJ to add you.";
       else if(j.error === "signin"){ errEl.textContent = j.message; loadMe(); }
       else if(j.error === "terms"){ termsAccepted = false; openTerms(); }
-      else if(j.error === "location") errEl.textContent = "Allow location so we can see you're at The Dive, or scan the QR code at the bar. iPhone: Settings → Privacy → Location Services → Safari → While Using.";
+      else if(j.error === "location") errEl.textContent = "Allow location so we can see you're at The Dive. " + LOC_HELP.allow + " Or ask the DJ to add you.";
       else errEl.textContent = j.message || j.error || "Couldn't add you. Try again.";
       return false;
     }
