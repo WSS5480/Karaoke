@@ -276,8 +276,6 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 body.posting{overflow:hidden}
 /* specials stay pinned at the top while scrolling */
 #promo{position:sticky;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:50}
-#promo.pinned{position:fixed;top:calc(env(safe-area-inset-top,0px) + 6px);left:50%;transform:translateX(-50%);width:min(480px,calc(100% - 32px));box-sizing:border-box;margin:0}
-#promoSpace{flex:none}
 </style>
 </head>
 <body class="booting">
@@ -1631,22 +1629,6 @@ $("logout").addEventListener("click", async () => { await post("/api/auth/logout
 
 /* ---------- install as an app ---------- */
 if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-/* specials stay locked at the top while you scroll (fixed, so it works on every phone) */
-(function(){
-  const p = $("promo"); if(!p) return;
-  const sp = document.createElement("div"); sp.id = "promoSpace"; sp.hidden = true; p.after(sp);
-  let home = 0;
-  function check(){
-    if(p.hidden){ p.classList.remove("pinned"); sp.hidden = true; return; }
-    if(!p.classList.contains("pinned")) home = p.getBoundingClientRect().top + window.scrollY - 6;
-    const pin = window.scrollY > Math.max(0, home);
-    if(pin && !p.classList.contains("pinned")){ sp.style.height = p.offsetHeight + "px"; sp.hidden = false; p.classList.add("pinned"); }
-    else if(!pin && p.classList.contains("pinned")){ p.classList.remove("pinned"); sp.hidden = true; }
-  }
-  window.addEventListener("scroll", check, { passive: true }); window.addEventListener("resize", check);
-  new MutationObserver(check).observe(p, { attributes: true, attributeFilter: ["hidden"] });
-  setInterval(check, 1000);
-})();
 /* ---------- phone alerts (push): sound + vibrate when you're next / up, even with the app closed ---------- */
 (function(){
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = !!(matchMedia("(display-mode: standalone)").matches || navigator.standalone);
