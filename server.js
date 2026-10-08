@@ -1407,6 +1407,11 @@ app.post("/api/watch/bump", wrap(async (req, res) => {
   if (l.length >= 10) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." });
   const ok = await pinIs("list", req.headers["x-watch-pin"]);
   if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "Wrong PIN." }); }
+  if (req.body.price != null) {
+    const v = parseInt(req.body.price, 10); if (!(v >= 1 && v <= 50)) return res.status(400).json({ error: "Pick $1 to $50 a spot." });
+    await db.setSetting("bump_price", String(v)); audit("App owner", "owner", "Lock-your-spot price set to $" + v + " a spot");
+    if (req.body.on == null) return res.json({ ok: true, price: v });
+  }
   await db.setSetting("bump", req.body.on ? "on" : "off");
   if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = "owner turned move-ups off"; } }); await saveBumps(all); }
   res.json({ ok: true, on: !!req.body.on });
@@ -1715,6 +1720,11 @@ app.post("/api/bar/tips", wrap(async (req, res) => {
 }));
 app.post("/api/bar/bump", wrap(async (req, res) => {
   const who = await barAuth(req, res); if (!who) return;
+  if (req.body.price != null) {
+    const v = parseInt(req.body.price, 10); if (!(v >= 1 && v <= 50)) return res.status(400).json({ error: "Pick $1 to $50 a spot." });
+    await db.setSetting("bump_price", String(v)); audit(who.name, who.owner ? "bar owner" : "manager", "Lock-your-spot price set to $" + v + " a spot");
+    if (req.body.on == null) return res.json({ ok: true, price: v });
+  }
   audit(who.name, who.owner ? "bar owner" : "manager", "Move-ups " + (req.body.on ? "on" : "off"));
   await db.setSetting("bump", req.body.on ? "on" : "off");
   if (!req.body.on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = (who.owner ? "owner" : who.name) + " turned move-ups off"; } }); await saveBumps(all); }
