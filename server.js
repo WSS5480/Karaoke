@@ -624,7 +624,7 @@ app.post("/api/signup", wrap(async (req, res) => {
     const lat = Number(req.body.lat), lng = Number(req.body.lng), acc = Math.min(Math.max(Number(req.body.acc) || 0, 0), 200);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(403).json({ error: "location", message: "Turn on location so we can see you're at " + TEN().short + ". You must be here to sign up." });
     const away = metersAway(lat, lng);
-    if (away - acc > (Number(TEN().radius) || 150)) return res.status(403).json({ error: "far", miles: Math.round(away / 1609.34 * 10) / 10, message: "You need to be at " + TEN().short + " to sign up." });
+    if (away - acc > (Number(TEN().radius) || 150)) return res.status(403).json({ error: "far", miles: Math.round(away / 1609.34 * 10) / 10, acc: Math.round(Number(req.body.acc) || 0), message: "You need to be at " + TEN().short + " to sign up." });
   }
   const profile = await getProfile(dev), cust = uid ? await db.customer(uid) : null;
   const name = (cust && cust.name) || (profile && profile.name) || clean(req.body.name, 30), song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);

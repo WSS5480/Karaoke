@@ -630,10 +630,10 @@ const $ = id => document.getElementById(id);
 let qrToken = "";
 try{ const at = new URLSearchParams(location.search).get("at"); if(at){ sessionStorage.setItem("dive_qr", at); history.replaceState(null, "", "/"); } qrToken = sessionStorage.getItem("dive_qr") || ""; }catch(e){}
 let geofenceOn = true;
-function getSpot(){
+function getSpot(fresh){
   return new Promise((ok, bad) => {
     if(!navigator.geolocation) return bad(new Error("none"));
-    navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), bad, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+    navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), bad, { enableHighAccuracy: true, timeout: fresh ? 15000 : 12000, maximumAge: fresh ? 0 : 15000 });
   });
 }
 let songs = [], mine = null, buzzed = false;
@@ -757,10 +757,18 @@ async function doSignup(name, song, artist, errEl){
   try{
     let spot = {};
     if(geofenceOn){ try{ spot = await getSpot(); }catch(ge){ spot = {}; } }
-    const r = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, app: !!(matchMedia("(display-mode: standalone)").matches || navigator.standalone), ...spot }) });
-    const j = await r.json();
+    const send = () => fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, app: !!(matchMedia("(display-mode: standalone)").matches || navigator.standalone), ...spot }) });
+    let r = await send(), j = await r.json();
+    // "too far": phones sometimes hand back an old or rough location. Get a fresh GPS fix and try once more.
+    if(!r.ok && j.error === "far"){
+      errEl.textContent = "📍 Checking your location again…";
+      try{ spot = await getSpot(true); r = await send(); j = await r.json(); }catch(ge){}
+      errEl.textContent = "";
+    }
     if(!r.ok){
-      if(j.error === "far") errEl.textContent = "You need to be at The Dive to sign up. You're about " + j.miles + " miles away.";
+      if(j.error === "far") errEl.textContent = j.acc > 300
+        ? "📍 Your phone is only giving a rough location (about " + j.miles + " miles off). Turn on Precise Location: iPhone Settings → Privacy & Security → Location Services → Safari Websites → Precise Location ON. Or ask the DJ to add you."
+        : "You need to be at The Dive to sign up. Your phone says you're about " + j.miles + " miles away. Inside the bar? Step near the door or a window and try again, or ask the DJ to add you.";
       else if(j.error === "signin"){ errEl.textContent = j.message; loadMe(); }
       else if(j.error === "terms"){ termsAccepted = false; openTerms(); }
       else if(j.error === "location") errEl.textContent = "Allow location so we can see you're at The Dive, or scan the QR code at the bar. iPhone: Settings → Privacy → Location Services → Safari → While Using.";
