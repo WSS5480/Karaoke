@@ -783,6 +783,8 @@ const LOC_HELP = (() => {
   if(ios && crios) return { allow: "iPhone: Settings → Chrome → Location → While Using the App, then reload.", precise: "Turn on Precise Location: Settings → Chrome → Location → Precise Location ON." };
   if(ios) return { allow: "iPhone: Settings → Privacy & Security → Location Services → Safari Websites → While Using, then reload.", precise: "Turn on Precise Location: Settings → Privacy & Security → Location Services → Safari Websites → Precise Location ON." };
   if(android && samsung) return { allow: "Android: tap the lock icon by the web address → Permissions → Location → Allow. Also turn on Location in your phone's quick settings.", precise: "Turn on Location in quick settings and set Samsung Internet's location to Precise." };
+  const installed = !!(navigator.standalone || matchMedia("(display-mode: standalone)").matches);
+  if(android && installed) return { allow: "Android app: press and hold The Dive icon on your home screen → App info (ⓘ) → Permissions → Location → Allow, then reopen. Or open the link in Chrome instead.", precise: "Press and hold The Dive icon → App info → Permissions → Location → Allow, Use precise location ON." };
   if(android) return { allow: "Android: tap the icon left of the web address → Permissions → Location → Allow. Also turn on Location in your phone's quick settings.", precise: "Turn on Location in quick settings, then Settings → Location → Google Location Accuracy ON." };
   return { allow: "Allow location for this site in your browser, then reload.", precise: "Turn on precise location for this site." };
 })();
