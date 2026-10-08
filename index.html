@@ -941,6 +941,7 @@ setTimeout(() => document.body.classList.remove("booting"), 3500);   // never hi
 let last = null;
 $("formCard").before($("rateCard"));
 $("formCard").before($("postCard"));
+function dismissed(id){ try{ return localStorage.getItem("dive_rated_done") === String(id); }catch(e){ return false; } }
 function renderRate(l){
   if(!l || dismissed(l.id) || mine){ $("rateCard").hidden = true; return; }
   const first = !last || last.id !== l.id; last = l;
