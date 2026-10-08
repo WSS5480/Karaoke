@@ -652,11 +652,12 @@ const $ = id => document.getElementById(id);
 let qrToken = "";
 try{ const at = new URLSearchParams(location.search).get("at"); if(at){ sessionStorage.setItem("dive_qr", at); history.replaceState(null, "", "/"); } qrToken = sessionStorage.getItem("dive_qr") || ""; }catch(e){}
 let geofenceOn = true;
+// GPS first; if it times out or isn't available indoors (common on Android Chrome), fall back to Wi-Fi/cell location
 function getSpot(fresh){
-  return new Promise((ok, bad) => {
-    if(!navigator.geolocation) return bad(new Error("none"));
-    navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), bad, { enableHighAccuracy: true, timeout: fresh ? 15000 : 12000, maximumAge: fresh ? 0 : 15000 });
-  });
+  const ask = opts => new Promise((ok, bad) => navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), bad, opts));
+  if(!navigator.geolocation) return Promise.reject(new Error("none"));
+  return ask({ enableHighAccuracy: true, timeout: fresh ? 12000 : 9000, maximumAge: fresh ? 0 : 15000 })
+    .catch(e => { if(e && e.code === 1) throw e; return ask({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }); });
 }
 let songs = [], mine = null, buzzed = false;
 /* ---------- phone alerts: buzz + chime. Vibration works on Android; iPhones only get the chime and the pop-up ---------- */
