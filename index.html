@@ -270,6 +270,10 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 .pushbox{display:flex;flex-direction:column;gap:6px}.pushbox .go{background:#5fd36e;color:#041206}.pushbox .go .bsub{display:block;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;margin-top:2px}
 .pushbox .hint{margin:0;font-size:15px;line-height:1.4;color:var(--ink);background:rgba(95,211,110,.1);border:1px solid #39b54a;border-radius:12px;padding:10px}.pushbox .ok{margin:0;color:var(--green-hi);font-weight:700}
+/* Post opens right where you are, as a sheet over the page (no scrolling to find it) */
+#postScrim{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2147482000}
+#postCard.sheet{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;max-height:92vh;max-height:92dvh;overflow:auto;z-index:2147482001;border-radius:22px 22px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 40px rgba(0,0,0,.6);-webkit-overflow-scrolling:touch}
+body.posting{overflow:hidden}
 </style>
 </head>
 <body class="booting">
@@ -415,7 +419,8 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
     <button class="ghost" id="rateDone" type="button">Done</button>
   </section>
 
-  <section class="card" id="postCard" hidden>
+  <div id="postScrim" hidden></div>
+  <section class="card" id="postCard" hidden role="dialog" aria-modal="true" aria-label="Post your song">
     <h2>Post your song <span style="text-transform:none;letter-spacing:0">/ Publícalo</span></h2>
     <div class="postwrap">
       <img id="postPreview" alt="Your karaoke picture" hidden>
@@ -931,7 +936,7 @@ function renderRate(l){
   $("myLikes").textContent = "❤️ " + (l.likes || 0) + ((l.likes || 0) === 1 ? " like" : " likes");
   if(first) $("pub").checked = !!l.public;
 }
-$("saveRate").addEventListener("click", () => { if(!last) return; openPost({ ...last }); $("postCard").scrollIntoView({ behavior: "smooth", block: "center" }); });
+$("saveRate").addEventListener("click", () => { if(!last) return; openPost({ ...last }); });
 $("pub").addEventListener("change", async () => {
   if(!last) return;
   try{ const r = await fetch("/api/wall-optin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: last.id, public: $("pub").checked }) }); if(!r.ok) throw 0;
@@ -1005,7 +1010,7 @@ const shown = item => ({ ...item, likesShown: $("showStars").checked ? (item.lik
 // make the picture first; the Post button only turns on when it's ready, so the tap opens the share menu instantly
 async function openPost(item){
   postItem = item; postPic = null; $("postLinkBox").hidden = true;
-  $("postCard").hidden = false; $("shareMsg").textContent = "";
+  $("postCard").hidden = false; $("postCard").classList.add("sheet"); $("postScrim").hidden = false; document.body.classList.add("posting"); $("postCard").scrollTop = 0; $("shareMsg").textContent = "";
   $("postSong").textContent = item.song + (item.artist ? " – " + item.artist : "");
   $("postBtn").disabled = true; $("postBtn").textContent = "Getting it ready…"; $("postPreview").hidden = true;
   $("showStars").checked = !!item.likes; $("showStars").disabled = !item.likes; postMode = "dive"; photoFile = null;
@@ -1197,7 +1202,9 @@ $("showStars").addEventListener("change", async () => {
   if(postItem !== item) return;
   postPic = pic; $("postPreview").src = pic.url; $("postBtn").disabled = false;
 });
-$("postClose").addEventListener("click", () => { $("postCard").hidden = true; postItem = null; });
+function closePost(){ $("postCard").hidden = true; $("postCard").classList.remove("sheet"); $("postScrim").hidden = true; document.body.classList.remove("posting"); postItem = null; }
+$("postClose").addEventListener("click", closePost);
+$("postScrim").addEventListener("click", closePost);
 
 /* ---------- my songs: ever sang (with date+time), favorites (♥), practice list ---------- */
 let bySong = [], mSort = "new", mineSig = "", lists = { fav: [], practice: [] }, mineItems = [], multiOn = false, tab = "All";
@@ -1284,7 +1291,6 @@ async function loadMine(force){
       const sh = document.createElement("button"); sh.type = "button"; sh.className = "sm"; sh.textContent = "📣 Post"; sh.title = "Post this song with The Dive picture, your photo, or your video"; sh.setAttribute("aria-label", "Post " + x.song);
       sh.addEventListener("click", () => {
         openPost({ id: x.id, name: x.name, song: x.song, artist: x.artist, likes: x.likes, public: x.public });
-        $("postCard").scrollIntoView({ behavior: "smooth", block: "center" });
       });
       const li = songRow(x, { date: x.at, left: st, extra: [sh] });
       if((x.posted && x.posted.length) || (x.links && Object.keys(x.links).length)) li.appendChild(postChips(x));
