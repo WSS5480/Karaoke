@@ -274,6 +274,8 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 #postScrim{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2147482000}
 #postCard.sheet{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;max-height:92vh;max-height:92dvh;overflow:auto;z-index:2147482001;border-radius:22px 22px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 40px rgba(0,0,0,.6);-webkit-overflow-scrolling:touch}
 body.posting{overflow:hidden}
+/* specials stay pinned at the top while scrolling */
+#promo{position:sticky;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:50}
 </style>
 </head>
 <body class="booting">
@@ -925,7 +927,7 @@ function render(data){
 
 setTimeout(() => document.body.classList.remove("booting"), 3500);   // never hide the form if the line can't load
 /* ---------- rate and share ---------- */
-let last = null, picked = 0;
+let last = null;
 $("formCard").before($("rateCard"));
 $("formCard").before($("postCard"));
 function renderRate(l){
@@ -1932,7 +1934,7 @@ loadMe(); setInterval(refresh, 5000);
   let hiddenAt = 0;
   const back = () => {
     if(hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000){ location.reload(); return; }
-    hiddenAt = 0; if(true) refresh();
+    hiddenAt = 0; refresh();
   };
   document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") hiddenAt = Date.now(); else back(); });
   window.addEventListener("pageshow", e => { if(e.persisted) location.reload(); });
