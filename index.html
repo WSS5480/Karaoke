@@ -25,7 +25,7 @@ main{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:18px;p
 /* fresh scan, not in line yet: sign-up form first, small header, nothing to scroll past */
 .fresh .logo{width:72px}
 .fresh h1{font-size:23px}.fresh h1 small{font-size:13px;margin-top:2px}
-.fresh #installBar,.fresh #nowOpt,.fresh #lyrWhere{display:none!important}
+.fresh #nowOpt,.fresh #lyrWhere{display:none!important}
 h1{font-family:var(--slab);font-weight:800;font-size:30px;line-height:1.1;margin:0;text-align:center;text-wrap:balance}
 h1 small{display:block;font-family:var(--body);font-weight:500;font-size:15px;color:var(--ink-2);margin-top:6px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:14px}
@@ -181,7 +181,7 @@ li.up .av{border-color:var(--green)}
 .install{display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--green);border-radius:16px;padding:12px 14px}
 .install img{width:48px;height:48px;border-radius:12px;flex:none}
 .install .tx{flex:1;min-width:0;font-size:14px;line-height:1.35}
-.install .tx b{display:block;font-size:16px}
+.install .tx>b{display:block;font-size:16px}.install .tx span b{display:inline;font-size:inherit}
 .install button{font:inherit;font-weight:700;border-radius:999px;padding:10px 16px;border:0;background:var(--green);color:#041206;cursor:pointer;flex:none}
 .install .x{background:none;color:var(--ink-2);padding:6px;font-size:20px;font-weight:400}
 .postwrap{display:flex;gap:14px;align-items:center}
@@ -273,7 +273,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 <main>
   <div class="install" id="installBar" hidden>
     <img src="/icon-192.png?v=2" alt="">
-    <div class="tx"><b>Get The Dive app</b><span id="installHow">Sign up faster next time.</span></div>
+    <div class="tx"><b>📲 Get The Dive app</b><span id="installHow">Faster sign-up, and your phone buzzes when you're up.</span></div>
     <button id="installBtn" type="button">Add</button>
     <button class="x" id="installX" type="button" aria-label="Hide">×</button>
   </div>
@@ -1639,8 +1639,11 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), iosChrome = ios && /CriOS/i.test(navigator.userAgent);
   if(iosChrome){ $("iosGuide").classList.add("top"); $("iosShareWhere").textContent = "at the top right"; }
   let promptEvt = null;
-  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEvt = e; $("installBar").hidden = false; $("installHow").textContent = "Sign up faster next time."; $("installBtn").hidden = false; });
-  if(ios){ $("installBar").hidden = false; }
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEvt = e; if(hidden) return; $("installBar").hidden = false; $("installHow").textContent = "Faster sign-up, and your phone buzzes when you're up. Tap Add."; $("installBtn").hidden = false; $("installBtn").textContent = "Add"; });
+  // steps right in the banner at the top, no extra tap
+  const steps = ios ? (iosChrome ? "Tap <b style='display:inline'>Share</b> <span aria-hidden='true'>⬆︎</span> at the top right → <b style='display:inline'>Add to Home Screen</b>. Then open The Dive from your home screen." : "Tap <b style='display:inline'>Share</b> <span aria-hidden='true'>⬆︎</span> at the bottom of Safari → <b style='display:inline'>Add to Home Screen</b>. Then open The Dive from your home screen.")
+    : "Tap your browser menu <b style='display:inline'>⋮</b> → <b style='display:inline'>Install app</b> (or Add to Home screen).";
+  if(!hidden){ $("installBar").hidden = false; $("installHow").innerHTML = "Faster sign-up, and your phone buzzes when you're up.<br>" + steps; $("installBtn").hidden = true; }
   $("installBtn").addEventListener("click", async () => {
     if(ios){ $("iosGuide").hidden = false; return; }
     if(promptEvt){ promptEvt.prompt(); const r = await promptEvt.userChoice; if(r.outcome === "accepted") $("installBar").hidden = true; promptEvt = null; return; }
