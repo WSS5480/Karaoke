@@ -572,7 +572,8 @@ async function pinIs(kind, pin) {
   const o = await db.getSetting(kind + "_pin"); if (o) return pinMatches(pin, o);
   return T() === "dive" ? same(pin, startPin(kind)) : pinMatches(pin, TEN().pinHash);
 }
-async function pinIsStarting(kind) { return T() === "dive" && kind === "bar" && !(await db.getSetting("bar_pin")); }
+// every bar owner must pick their own Bar Owner PIN: until they do, they are on the starting one (The Dive: BAR_OWNER_PIN; other bars: their account PIN)
+async function pinIsStarting(kind) { return kind === "bar" && !(await db.getSetting("bar_pin")); }
 async function setOwnerPin(kind, pin) {
   // other bars' house PIN is their account PIN (also changed on their Setup page): update it there
   if (T() !== "dive" && kind === "house") { const t = await db.getTenant(T()); if (t) { t.pinHash = hashPin(pin); await saveTenant(t); return; } }
@@ -1682,7 +1683,11 @@ async function barAuth(req, res) {
   if (l.length >= 10) { res.status(429).json({ error: "Too many tries. Wait 10 minutes." }); return null; }
   const pin = String(req.headers["x-bar-pin"] || "").replace(/\D/g, ""); let nm = ""; try { nm = decodeURIComponent(String(req.headers["x-bar-name"] || "")); } catch (e) {}
   if (pin) {
-    if (await pinIs("bar", pin)) return { name: "Owner", owner: true, starting: await pinIsStarting("bar") };
+    if (await pinIs("bar", pin)) {
+      const starting = await pinIsStarting("bar");
+      if (starting && req.method === "POST" && !/^\/api\/bar\/(pin|phone)$/.test(req.path)) { res.status(403).json({ error: "Set your own Bar Owner PIN first.", needNewPin: true }); return null; }
+      return { name: "Owner", owner: true, starting };
+    }
     if (T() === "dive" && await pinIs("list", pin)) return { name: "App owner", owner: true };
     const who = await whoIs(pin, nm);
     if (who && who.pick) { res.status(409).json({ error: "Tap your name.", names: who.pick }); return null; }
@@ -1692,6 +1697,7 @@ async function barAuth(req, res) {
 }
 app.get("/api/bar", wrap(async (req, res) => {
   const who = await barAuth(req, res); if (!who) return;
+  if (who.starting) return res.json({ who, mustSetPin: true, ownerPhone: maskPhone(await recoveryPhone("bar")) });
   await djIdleCheck();
   const djNow = await djSession(), s = await tipState(), all = await getTips(barDay().date), act = await db.active(), off = await tipsOff();
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
@@ -1737,6 +1743,7 @@ app.post("/api/bar/pin", wrap(async (req, res) => {
   const pin = String(req.body.pin || "").replace(/\D/g, "");
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
   if (T() === "dive" && pin === startPin("bar")) return res.status(409).json({ error: "That's the starting PIN. Pick your own." });
+  if (T() !== "dive" && TEN().pinHash && pinMatches(pin, TEN().pinHash)) return res.status(409).json({ error: "That's your bar's account PIN. Pick a different one for the Bar Owner app." });
   if (pin === TEMP_PIN || (await getHosts()).some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
   await setOwnerPin("bar", pin); audit(who.name, "bar owner", "Changed the Bar Owner PIN"); res.json({ ok: true });
 }));
