@@ -954,6 +954,13 @@ async function vapidReady() {
   });
   return vapidPub;
 }
+// phone-side errors (so a blank screen on one phone shows up in the logs)
+const clientErrs = new Map();
+app.post("/api/clienterr", express.text({ type: "*/*", limit: "4kb" }), (req, res) => {
+  const t = Date.now(), k = req.ip, l = (clientErrs.get(k) || []).filter(x => t - x < 600000);
+  if (l.length < 20) { l.push(t); clientErrs.set(k, l); let b = req.body; try { if (typeof b === "string") b = JSON.parse(b); } catch (e) {} console.error("client error:", JSON.stringify(b).slice(0, 600)); }
+  res.status(204).end();
+});
 app.get("/api/push/key", wrap(async (req, res) => { res.json({ key: await vapidReady() }); }));
 app.post("/api/push/sub", wrap(async (req, res) => {
   const sub = req.body && req.body.sub;

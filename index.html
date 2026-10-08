@@ -646,6 +646,8 @@ body.posting{overflow:hidden}
   <div class="arrow" aria-hidden="true">⬇</div>
 </div>
 <script>
+(function(){ let n = 0; const send = (m, src, ln) => { if(++n > 5) return; try{ const b = JSON.stringify({ m: String(m).slice(0, 300), src: String(src || "").slice(-80), ln: ln || 0, ua: navigator.userAgent.slice(0, 160), app: !!(navigator.standalone || matchMedia("(display-mode: standalone)").matches) }); (navigator.sendBeacon && navigator.sendBeacon("/api/clienterr", new Blob([b], { type: "application/json" }))) || fetch("/api/clienterr", { method: "POST", headers: { "Content-Type": "application/json" }, body: b, keepalive: true }); }catch(e){} };
+  window.addEventListener("error", e => send(e.message, e.filename, e.lineno)); window.addEventListener("unhandledrejection", e => send("promise: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason))); window.diveReportErr = send; })();
 const $ = id => document.getElementById(id);
 let qrToken = "";
 try{ const at = new URLSearchParams(location.search).get("at"); if(at){ sessionStorage.setItem("dive_qr", at); history.replaceState(null, "", "/"); } qrToken = sessionStorage.getItem("dive_qr") || ""; }catch(e){}
@@ -871,7 +873,7 @@ function render(data){
   if(!lyricsOn){ $("lyrModal").hidden = true; $("singModal").hidden = true; }
   $("venueLine").hidden = !data.venue; $("venueLine").textContent = data.venue ? "Tonight at " + data.venue : "";
   geofenceOn = data.geofence !== false; $("locHint").hidden = !geofenceOn;
-  renderRate(data.last);
+  try{ renderRate(data.last); }catch(e){ window.diveReportErr && window.diveReportErr("renderRate: " + e.message); }
   const blocked = !data.open || data.paused;
   $("closedCard").hidden = !blocked || !!mine;
   $("closedMsg").textContent = !data.open ? "Sign-ups are closed right now. Ask the KJ." : data.pausedUntil ? "Sign-ups are paused. Back at " + new Date(data.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + "." : "Sign-ups are paused for a bit. Check back soon.";
@@ -881,7 +883,7 @@ function render(data){
   $("mineCard").hidden = !mine;
   if(!mine && window.paintBump) window.paintBump({ on: false }, null);
   document.body.classList.toggle("fresh", !mine && !$("formCard").hidden);
-  if(mine){
+  if(mine) try{
     const ahead = mine.spot;
     $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + (ahead + 1);
     $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
@@ -906,11 +908,11 @@ function render(data){
         setLyr($("upLyr"), mine); $("upModal").hidden = false;
       }
     }
-  }
-  paintNow((data.queue || []).find(r => r.status === "up"));
-  paintLikes(data.sung);
+  }catch(e){ window.diveReportErr && window.diveReportErr("mine: " + e.message); }
+  try{ paintNow((data.queue || []).find(r => r.status === "up")); }catch(e){ window.diveReportErr && window.diveReportErr("paintNow: " + e.message); }
+  try{ paintLikes(data.sung); }catch(e){ window.diveReportErr && window.diveReportErr("paintLikes: " + e.message); }
   const ol = $("queue"); ol.innerHTML = "";
-  if(!data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
+  if(!data.queue || !data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
   data.queue.forEach((r, i) => {
     const li = document.createElement("li"); if(r.status === "up") li.classList.add("up"); if(mine && r.id === mine.id) li.classList.add("me"); if(r.paid && r.status === "queued") li.classList.add("locked");
     const n = document.createElement("span"); n.className = "n"; n.textContent = r.status === "up" ? "▶" : i + 1;
