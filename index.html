@@ -128,6 +128,9 @@ li.up .av{border-color:var(--green)}
 .posts .fb{background:#1877f2}.posts .ig{background:linear-gradient(45deg,#fa7e1e,#d62976,#962fbf)}.posts .tt{background:#111;border:1px solid #444}
 .posts .addp{background:transparent;border:1px solid var(--line);color:var(--ink)}
 .posts small{font-weight:400;opacity:.85}
+.lifehearts{display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:10px;padding:10px 14px;border-radius:14px;background:rgba(255,111,168,.1);border:1px solid rgba(255,111,168,.45);margin:-2px 0 4px}
+.lifehearts b{grid-row:span 2;font-size:32px;line-height:1;color:#ff8fa6;font-family:var(--slab)}.lifehearts span{font-weight:800}.lifehearts i{font-style:normal;font-size:13px;color:var(--ink-2)}
+.bysong .tot{font-weight:800;color:#ff8fa6}.bysong .cnt{font-size:13px;color:var(--ink-2)}
 .mylk{font-weight:800;color:#ff8fa6;font-size:15px}
 .mine-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .mine-list li{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px;border-top:1px solid var(--line)}
@@ -468,6 +471,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 
   <section class="card" id="mySongs">
     <h2>My songs <span style="text-transform:none;letter-spacing:0">/ Mis canciones</span></h2>
+    <div class="lifehearts" id="lifeHearts" hidden><b id="lhTotal">0</b><span>lifetime ❤️ hearts</span><i id="lhSub"></i></div>
     <div class="tabs" role="tablist">
       <button type="button" role="tab" id="tabFor" aria-selected="true">✨ For you</button>
       <button type="button" role="tab" id="tabAll" aria-selected="false">Sang <span id="cAll"></span></button>
@@ -483,6 +487,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <div class="seg">
         <button class="sm" id="mTop" type="button" aria-pressed="false">Most liked</button>
         <button class="sm" id="mNew" type="button" aria-pressed="true">Newest</button>
+        <button class="sm" id="mSong" type="button" aria-pressed="false">By song</button>
       </div>
       <ol class="mine-list" id="mineList"></ol>
       <p class="empty2" id="allEmpty" hidden>Every song you sing shows up here with the date and time. Tap ♥ to save it to Favorites.</p>
@@ -1195,7 +1200,7 @@ $("showStars").addEventListener("change", async () => {
 $("postClose").addEventListener("click", () => { $("postCard").hidden = true; postItem = null; });
 
 /* ---------- my songs: ever sang (with date+time), favorites (♥), practice list ---------- */
-let mSort = "new", mineSig = "", lists = { fav: [], practice: [] }, mineItems = [], multiOn = false, tab = "All";
+let bySong = [], mSort = "new", mineSig = "", lists = { fav: [], practice: [] }, mineItems = [], multiOn = false, tab = "All";
 const sKey = (song, artist) => (song + "|" + (artist || "")).toLowerCase();
 const isFav = (song, artist) => lists.fav.some(x => sKey(x.song, x.artist) === sKey(song, artist));
 const when = t => new Date(t).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -1254,7 +1259,26 @@ async function loadMine(force){
     if(!force && sig === mineSig) return; mineSig = sig; mineItems = j.items; paintFor();
     $("cAll").textContent = j.items.length ? "(" + j.items.length + ")" : ""; $("allEmpty").hidden = !!j.items.length;
     $("mTop").setAttribute("aria-pressed", mSort === "top"); $("mNew").setAttribute("aria-pressed", mSort === "new");
+    // lifetime hearts: all their songs together, plus best song
+    { const tot = j.items.reduce((a, x) => a + (x.likes || 0), 0), by = new Map();
+      j.items.forEach(x => { const k = sKey(x.song, x.artist), g = by.get(k) || { song: x.song, artist: x.artist, n: 0, likes: 0, best: 0, last: x.at }; g.n++; g.likes += x.likes || 0; g.best = Math.max(g.best, x.likes || 0); if(x.at > g.last) g.last = x.at; by.set(k, g); });
+      bySong = [...by.values()].sort((a, b) => b.likes - a.likes || b.n - a.n || String(b.last).localeCompare(String(a.last)));
+      $("lifeHearts").hidden = !j.items.length; $("lhTotal").textContent = tot;
+      const top = bySong[0]; $("lhSub").textContent = j.items.length + (j.items.length === 1 ? " song sung" : " songs sung") + (top && top.likes ? " · most loved: " + top.song + " (❤️ " + top.likes + ")" : ""); }
+    $("mSong").setAttribute("aria-pressed", mSort === "song");
     const ol = $("mineList"); ol.innerHTML = "";
+    if(mSort === "song"){
+      ol.classList.add("bysong");
+      bySong.forEach(g => {
+        const st = document.createElement("span"); st.className = "mylk"; st.innerHTML = "";
+        const t = document.createElement("span"); t.className = "tot"; t.textContent = "❤️ " + g.likes + " total";
+        const c = document.createElement("span"); c.className = "cnt"; c.textContent = " · sang " + g.n + "×" + (g.n > 1 && g.best ? " · best night ❤️ " + g.best : "");
+        st.append(t, c);
+        ol.appendChild(songRow(g, { date: g.last, left: st }));
+      });
+      return;
+    }
+    ol.classList.remove("bysong");
     j.items.forEach(x => {
       const st = document.createElement("span"); st.className = "mylk"; st.textContent = "❤️ " + (x.likes || 0); st.title = (x.likes || 0) + " likes from the crowd";
       const sh = document.createElement("button"); sh.type = "button"; sh.className = "sm"; sh.textContent = "📣 Post"; sh.title = "Post this song with The Dive picture, your photo, or your video"; sh.setAttribute("aria-label", "Post " + x.song);
@@ -1295,6 +1319,7 @@ function postChips(x){
 }
 $("mTop").addEventListener("click", () => { mSort = "top"; loadMine(true); });
 $("mNew").addEventListener("click", () => { mSort = "new"; loadMine(true); });
+$("mSong").addEventListener("click", () => { mSort = "song"; loadMine(true); });
 /* "For you": suggestions from the song library based on what they've sung, hearted and saved to practice.
    Same artist scores highest, then same style (genre) and language. Only this singer's own songs are used. */
 let popular = [], forSeed = 0;
