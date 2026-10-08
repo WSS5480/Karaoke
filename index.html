@@ -653,6 +653,7 @@ let qrToken = "";
 try{ const at = new URLSearchParams(location.search).get("at"); if(at){ sessionStorage.setItem("dive_qr", at); history.replaceState(null, "", "/"); } qrToken = sessionStorage.getItem("dive_qr") || ""; }catch(e){}
 let geofenceOn = true;
 // GPS first; if it times out or isn't available indoors (common on Android Chrome), fall back to Wi-Fi/cell location
+try{ navigator.permissions && navigator.permissions.query({ name: "geolocation" }).then(p => { window.__geoPerm = p.state; p.onchange = () => window.__geoPerm = p.state; }).catch(() => {}); }catch(e){}
 function getSpot(fresh){
   const ask = opts => new Promise((ok, bad) => navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }), bad, opts));
   if(!navigator.geolocation) return Promise.reject(new Error("none"));
@@ -788,7 +789,7 @@ const LOC_HELP = (() => {
 async function doSignup(name, song, artist, errEl){
   try{
     let spot = {};
-    if(geofenceOn){ try{ spot = await getSpot(); }catch(ge){ spot = {}; } }
+    let geoWhy = ""; if(geofenceOn){ try{ spot = await getSpot(); }catch(ge){ spot = {}; geoWhy = ge ? ((ge.code ? "code " + ge.code + " " : "") + (ge.message || "")) : "unknown"; } }
     const send = () => fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, song, artist, qr: qrToken, app: !!(matchMedia("(display-mode: standalone)").matches || navigator.standalone), ...spot }) });
     let r = await send(), j = await r.json();
     // "too far": phones sometimes hand back an old or rough location. Get a fresh GPS fix and try once more.
@@ -798,12 +799,13 @@ async function doSignup(name, song, artist, errEl){
       errEl.textContent = "";
     }
     if(!r.ok){
+      if(j.error === "far") window.diveReportErr && window.diveReportErr("signup far: " + j.miles + " mi, acc " + j.acc);
       if(j.error === "far") errEl.textContent = j.acc > 300
         ? "📍 Your phone is only giving a rough location (about " + j.miles + " miles off). " + LOC_HELP.precise + " Or ask the DJ to add you."
         : "You need to be at The Dive to sign up. Your phone says you're about " + j.miles + " miles away. Inside the bar? Step near the door or a window and try again, or ask the DJ to add you.";
       else if(j.error === "signin"){ errEl.textContent = j.message; loadMe(); }
       else if(j.error === "terms"){ termsAccepted = false; openTerms(); }
-      else if(j.error === "location") errEl.textContent = "Allow location so we can see you're at The Dive. " + LOC_HELP.allow + " Or ask the DJ to add you.";
+      else if(j.error === "location") { window.diveReportErr && window.diveReportErr("signup location: " + (geoWhy || "no position") + " | perm=" + (window.__geoPerm || "?")); errEl.textContent = "(" + (geoWhy || "no position") + ") "; errEl.textContent += "Allow location so we can see you're at The Dive. " + LOC_HELP.allow + " Or ask the DJ to add you."; }
       else errEl.textContent = j.message || j.error || "Couldn't add you. Try again.";
       return false;
     }
