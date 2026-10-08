@@ -265,6 +265,8 @@ textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var
 .lyrapps button small{display:block;font-weight:400;font-size:12px;color:var(--ink-2)}
 .lyrapps button.on{border-color:var(--green)}
 li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
+.pushbox{display:flex;flex-direction:column;gap:6px}.pushbox .go{background:#5fd36e;color:#041206}.pushbox .go .bsub{display:block;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;margin-top:2px}
+.pushbox .hint{margin:0;font-size:15px;line-height:1.4;color:var(--ink);background:rgba(95,211,110,.1);border:1px solid #39b54a;border-radius:12px;padding:10px}.pushbox .ok{margin:0;color:var(--green-hi);font-weight:700}
 </style>
 </head>
 <body class="booting">
@@ -377,6 +379,11 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <button class="go" id="bumpOpen" type="button">🔒 Lock your spot<small class="bsub">Move up · $<span id="bumpPrice">1</span> a spot · nobody can bump you</small></button>
       <p class="bumpmsg" id="bumpMsg" role="status"></p>
       <button class="bigbtn" id="bumpCancel" type="button" hidden>Didn't pay? Cancel move-up request</button>
+    </div>
+    <div class="pushbox" id="pushBox" hidden>
+      <button class="go" id="pushOn" type="button">🔔 Buzz my phone when I'm up<small class="bsub">Sound + vibrate, even with the app closed</small></button>
+      <p class="hint" id="pushHow" hidden></p>
+      <p class="ok" id="pushOk" hidden>🔔 Alerts on: we'll buzz you when you're next and when you're up.</p>
     </div>
     <p>Keep this page open. It updates on its own.</p>
     <button class="ghost" id="editSong" type="button">Change my song</button>
@@ -1589,6 +1596,40 @@ $("logout").addEventListener("click", async () => { await post("/api/auth/logout
 
 /* ---------- install as an app ---------- */
 if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+/* ---------- phone alerts (push): sound + vibrate when you're next / up, even with the app closed ---------- */
+(function(){
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = !!(matchMedia("(display-mode: standalone)").matches || navigator.standalone);
+  const can = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  async function isOn(){ try{ if(!can || Notification.permission !== "granted") return false; const reg = await navigator.serviceWorker.ready; return !!(await reg.pushManager.getSubscription()); }catch(e){ return false; } }
+  async function paint(){
+    const box = $("pushBox"); if(!box) return;
+    if(!can && !ios){ box.hidden = true; return; }
+    box.hidden = false;
+    if(await isOn()){ $("pushOn").hidden = true; $("pushHow").hidden = true; $("pushOk").hidden = false; return; }
+    $("pushOk").hidden = true;
+    if(ios && (!standalone || !can)){ $("pushOn").hidden = true; $("pushHow").hidden = false; $("pushHow").innerHTML = "🔔 <b>Want your iPhone to buzz when you're up?</b> Tap the Share button <b>⬆︎</b> → <b>Add to Home Screen</b>, open <b>The Dive</b> from your home screen, then tap “Buzz my phone”."; return; }
+    if(Notification.permission === "denied"){ $("pushOn").hidden = true; $("pushHow").hidden = false; $("pushHow").textContent = "🔕 Alerts are blocked for this site. Turn on notifications for it in your phone's settings."; return; }
+    $("pushOn").hidden = false; $("pushHow").hidden = true;
+  }
+  const b64 = s => { const p = "=".repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+  async function turnOn(){
+    const btn = $("pushOn"); btn.disabled = true;
+    try{
+      const perm = await Notification.requestPermission();
+      if(perm !== "granted") throw new Error("blocked");
+      const reg = await navigator.serviceWorker.ready, key = (await (await fetch("/api/push/key")).json()).key;
+      let sub = await reg.pushManager.getSubscription();
+      if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
+      const r = await fetch("/api/push/sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON() }) });
+      if(!r.ok) throw new Error("save");
+    }catch(e){ $("pushHow").hidden = false; $("pushHow").textContent = e.message === "blocked" ? "🔕 You said no to alerts. Turn on notifications for this site in your phone's settings to get buzzed." : "Couldn't turn on alerts. Try again."; }
+    btn.disabled = false; paint();
+  }
+  if($("pushOn")){ $("pushOn").addEventListener("click", turnOn); paint(); }
+  window.divePushPaint = paint;
+  // already on: re-send the subscription so it's tied to this phone's spot on the list
+  isOn().then(async on => { if(!on) return; try{ const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if(sub) fetch("/api/push/sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON() }) }); }catch(e){} });
+})();
 (function(){
   const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   let hidden = false; try{ hidden = sessionStorage.getItem("dive_install_x") === "1"; }catch(e){}

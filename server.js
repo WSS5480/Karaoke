@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
+const webpush = require("web-push");
 const { AsyncLocalStorage } = require("async_hooks");
 /* ---------- multi-bar: every request runs "inside" one bar or DJ ----------
    The Dive on 495 is the original and lives at the root URLs (/, /kj, ...).
@@ -957,6 +958,46 @@ async function allBars(fn) {
   for (const t of list) { if (!t.slug || t.slug === "dive") continue; await ctx.run({ t: t.slug, tenant: t, base: "/b/" + t.slug }, () => fn().catch(e => console.error(t.slug + ":", e.message))); }
 }
 setInterval(() => { allBars(async () => { await djIdleCheck(); await nightlyClose(); }).catch(() => {}); }, 5 * 60000);
+/* ---------- phone alerts (Web Push): "you're next" and "you're up" buzz + sound even when the app is closed.
+   iPhone: works once the app is added to the Home Screen (iOS 16.4+). Keys are made once and kept in the database. ---------- */
+let vapidPub = "";
+async function vapidReady() {
+  if (vapidPub) return vapidPub;
+  await ctx.run({ t: "dive", tenant: DIVE, base: "" }, async () => {
+    let k = null; try { k = JSON.parse((await db.getSetting("vapid_keys")) || "null"); } catch (e) {}
+    if (!k || !k.publicKey) { k = webpush.generateVAPIDKeys(); await db.setSetting("vapid_keys", JSON.stringify(k)); }
+    webpush.setVapidDetails("https://the-dive-karaoke.onrender.com", k.publicKey, k.privateKey); vapidPub = k.publicKey;
+  });
+  return vapidPub;
+}
+app.get("/api/push/key", wrap(async (req, res) => { res.json({ key: await vapidReady() }); }));
+app.post("/api/push/sub", wrap(async (req, res) => {
+  const sub = req.body && req.body.sub;
+  if (!sub || typeof sub.endpoint !== "string" || !/^https:\/\//.test(sub.endpoint) || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) return res.status(400).json({ error: "Alerts didn't turn on. Try again." });
+  const clean = { endpoint: sub.endpoint.slice(0, 600), keys: { p256dh: String(sub.keys.p256dh).slice(0, 200), auth: String(sub.keys.auth).slice(0, 100) } };
+  await db.setSetting("push:" + owner(req, res), JSON.stringify(clean)); res.json({ ok: true });
+}));
+app.post("/api/push/off", wrap(async (req, res) => { await db.setSetting("push:" + owner(req, res), ""); res.json({ ok: true }); }));
+const pushSentMem = new Map();
+async function pushTo(row, stage, title, body) {
+  if (!row || !row.device || String(row.device).startsWith("kj-")) return;
+  const key = T() + ":" + row.id + ":" + stage + (stage === "nosong" ? ":" + row.song : "");
+  if (pushSentMem.has(key)) return; pushSentMem.set(key, Date.now());
+  if (pushSentMem.size > 3000) { const cut = Date.now() - 12 * 3600e3; for (const [k, t] of pushSentMem) if (t < cut) pushSentMem.delete(k); }
+  let sub = null; try { sub = JSON.parse((await db.getSetting("push:" + row.device)) || "null"); } catch (e) {}
+  if (!sub) return;
+  await vapidReady();
+  try { await webpush.sendNotification(sub, JSON.stringify({ title, body, tag: "dive-" + stage, url: (BASE() || "") + "/" }), { TTL: 600, urgency: "high" }); }
+  catch (e) { if (e && (e.statusCode === 404 || e.statusCode === 410)) await db.setSetting("push:" + row.device, ""); }
+}
+async function pushTick() {
+  const list = await db.active(), up = list.find(r => r.status === "up"), q = list.filter(r => r.status === "queued"), song = r => "“" + r.song + "”" + (r.artist ? " – " + r.artist : "");
+  if (up) await pushTo(up, "up", "🎤 You're up! / ¡Te toca!", "Head to the stage: " + song(up));
+  if (q[0] && (up || q.length > 1)) await pushTo(q[0], "deck", "⏭️ You're next! / ¡Sigues tú!", "Get ready near the stage: " + song(q[0]));
+  const ns = await noSongs();
+  if (ns.size) { const ask = await idSet("repeat_ask"); for (const r of q) if (ns.has(r.id)) await pushTo(r, "nosong", ask.has(r.id) ? "🔁 Pick a different song" : "🎵 Pick another song", (ask.has(r.id) ? "That song was already sung tonight." : "The DJ doesn't have " + song(r) + ".") + " You keep your spot. Tap to change it."); }
+}
+setInterval(() => { allBars(pushTick).catch(() => {}); }, 15000);
 setTimeout(() => { allBars(async () => { await djIdleCheck(); await nightlyClose(); }).catch(() => {}); }, 20000);
 async function endDj(name, why, how, at) {
   const ds = await djSession();
