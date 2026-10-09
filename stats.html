@@ -212,7 +212,7 @@ const dshort = d => d ? new Date(d).toLocaleDateString([], { month: "short", day
 async function loadSingers(){
   try{ const r = await fetch("/api/kj/singers", { headers: { "x-kj-pin": pin }, cache: "no-store" }); if(!r.ok) return; singers = (await r.json()).singers || []; }catch(e){ return; }
   const sel = $("sPick"), cur = sel.value; sel.length = 1;
-  singers.forEach(x => { const o = document.createElement("option"); o.value = x.key; o.textContent = x.name + " — " + x.songs + (x.songs === 1 ? " song" : " songs") + (x.likes ? " · ❤️ " + x.likes : ""); sel.appendChild(o); });
+  singers.forEach(x => { const o = document.createElement("option"); o.value = x.key; o.textContent = x.name + (x.dj ? " (added by DJ)" : "") + " — " + x.songs + (x.songs === 1 ? " song" : " songs") + (x.likes ? " · ❤️ " + x.likes : ""); sel.appendChild(o); });
   sel.value = cur;
 }
 function suggest(){
@@ -220,17 +220,17 @@ function suggest(){
   if(!q){ box.hidden = true; return; }
   const hits = singers.filter(x => x.name.toLowerCase().includes(q) || (x.aka || []).some(a => a.toLowerCase().includes(q))).sort((a, b) => b.songs - a.songs).slice(0, 12);
   if(!hits.length){ const n = document.createElement("button"); n.type = "button"; n.disabled = true; n.textContent = "No singer matches “" + $("sSearch").value.trim() + "”"; box.appendChild(n); box.hidden = false; return; }
-  hits.forEach(x => { const b = document.createElement("button"); b.type = "button"; b.textContent = x.name; const sm = document.createElement("small"); sm.textContent = x.songs + (x.songs === 1 ? " song" : " songs") + (x.likes ? " · ❤️ " + x.likes : "") + " · last " + dshort(x.last) + (x.aka && x.aka.length ? " · also " + x.aka.join(", ") : ""); b.appendChild(sm);
+  hits.forEach(x => { const b = document.createElement("button"); b.type = "button"; b.textContent = x.name + (x.dj ? " (added by DJ)" : ""); const sm = document.createElement("small"); sm.textContent = x.songs + (x.songs === 1 ? " song" : " songs") + (x.likes ? " · ❤️ " + x.likes : "") + " · last " + dshort(x.last) + (x.aka && x.aka.length ? " · also " + x.aka.join(", ") : ""); b.appendChild(sm);
     b.addEventListener("click", () => { $("sSearch").value = x.name; box.hidden = true; $("sPick").value = x.key; showSinger(x.key); }); box.appendChild(b); });
   box.hidden = false;
 }
 async function showSinger(key){
   if(!key){ $("sOut").hidden = true; return; }
   let d; try{ const r = await fetch("/api/kj/singer-stats/" + encodeURIComponent(key), { headers: { "x-kj-pin": pin }, cache: "no-store" }); d = await r.json(); if(!r.ok) throw new Error(d.error); }catch(e){ return; }
-  $("sOut").hidden = false; $("sName").textContent = d.name;
+  $("sOut").hidden = false; $("sName").textContent = d.name + (d.dj ? " (added by DJ)" : "");
   $("sMeta").textContent = "First sang " + dshort(d.first) + " · last " + dshort(d.last) + (d.aka && d.aka.length ? " · also signed up as " + d.aka.join(", ") : "");
   const tiles = [[d.songs, "total songs sung"], [d.nights, d.nights === 1 ? "night" : "nights"], ["❤️ " + d.likes, "hearts from the crowd"], [d.list.length, "different songs"]];
-  if(d.money){ tiles.push([usd2(d.money.total), "total tipped (all)"], [usd2(d.money.tipped), d.money.tipCount + (d.money.tipCount === 1 ? " tip to DJs" : " tips to DJs")], [usd2(d.money.moveups), d.money.moveCount + (d.money.moveCount === 1 ? " lock-your-spot" : " lock-your-spots")]); }
+  if(d.money && !d.dj){ tiles.push([usd2(d.money.total), "total tipped (all)"], [usd2(d.money.tipped), d.money.tipCount + (d.money.tipCount === 1 ? " tip to DJs" : " tips to DJs")], [usd2(d.money.moveups), d.money.moveCount + (d.money.moveCount === 1 ? " lock-your-spot" : " lock-your-spots")]); }
   $("sTiles").innerHTML = ""; tiles.forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("sTiles").appendChild(t); });
   const ol = $("sSongs"); ol.innerHTML = "";
   d.list.forEach(x => { const li = document.createElement("li"); const t = document.createElement("div"); const b = document.createElement("b"); b.textContent = x.song; const sm = document.createElement("small"); sm.textContent = (x.artist ? x.artist + " · " : "") + "last " + dshort(x.last); t.append(b, sm);
