@@ -96,6 +96,42 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <span class="live"><i></i>Live</span>
     </header>
 
+    <section class="card">
+      <h2>Now singing <span id="djLine"></span></h2>
+      <div class="now" id="now"></div>
+    </section>
+    <section class="card">
+      <h2>Up next <span id="waitCount"></span></h2>
+      <ol id="queue"></ol>
+    </section>
+    <section class="card">
+      <h2>Sung tonight <span id="doneCount"></span></h2>
+      <ol id="done"></ol>
+    </section>
+    <section class="card">
+      <h2>Tonight's crowd</h2>
+      <div class="crowd" id="crowd"></div>
+    </section>
+    <section class="card">
+      <h2>Night status</h2>
+      <div class="chips" id="status"></div>
+    </section>
+    <section class="card">
+      <h2>Tonight's tips <span id="tipState"></span></h2>
+      <div class="tiles" id="tiles"></div>
+      <div class="chips" id="byDj"></div>
+      <ol id="tipList"></ol>
+      <p class="sub" style="margin:0">What guests tapped to send. Confirm in the DJ's payment apps. Past nights: <a href="/stats">Analytics</a>.</p>
+    </section>
+    <section class="card">
+      <h2>Posted to social media <span id="postCount"></span></h2>
+      <div class="tiles" id="postTiles" style="grid-template-columns:repeat(3,1fr)"></div>
+      <ol id="postList"></ol>
+      <p class="sub" style="margin:0">Counts when a singer taps a Facebook, Instagram or TikTok icon and finishes sharing.</p>
+    </section>
+
+    <h2 style="margin:8px 0 0;font-size:15px;color:var(--ink-2)">Owner tools</h2>
+
     <button type="button" class="kill off" id="djCtl" style="font-size:18px">🎧 Open DJ controls (add, move, remove singers)</button>
     <button type="button" class="kill off" id="statsBtn" style="font-size:18px;background:#ffc93c;color:#111;border-color:#ffc93c">📊 Analytics &amp; singer lookup</button>
 
@@ -105,13 +141,6 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <p class="sub" style="margin:0" id="moneyHelp">Stops every tip button and new paid move-ups for every DJ until you turn them back on. Spots people already paid for stay locked.</p>
     </section>
 
-    <section class="card">
-      <h2>Tonight's tips <span id="tipState"></span></h2>
-      <div class="tiles" id="tiles"></div>
-      <div class="chips" id="byDj"></div>
-      <ol id="tipList"></ol>
-      <p class="sub" style="margin:0">What guests tapped to send. Confirm in the DJ's payment apps. Past nights: <a href="/stats">Analytics</a>.</p>
-    </section>
 
     <section class="card">
       <h2>🔒 Lock your spot (paid move-ups) <span id="bumpState"></span></h2>
@@ -145,37 +174,11 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <p class="sub" style="margin:0">Each DJ session from sign-in to close: songs sung, tips and paid move-ups tapped to that DJ, and how it closed. A session with no activity for 5 hours closes on its own.</p>
     </section>
 
-    <section class="card">
-      <h2>Tonight's crowd</h2>
-      <div class="crowd" id="crowd"></div>
-    </section>
 
-    <section class="card">
-      <h2>Posted to social media <span id="postCount"></span></h2>
-      <div class="tiles" id="postTiles" style="grid-template-columns:repeat(3,1fr)"></div>
-      <ol id="postList"></ol>
-      <p class="sub" style="margin:0">Counts when a singer taps a Facebook, Instagram or TikTok icon and finishes sharing.</p>
-    </section>
 
-    <section class="card">
-      <h2>Now singing <span id="djLine"></span></h2>
-      <div class="now" id="now"></div>
-    </section>
 
-    <section class="card">
-      <h2>Up next <span id="waitCount"></span></h2>
-      <ol id="queue"></ol>
-    </section>
 
-    <section class="card">
-      <h2>Sung tonight <span id="doneCount"></span></h2>
-      <ol id="done"></ol>
-    </section>
 
-    <section class="card">
-      <h2>Night status</h2>
-      <div class="chips" id="status"></div>
-    </section>
   </div>
 </main>
 <script>
