@@ -436,7 +436,10 @@ body.posting{overflow:hidden}
           <button class="net tt" data-net="TikTok" type="button" disabled aria-label="Post to TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M16.6 3c.3 2.2 1.6 3.6 3.9 3.8v2.6c-1.4.1-2.6-.3-3.9-1.1v5.6c0 3.5-2.5 5.6-5.4 5.6-3 0-5.3-2.3-5.1-5.4.2-2.8 2.6-4.8 5.6-4.5v2.7c-1.4-.3-2.9.4-3 1.9-.1 1.4.9 2.5 2.4 2.5 1.6 0 2.6-1 2.6-2.8V3z"/></svg><span>TikTok</span></button>
         </div>
         <p class="hint" id="netStatus" style="color:var(--ink-2);margin:0">Getting it ready…</p>
-        <label class="chk" for="showStars" style="justify-content:flex-start"><input type="checkbox" id="showStars" checked> Show my likes</label>
+        <label for="likeMode" style="display:flex;flex-direction:column;gap:4px;font-weight:700">❤️ Likes on my post
+          <select id="likeMode" style="font:inherit;font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)">
+            <option value="night">Tonight's likes</option><option value="life">All-time likes for this song</option><option value="none">Don't show likes</option>
+          </select></label>
         <label class="chk" for="tagDive" style="justify-content:flex-start"><input type="checkbox" id="tagDive" checked> Tag The Dive</label>
         <label class="chk" for="followDive" id="followRow" style="justify-content:flex-start"><input type="checkbox" id="followDive" checked> Follow The Dive</label>
         <button class="linkbtn" id="ownPhoto" type="button" style="align-self:flex-start;padding-left:0">📷 Use my own photo</button>
@@ -971,7 +974,7 @@ function wrapText(c, text, x, y, maxW, lh){
 }
 const picCache = new Map();
 async function makeImage(item){
-  if(picCache.has(item.id + ":" + item.likesShown)) return picCache.get(item.id + ":" + item.likesShown);
+  if(picCache.has(item.id + ":" + item.likesShown + (item.likesWord || ""))) return picCache.get(item.id + ":" + item.likesShown + (item.likesWord || ""));
   const W = 1080, H = 1920, cv = document.createElement("canvas"); cv.width = W; cv.height = H; const c = cv.getContext("2d");
   c.fillStyle = "#0a0c0a"; c.fillRect(0, 0, W, H);
   const g = c.createRadialGradient(W/2, 560, 80, W/2, 560, 520); g.addColorStop(0, "rgba(57,181,74,.55)"); g.addColorStop(1, "rgba(57,181,74,0)");
@@ -983,14 +986,14 @@ async function makeImage(item){
   const n = wrapText(c, item.song, W/2, 1120, W - 140, 104);
   let y = 1120 + n * 104;
   if(item.artist){ c.fillStyle = "#9fae9f"; c.font = "500 50px Outfit, system-ui, sans-serif"; c.fillText(item.artist, W/2, y); y += 90; }
-  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = "72px system-ui, sans-serif"; c.fillText("❤️ " + item.likesShown + (item.likesShown === 1 ? " like" : " likes"), W/2, y + 60); }
+  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = "72px system-ui, sans-serif"; c.fillText("❤️ " + item.likesShown + (item.likesWord || (item.likesShown === 1 ? " like" : " likes")), W/2, y + 60); }
   c.fillStyle = "#5fd36e"; c.font = "800 56px 'Roboto Slab', Georgia, serif"; c.fillText(item.name, W/2, y + 190);
   c.fillStyle = "#eef3ee"; c.font = "500 44px Outfit, system-ui, sans-serif"; c.fillText("Karaoke at The Dive on 495 · McAllen, TX", W/2, H - 170);
   c.fillStyle = "#5fd36e"; c.font = "600 40px Outfit, system-ui, sans-serif"; c.fillText("#TheDiveOn495  #Karaoke  #McAllen", W/2, H - 105);
   const blob = await new Promise(r => cv.toBlob(r, "image/png"));
   const file = new File([blob], "the-dive-karaoke.png", { type: "image/png" });
   const out = { blob, file, url: URL.createObjectURL(blob) };
-  picCache.set(item.id + ":" + item.likesShown, out);
+  picCache.set(item.id + ":" + item.likesShown + (item.likesWord || ""), out);
   return out;
 }
 // card with the customer's own photo on top, The Dive badge, then song, stars and name
@@ -1016,7 +1019,7 @@ async function makePhotoImage(item, file){
   const n = wrapText(c, item.song, W/2, PH + 130, W - 140, 96);
   let y = PH + 130 + n * 96;
   if(item.artist){ c.fillStyle = "#9fae9f"; c.font = "500 46px Outfit, system-ui, sans-serif"; c.fillText(item.artist, W/2, y); y += 80; }
-  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = "64px system-ui, sans-serif"; c.fillText("❤️ " + item.likesShown + (item.likesShown === 1 ? " like" : " likes"), W/2, y + 50); }
+  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = "64px system-ui, sans-serif"; c.fillText("❤️ " + item.likesShown + (item.likesWord || (item.likesShown === 1 ? " like" : " likes")), W/2, y + 50); }
   c.fillStyle = "#5fd36e"; c.font = "800 52px 'Roboto Slab', Georgia, serif"; c.fillText(item.name, W/2, Math.min(y + 160, H - 190));
   c.fillStyle = "#eef3ee"; c.font = "500 40px Outfit, system-ui, sans-serif"; c.fillText("Karaoke at The Dive on 495 · McAllen, TX", W/2, H - 110);
   c.fillStyle = "#5fd36e"; c.font = "600 36px Outfit, system-ui, sans-serif"; c.fillText("#TheDiveOn495  #Karaoke  #McAllen", W/2, H - 55);
@@ -1025,14 +1028,17 @@ async function makePhotoImage(item, file){
 }
 let postItem = null, postPic = null, vidFile = null;
 let postMode = "dive", photoFile = null;
-const shown = item => ({ ...item, likesShown: $("showStars").checked ? (item.likes || 0) : 0 });
+const songLife = item => { const k = sKey(item.song, item.artist); let t = 0, found = false; (mineItems || []).forEach(x => { if(sKey(x.song, x.artist) === k){ t += x.likes || 0; if(x.id === item.id) found = true; } }); return t + (found ? 0 : (item.likes || 0)); };
+const shown = item => { const m = $("likeMode").value; const n = m === "night" ? (item.likes || 0) : m === "life" ? songLife(item) : 0;
+  const when = item.at && Date.now() - Date.parse(item.at) > 12 * 3600e3 ? "that night" : "tonight";
+  return { ...item, likesShown: n, likesWord: m === "life" ? (n === 1 ? " like all-time" : " likes all-time") : (n === 1 ? " like " : " likes ") + when }; };
 // make the picture first; the Post button only turns on when it's ready, so the tap opens the share menu instantly
 async function openPost(item){
   postItem = item; postPic = null; $("postLinkBox").hidden = true;
   $("postCard").hidden = false; $("postCard").classList.add("sheet"); $("postScrim").hidden = false; document.body.classList.add("posting"); $("postCard").scrollTop = 0; $("shareMsg").textContent = "";
   $("postSong").textContent = item.song + (item.artist ? " – " + item.artist : "");
   $("postBtn").disabled = true; $("postBtn").textContent = "Getting it ready…"; $("postPreview").hidden = true;
-  $("showStars").checked = !!item.likes; $("showStars").disabled = !item.likes; postMode = "dive"; photoFile = null;
+  { const life = songLife(item), lm = $("likeMode"); lm.options[0].textContent = (item.at && Date.now() - Date.parse(item.at) > 12 * 3600e3 ? "That night's likes" : "Tonight's likes") + " (❤️ " + (item.likes || 0) + ")"; lm.options[1].textContent = "All-time likes for this song (❤️ " + life + ")"; lm.value = item.likes ? "night" : life ? "life" : "none"; } postMode = "dive"; photoFile = null;
   $("ownPhoto").textContent = "📷 Use my own photo"; $("divePhoto").hidden = true; $("postVidPreview").hidden = true; $("vidWork").hidden = true; vidFile = null;
   const pic = await makeImage(shown(item));
   if(postItem !== item) return;
@@ -1097,7 +1103,7 @@ netBtns.forEach(btn => btn.addEventListener("click", () => {
   const net = btn.dataset.net;
   if(navigator.clipboard) navigator.clipboard.writeText(caption(postItem, net)).catch(() => {});
   // Facebook with The Dive picture: open Facebook's post box with the song card, they just tap Post
-  if(net === "Facebook" && postMode === "dive" && postItem.public && postItem.id && ($("showStars").checked || !postItem.likes)){
+  if(net === "Facebook" && postMode === "dive" && postItem.public && postItem.id && ($("likeMode").value !== "life")){
     const u = location.origin + "/s/" + postItem.id;
     window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(u), "_blank");
     markPosted(net); offerFollow(net); $("shareMsg").textContent = "✓ Facebook opened. Tap Post to finish.";
@@ -1152,7 +1158,7 @@ async function makeOverlay(item, W, H){
   c.fillStyle = "#fff"; c.font = `800 ${54 * k}px 'Roboto Slab', Georgia, serif`;
   const n = wrapText(c, item.song, W/2, y + 62 * k, W - 80 * k, 62 * k); y += 62 * k + n * 62 * k;
   if(item.artist){ c.fillStyle = "#cfd8cf"; c.font = `500 ${30 * k}px Outfit, system-ui, sans-serif`; c.fillText(item.artist, W/2, y); y += 50 * k; }
-  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = `${40 * k}px system-ui, sans-serif`; c.fillText("❤️ " + item.likesShown + (item.likesShown === 1 ? " like" : " likes"), W/2, y + 20 * k); }
+  if(item.likesShown){c.fillStyle = "#ff8fa6"; c.font = `${40 * k}px system-ui, sans-serif`; c.fillText("❤️ " + item.likesShown + (item.likesWord || (item.likesShown === 1 ? " like" : " likes")), W/2, y + 20 * k); }
   c.fillStyle = "#5fd36e"; c.font = `800 ${34 * k}px 'Roboto Slab', Georgia, serif`; c.fillText(item.name + "  ·  The Dive on 495", W/2, Math.min(y + 80 * k, H - 30 * k));
   return o;
 }
@@ -1213,7 +1219,7 @@ $("vidStart").addEventListener("click", async () => {
     showVidPreview(postPic.url);
   }
 });
-$("showStars").addEventListener("change", async () => {
+$("likeMode").addEventListener("change", async () => {
   if(!postItem) return; const item = postItem;
   $("postBtn").disabled = true;
   if(postMode === "video"){ $("vidWork").hidden = false; $("vidStart").hidden = false; $("vidStatus").textContent = "Tap Make my video to update it."; $("postVidPreview").hidden = true; return; }
@@ -1309,7 +1315,7 @@ async function loadMine(force){
       const st = document.createElement("span"); st.className = "mylk"; st.textContent = "❤️ " + (x.likes || 0); st.title = (x.likes || 0) + " likes from the crowd";
       const sh = document.createElement("button"); sh.type = "button"; sh.className = "sm"; sh.textContent = "📣 Post"; sh.title = "Post this song with The Dive picture, your photo, or your video"; sh.setAttribute("aria-label", "Post " + x.song);
       sh.addEventListener("click", () => {
-        openPost({ id: x.id, name: x.name, song: x.song, artist: x.artist, likes: x.likes, public: x.public });
+        openPost({ id: x.id, name: x.name, song: x.song, artist: x.artist, likes: x.likes, public: x.public, at: x.at });
       });
       const li = songRow(x, { date: x.at, left: st, extra: [sh] });
       if((x.posted && x.posted.length) || (x.links && Object.keys(x.links).length)) li.appendChild(postChips(x));
