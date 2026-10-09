@@ -56,6 +56,7 @@ li:first-child{border-top:0}
 li .n{font-family:var(--slab);font-weight:800;color:var(--ink-2);width:26px;text-align:right;font-variant-numeric:tabular-nums;flex:none}
 li .t{min-width:0;flex:1}
 li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
+#queue li .t .eta{display:block;font-size:13px;color:#9fb3a2;margin-top:2px}
 #queue li .t b{font-size:20px;font-weight:700;color:#ffc93c;line-height:1.2}
 li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
 li.up{background:rgba(57,181,74,.14)}
@@ -942,7 +943,13 @@ function render(data){
     const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
     const av = document.createElement("img"); av.className = "av"; av.alt = ""; av.loading = "lazy";
     av.src = r.photo ? "/api/photo/" + r.id + "?v=" + r.photo : "/logo.png"; av.onerror = () => { av.onerror = null; av.src = "/logo.png"; };
-    t.append(b, s); li.append(n, av, t);
+    t.append(b, s);
+    if(r.status === "queued" && mine && r.id === mine.id && mine.eta && mine.eta.at){ const e = document.createElement("small"); e.className = "eta"; e.textContent = "⏱ Your time: ~" + new Date(mine.eta.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); t.appendChild(e); }
+    li.append(n, av, t);
+    // heart the singer on stage right from the list (not your own song)
+    if(r.status === "up" && !(mine && r.id === mine.id)){ const sg = (data.sung || []).find(x => x.id === r.id) || { likes: r.likes || 0, liked: false };
+      const hb = document.createElement("button"); hb.type = "button"; hb.className = "likebtn" + (sg.liked ? " on" : ""); hb.textContent = "❤️ " + (sg.likes || 0);
+      hb.setAttribute("aria-label", (sg.liked ? "Unlike " : "Like ") + r.name); hb.addEventListener("click", () => sendLike(r.id, !sg.liked)); li.appendChild(hb); }
     if(r.status === "up" || (mine && r.id === mine.id)){ const lk = document.createElement("a"); lk.className = "lyr"; setLyr(lk, r); lk.target = "_blank"; lk.rel = "noopener"; lk.textContent = "🔎 Lyrics"; lk.setAttribute("aria-label", "Search lyrics for " + r.song); li.appendChild(lk); }
     ol.appendChild(li);
   });
