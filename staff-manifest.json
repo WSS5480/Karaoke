@@ -1,7 +1,7 @@
 {
  "id": "/owner",
- "name": "The Dive Owner",
- "short_name": "Dive Owner",
+ "name": "App Owner",
+ "short_name": "App Owner",
  "start_url": "/owner",
  "scope": "/owner",
  "display": "standalone",
