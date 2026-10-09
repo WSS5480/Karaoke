@@ -104,6 +104,7 @@ body.shared #installBar,body.shared .ghd p,body.shared .gbtns,body.shared .ownon
     <div class="brand"><img src="/logo.png" alt="The Dive on 495"><h1 id="pageTitle">Karaoke Owner List</h1></div>
     <button class="copyall" id="copyAll" type="button">Copy whole list</button>
     <button class="lockbtn" id="relock" type="button">🔒 Lock this list</button>
+    <a class="copyall" id="statsBtn" href="/stats" style="background:#ffc93c;color:#111;text-decoration:none;text-align:center;font-weight:800">📊 Analytics &amp; singer lookup</a>
     <p class="msg" id="msg" role="status"></p>
     <p id="intro" style="margin:0;font-size:14px;color:var(--ink-2)">Each group has its own send button, so you only send people what they need. Every link is its own app: open it and tap <b>Add</b> to put it on the home screen.</p>
   </header>
@@ -201,6 +202,7 @@ const $ = id => document.getElementById(id);
 
 /* ---------- owner only: the list PIN opens it; remembered on the owner's phone ---------- */
 const OWN_KEY = "dive_staff_owner_pin";
+document.addEventListener("click", e => { if(e.target.closest("#statsBtn")){ try{ const p = localStorage.getItem(OWN_KEY) || sessionStorage.getItem("dive_staff_pin") || ""; if(p) sessionStorage.setItem("kj_pin", p); }catch(x){} } });
 async function isOwner(p){
   try{ const r = await fetch("/api/staff-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: p }), cache: "no-store" }); if(r.status === 429){ $("lockErr").textContent = "Too many tries. Wait 10 minutes."; return false; } return r.ok; }catch(e){ return false; }
 }

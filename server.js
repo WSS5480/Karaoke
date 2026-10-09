@@ -844,7 +844,7 @@ async function kjAuth(req, res, next) {
     const t = Date.now(), l = (pinTries.get(req.ip) || []).filter(x => t - x < 600000);
     if (l.length >= 20) return res.status(429).json({ error: "Too many wrong PINs. Wait 10 minutes." });
     // Analytics also opens with the owner list PIN (app owner) or the Bar Owner PIN: view only, never host controls
-    if (req.method === "GET" && /^\/api\/kj\/stats(\?|$)/.test(req.originalUrl)) {
+    if (req.method === "GET" && /^\/api\/kj\/(stats|singers|singer-stats)(\?|\/|$)/.test(req.originalUrl)) {
       const pv = String(req.headers["x-kj-pin"] || "");
       if (await pinIs("list", pv)) { req.kj = { name: "App owner", role: "owner", owner: true, admin: false }; return next(); }
       if (await pinIs("bar", pv)) { req.kj = { name: "Bar owner", role: "owner", owner: true, admin: false }; return next(); }
@@ -1178,6 +1178,35 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10),
     tips: (req.kj.owner || req.kj.manager) ? await tipStats(days) : req.kj.role === "dj" ? await tipStats(days, req.kj.name) : null
   });
+}));
+/* ---------- singer lookup (analytics): every singer ever, searchable; one singer's totals, songs, hearts and tips ---------- */
+const singerKey = dev => crypto.createHash("sha1").update(String(dev || "")).digest("hex").slice(0, 12);
+async function singerBook() {
+  const rows = await db.sungSince(0), map = new Map();
+  for (const r of rows) {
+    if (!r.device) continue;
+    const k = singerKey(r.device), g = map.get(k) || { key: k, device: r.device, name: r.name, names: new Set(), songs: 0, likes: 0, nights: new Set(), first: r.done_at, last: r.done_at, list: new Map() };
+    g.name = r.name; g.names.add(r.name); g.songs++; g.likes += r.likes || 0; g.nights.add(nightOf(r.done_at)); g.last = r.done_at;
+    const sk = String(r.song).toLowerCase() + "|" + String(r.artist || "").toLowerCase(), so = g.list.get(sk) || { song: r.song, artist: r.artist || "", count: 0, likes: 0, last: r.done_at };
+    so.count++; so.likes += r.likes || 0; so.last = r.done_at; g.list.set(sk, so);
+    map.set(k, g);
+  }
+  return map;
+}
+app.get("/api/kj/singers", wrap(async (req, res) => {
+  const map = await singerBook();
+  res.json({ singers: [...map.values()].map(g => ({ key: g.key, name: g.name, aka: [...g.names].filter(n => n !== g.name).slice(0, 4), songs: g.songs, likes: g.likes, last: g.last })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) });
+}));
+app.get("/api/kj/singer-stats/:key", wrap(async (req, res) => {
+  const g = (await singerBook()).get(String(req.params.key));
+  if (!g) return res.status(404).json({ error: "Singer not found." });
+  const seeMoney = !!(req.kj.owner || req.kj.manager);
+  let tipped = 0, tipCount = 0, moveups = 0, moveCount = 0;
+  if (seeMoney) for (const n of await getTipNights()) for (const t of await getTips(n)) if (t.who === g.device) { if (t.bump) { moveups += t.amount; moveCount++; } else { tipped += t.amount; tipCount++; } }
+  const r2 = x => Math.round(x * 100) / 100;
+  res.json({ name: g.name, aka: [...g.names].filter(n => n !== g.name), songs: g.songs, nights: g.nights.size, likes: g.likes, first: g.first, last: g.last,
+    money: seeMoney ? { tipped: r2(tipped), tipCount, moveups: r2(moveups), moveCount, total: r2(tipped + moveups) } : null,
+    list: [...g.list.values()].sort((a, b) => b.count - a.count || b.likes - a.likes || String(b.last).localeCompare(String(a.last))) });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
 const staffOnly = (req, res, next) => req.kj && req.kj.role !== "dj" ? next() : res.status(403).json({ error: "Only staff can do that." });

@@ -50,6 +50,16 @@ ol.rank .meter{height:6px;border-radius:99px;background:var(--panel-2);margin-to
 ol.rank .meter i{display:block;height:100%;background:var(--green);border-radius:99px}
 ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap}
 .stars{color:var(--gold)}
+.slook{border:2px solid var(--gold)}
+.sfind{display:grid;grid-template-columns:1fr;gap:8px;position:relative}
+.sfind input,.sfind select{font:inherit;font-size:17px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);width:100%;box-sizing:border-box}
+.ssugg{position:absolute;left:0;right:0;top:52px;z-index:8;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;max-height:280px;overflow:auto;display:flex;flex-direction:column}
+.ssugg button{font:inherit;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);color:var(--ink);padding:10px 12px;cursor:pointer}
+.ssugg button small{display:block;color:var(--ink-2);font-size:13px}
+.shead{display:flex;flex-direction:column;gap:2px}.shead b{font-family:var(--slab);font-size:26px;color:var(--gold)}.shead span{color:var(--ink-2);font-size:14px}
+.slist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.slist li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;background:var(--panel-2);border-radius:10px;padding:8px 12px}
+.slist li b{display:block}.slist li small{color:var(--ink-2)}.slist .c{font-weight:800;font-variant-numeric:tabular-nums}.slist .h{color:#ff8fa6;font-weight:800}
 </style>
 <script src="/zoom.js" defer></script>
 </head>
@@ -73,6 +83,20 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
     <div class="row" role="group" aria-label="Time range">
       <button data-r="week">This week</button><button data-r="month">This month</button><button data-r="7">7 days</button><button data-r="30">30 days</button><button data-r="90">90 days</button><button data-r="all" aria-pressed="true">All time</button>
     </div>
+    <section class="card slook" id="singerCard">
+      <h2>🎤 Singer lookup <span>search or pick a singer</span></h2>
+      <div class="sfind">
+        <input id="sSearch" placeholder="Type a name…" autocomplete="off" aria-label="Search singers">
+        <div class="ssugg" id="sSugg" hidden></div>
+        <select id="sPick" aria-label="Pick a singer"><option value="">— All singers (A–Z) —</option></select>
+      </div>
+      <div id="sOut" hidden style="display:flex;flex-direction:column;gap:12px">
+        <div class="shead"><b id="sName"></b><span id="sMeta"></span></div>
+        <div class="tiles" id="sTiles"></div>
+        <h2 style="margin:0">Songs sung <span>times sung · ❤️ hearts</span></h2>
+        <ol class="slist" id="sSongs"></ol>
+      </div>
+    </section>
     <div class="tiles" id="tiles"></div>
     <div class="grid2">
       <section class="card"><h2>Songs per night <span>last 30 nights</span></h2><div class="chart" id="nights" role="img" aria-label="Songs sung each karaoke night"></div></section>
@@ -181,6 +205,42 @@ $("pinForm").addEventListener("submit", async e => {
   pin = v; if(await load()){ try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("err").textContent = ""; $("login").hidden = true; $("panel").hidden = false; }
 });
 $("pin").addEventListener("input", () => $("err").textContent = "");
+/* ---------- singer lookup ---------- */
+let singers = [];
+const usd2 = v => "$" + (Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const dshort = d => d ? new Date(d).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "";
+async function loadSingers(){
+  try{ const r = await fetch("/api/kj/singers", { headers: { "x-kj-pin": pin }, cache: "no-store" }); if(!r.ok) return; singers = (await r.json()).singers || []; }catch(e){ return; }
+  const sel = $("sPick"), cur = sel.value; sel.length = 1;
+  singers.forEach(x => { const o = document.createElement("option"); o.value = x.key; o.textContent = x.name + " — " + x.songs + (x.songs === 1 ? " song" : " songs") + (x.likes ? " · ❤️ " + x.likes : ""); sel.appendChild(o); });
+  sel.value = cur;
+}
+function suggest(){
+  const q = $("sSearch").value.trim().toLowerCase(), box = $("sSugg"); box.innerHTML = "";
+  if(!q){ box.hidden = true; return; }
+  const hits = singers.filter(x => x.name.toLowerCase().includes(q) || (x.aka || []).some(a => a.toLowerCase().includes(q))).sort((a, b) => b.songs - a.songs).slice(0, 12);
+  if(!hits.length){ const n = document.createElement("button"); n.type = "button"; n.disabled = true; n.textContent = "No singer matches “" + $("sSearch").value.trim() + "”"; box.appendChild(n); box.hidden = false; return; }
+  hits.forEach(x => { const b = document.createElement("button"); b.type = "button"; b.textContent = x.name; const sm = document.createElement("small"); sm.textContent = x.songs + (x.songs === 1 ? " song" : " songs") + (x.likes ? " · ❤️ " + x.likes : "") + " · last " + dshort(x.last) + (x.aka && x.aka.length ? " · also " + x.aka.join(", ") : ""); b.appendChild(sm);
+    b.addEventListener("click", () => { $("sSearch").value = x.name; box.hidden = true; $("sPick").value = x.key; showSinger(x.key); }); box.appendChild(b); });
+  box.hidden = false;
+}
+async function showSinger(key){
+  if(!key){ $("sOut").hidden = true; return; }
+  let d; try{ const r = await fetch("/api/kj/singer-stats/" + encodeURIComponent(key), { headers: { "x-kj-pin": pin }, cache: "no-store" }); d = await r.json(); if(!r.ok) throw new Error(d.error); }catch(e){ return; }
+  $("sOut").hidden = false; $("sName").textContent = d.name;
+  $("sMeta").textContent = "First sang " + dshort(d.first) + " · last " + dshort(d.last) + (d.aka && d.aka.length ? " · also signed up as " + d.aka.join(", ") : "");
+  const tiles = [[d.songs, "total songs sung"], [d.nights, d.nights === 1 ? "night" : "nights"], ["❤️ " + d.likes, "hearts from the crowd"], [d.list.length, "different songs"]];
+  if(d.money){ tiles.push([usd2(d.money.total), "total tipped (all)"], [usd2(d.money.tipped), d.money.tipCount + (d.money.tipCount === 1 ? " tip to DJs" : " tips to DJs")], [usd2(d.money.moveups), d.money.moveCount + (d.money.moveCount === 1 ? " lock-your-spot" : " lock-your-spots")]); }
+  $("sTiles").innerHTML = ""; tiles.forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("sTiles").appendChild(t); });
+  const ol = $("sSongs"); ol.innerHTML = "";
+  d.list.forEach(x => { const li = document.createElement("li"); const t = document.createElement("div"); const b = document.createElement("b"); b.textContent = x.song; const sm = document.createElement("small"); sm.textContent = (x.artist ? x.artist + " · " : "") + "last " + dshort(x.last); t.append(b, sm);
+    const c = document.createElement("span"); c.className = "c"; c.textContent = x.count + "×"; const h = document.createElement("span"); h.className = "h"; h.textContent = "❤️ " + x.likes; li.append(t, c, h); ol.appendChild(li); });
+}
+$("sSearch").addEventListener("input", suggest);
+$("sSearch").addEventListener("focus", suggest);
+document.addEventListener("click", e => { if(!e.target.closest(".sfind")) $("sSugg").hidden = true; });
+$("sPick").addEventListener("change", () => { $("sSearch").value = ""; $("sSugg").hidden = true; showSinger($("sPick").value); });
+const _load = load; load = async function(){ const ok = await _load(); if(ok !== false){ loadSingers(); if($("sPick").value) showSinger($("sPick").value); } return ok; };
 if(pin){ $("login").hidden = true; $("panel").hidden = false; load(); }
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && pin) load(); });
 </script>
