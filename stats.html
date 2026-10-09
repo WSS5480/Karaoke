@@ -175,6 +175,7 @@ async function load(){
   if(r.status === 401){ pin = ""; try{ sessionStorage.removeItem("kj_pin"); }catch(e){} $("panel").hidden = true; $("login").hidden = false; $("err").textContent = "Wrong PIN."; return false; }
   const d = await r.json(), T = d.totals;
   $("tiles").innerHTML = "";
+  if(d.ever){ [[d.ever.signups.toLocaleString(), "sign-ups ever (all time)"], [d.ever.phones.toLocaleString(), "different singers ever"], [d.ever.dj.toLocaleString(), "added by the DJ ever"]].forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; t.style.borderLeft = "4px solid var(--gold)"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("tiles").appendChild(t); }); }
   [[T.songs, "songs sung"], [T.singers, "singers"], [T.repeat, "came back 2+ nights"], [T.nights, "karaoke nights"], [T.perNight, "songs per night"], ["❤️ " + (T.likes || 0), "likes from the crowd"], [T.likesPerSong || 0, "likes per song"], [T.onWall, "on the Wall of Fame"]]
     .forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("tiles").appendChild(t); });
   bars($("nights"), d.nights.map(x => ({ v: x.count, l: fmtNight(x.night), tip: fmtNight(x.night) + ": " + x.count + (x.count === 1 ? " song" : " songs") })), Math.max(1, Math.ceil(d.nights.length / 6)));

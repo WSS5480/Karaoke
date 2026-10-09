@@ -313,6 +313,7 @@ if (DB_OK) {
     async setPos(id, p) { await Q(`UPDATE signups SET position=$2 WHERE id=$1 AND tenant=$3`, [id, p, T()]); },
     async get(id) { return (await Q(`SELECT * FROM signups WHERE id=$1 AND tenant=$2`, [id, T()])).rows[0]; },
     async newNight() { await Q(`UPDATE signups SET status='archived' WHERE tenant=$1 AND status IN ('up','queued','done')`, [T()]); },
+    async everCounts() { const r = (await Q(`SELECT count(*)::int AS n, count(DISTINCT device) FILTER (WHERE device NOT LIKE 'kj-%')::int AS phones, count(*) FILTER (WHERE device LIKE 'kj-%')::int AS dj FROM signups WHERE tenant=$1`, [T()])).rows[0]; return { signups: r.n, phones: r.phones, dj: r.dj }; },
     async getSetting(k) { const r = (await Q(`SELECT value FROM settings WHERE key=$1`, [SK(k)])).rows[0]; return r ? r.value : null; },
     async setSetting(k, v) { await Q(`INSERT INTO settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2`, [SK(k), v]); },
     // bars and DJs that use the system (The Dive itself is built in, not stored here)
@@ -357,6 +358,7 @@ if (DB_OK) {
     async setPos(id, p) { const r = rows.find(x => x.id === id && mine(x)); if (r) r.position = p; },
     async get(id) { return rows.find(x => x.id === id && mine(x)); },
     async newNight() { rows.forEach(r => { if (mine(r) && r.status !== "removed") r.status = "archived"; }); },
+    async everCounts() { const m = rows.filter(mine); return { signups: m.length, phones: new Set(m.filter(r => !String(r.device).startsWith("kj-")).map(r => r.device)).size, dj: m.filter(r => String(r.device).startsWith("kj-")).length }; },
     async getSetting(k) { return settings[SK(k)] ?? null; },
     async setSetting(k, v) { settings[SK(k)] = v; },
     async getTenant(slug) { return tenants[slug] ? { ...tenants[slug] } : null; },
@@ -488,12 +490,18 @@ setInterval(() => {
   for (const [t, b] of phones) if (b.dirty) { b.dirty = false; ctx.run({ t }, () => db.setSetting("phones:" + b.night, JSON.stringify(b.list)).catch(() => {})); }
 }, 60000);
 // tonight's sign-ups by how they came in (QR scan, installed app, link/browser, added by the DJ)
+const everCache = new Map();
+async function everCounts() {   // every sign-up ever (cached a minute; the live view polls every few seconds)
+  const c = everCache.get(T()); if (c && Date.now() - c.t < 60000) return c.v;
+  const v = await db.everCounts(); everCache.set(T(), { t: Date.now(), v }); return v;
+}
 async function signupStats() {
   const night = barDay().date, seen = new Set(), c = { total: 0, qr: 0, app: 0, link: 0, dj: 0, untracked: 0 };
   for (const r of [...await db.active(), ...await db.done(400)]) {
     if (seen.has(r.id) || nightOf(r.created_at) !== night) continue; seen.add(r.id);
     const v = viaOf(r); c.total++; c[v && v in c ? v : "untracked"]++;
   }
+  try { c.ever = await everCounts(); } catch (e) {}
   return c;
 }
 
@@ -1169,6 +1177,7 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
   const nightList = [...nights.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-31).map(([night, count]) => ({ night, count }));
   res.json({
     range: rq || "all",
+    ever: await everCounts().catch(() => null),
     totals: { songs: rows.length, singers: singers.size, nights: nights.size, repeat: singerList.filter(x => x.nights > 1).length,
               likes, likesPerSong: rows.length ? Math.round(likes / rows.length * 10) / 10 : 0, onWall, perNight: nights.size ? Math.round(rows.length / nights.size * 10) / 10 : 0 },
     nights: nightList, hours,

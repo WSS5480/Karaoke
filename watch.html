@@ -248,6 +248,7 @@ function paintCrowd(box, su, ph){
   if(!box) return; box.innerHTML = "";
   const tile = (v, l) => { const d = document.createElement("div"); d.className = "ctile"; const b = document.createElement("b"); b.textContent = v; const sp = document.createElement("span"); sp.textContent = l; d.append(b, sp); box.appendChild(d); };
   if(ph){ tile(ph.now, "phones open now"); tile(ph.tonight, "phones tonight" + (ph.since ? " (since " + new Date(ph.since).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ")" : "")); if(ph.today != null) tile(ph.today, "opened the app today (since 6 AM)"); tile(ph.app, "installed the app"); }
+  if(su && su.ever){ tile(su.ever.signups.toLocaleString(), "sign-ups ever (all time)"); tile(su.ever.phones.toLocaleString(), "different singers ever (phones)"); }
   if(su){ tile(su.total, "sign-ups tonight"); tile(su.qr, "scanned the QR"); tile(su.app, "from the app"); tile(su.link, "from the link"); tile(su.dj, "added by the DJ"); if(su.untracked) tile(su.untracked, "before tracking"); }
 }
 function paintTips(t){
