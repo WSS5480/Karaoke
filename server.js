@@ -1408,9 +1408,9 @@ async function bumpInfo(list, mine) {
   const out = { on: true, price: await bumpPrice(), host: s.host, links: s.links };
   if (mine && mine.status === "queued") {
     out.max = queuedAhead(list, mine);
-    // locked (paid) spots ahead can't be bought; show their numbers the way the singer sees the line
-    { const paid = await paidIds(), up = list.some(r => r.status === "up") ? 1 : 0, q = list.filter(r => r.status === "queued"), me = q.findIndex(r => r.id === mine.id);
-      out.locked = q.map((r, k) => k < me && paid.has(r.id) ? k + 1 + up : 0).filter(Boolean);
+    // locked (paid) spots ahead can't be bought; numbered like the DJ page (1 = next up)
+    { const paid = await paidIds(), q = list.filter(r => r.status === "queued"), me = q.findIndex(r => r.id === mine.id);
+      out.locked = q.map((r, k) => k < me && paid.has(r.id) ? k + 1 : 0).filter(Boolean);
       let f = 1; q.forEach((r, k) => { if (k < me && paid.has(r.id)) f = Math.max(f, k + 1); }); out.max = Math.max(0, me - f); }   // next up is never jumped
     const req = (await getBumps()).filter(b => b.sid === mine.id).pop();
     if (req) out.req = { status: req.status, spots: req.spots, amount: req.amount, manual: !!req.manual };

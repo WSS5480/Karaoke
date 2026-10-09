@@ -902,7 +902,10 @@ function render(data){
   document.body.classList.toggle("fresh", !mine && !$("formCard").hidden);
   if(mine) try{
     const ahead = mine.spot;
-    $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + (ahead + 1);
+    // number like the DJ page: 1 = next up; the singer on stage is ▶ (no number)
+    { const wq = (data.queue || []).filter(r => r.status === "queued"), wi = wq.findIndex(r => r.id === mine.id);
+      mine.wpos = wi >= 0 ? wi + 1 : ahead + 1 - ((data.queue || []).some(r => r.status === "up") ? 1 : 0); }
+    $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + mine.wpos;
     $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
     $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
     { const e = mine.eta, el = $("mineEta"); el.hidden = !(e && mine.status === "queued");
@@ -930,9 +933,10 @@ function render(data){
   try{ paintLikes(data.sung); }catch(e){ window.diveReportErr && window.diveReportErr("paintLikes: " + e.message); }
   const ol = $("queue"); ol.innerHTML = "";
   if(!data.queue || !data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
+  let wn = 0;
   data.queue.forEach((r, i) => {
     const li = document.createElement("li"); if(r.status === "up") li.classList.add("up"); if(mine && r.id === mine.id) li.classList.add("me"); if(r.paid && r.status === "queued") li.classList.add("locked");
-    const n = document.createElement("span"); n.className = "n"; n.textContent = r.status === "up" ? "▶" : i + 1;
+    const n = document.createElement("span"); n.className = "n"; n.textContent = r.status === "up" ? "▶" : ++wn;
     const t = document.createElement("div"); t.className = "t";
     const b = document.createElement("b"); b.textContent = r.name;
     const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
@@ -1744,7 +1748,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   window.diveOpenBump = () => { $("tipModal").hidden = true; $("bumpOpen").click(); };
   function paintSpots(){
     const box = $("bumpSpots"); box.innerHTML = "";
-    const place = (cur.spot || 0) + 1, locked = new Set(info.locked || []);   // numbers as they see them on their card
+    const place = cur.wpos || (cur.spot || 0) + 1, locked = new Set(info.locked || []);   // numbers as they see them on their card
     const open = k => !locked.has(place - k);
     let best = 0; for(let k = info.max; k >= 1; k--) if(open(k)){ best = k; break; }
     if(!open(spots)) spots = best || 1;
