@@ -51,6 +51,12 @@ ol.rank .meter i{display:block;height:100%;background:var(--green);border-radius
 ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap}
 .stars{color:var(--gold)}
 .slook{border:2px solid var(--gold)}
+.sx{border:1px solid #2a332a;border-radius:12px;background:#101410}
+.sx>summary{cursor:pointer;list-style:none;padding:12px 14px;font-weight:800;font-size:16px;display:flex;justify-content:space-between;gap:8px}
+.sx>summary::-webkit-details-marker{display:none}
+.sx>summary::after{content:"▸";color:#5fd36e}.sx[open]>summary::after{content:"▾"}
+.sx>summary span{font-weight:400;font-size:13px;color:#9fb3a2;margin-left:auto}
+.sx>*:not(summary){margin:0 12px 12px}
 .srec{display:flex;flex-direction:column;gap:10px}
 .srec .nt{border:1px solid #2a332a;border-radius:12px;padding:10px 12px;background:#101410}
 .srec .nt>b{display:block;font-size:16px;margin-bottom:6px;color:#ffc93c}
@@ -103,11 +109,9 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
       </div>
       <div id="sOut" hidden style="display:flex;flex-direction:column;gap:12px">
         <div class="shead"><b id="sName"></b><span id="sMeta"></span></div>
-        <div class="tiles" id="sTiles"></div>
-        <h2 style="margin:0">Songs sung <span>times sung · ❤️ hearts</span></h2>
-        <ol class="slist" id="sSongs"></ol>
-        <h2 style="margin:0">🧾 Night-by-night record <span>every sign-up, what happened, tips</span></h2>
-        <div id="sRec" class="srec"></div>
+        <details class="sx" id="sxStats"><summary>📊 Totals &amp; tips</summary><div class="tiles" id="sTiles"></div></details>
+        <details class="sx" id="sxSongs"><summary>🎵 Songs sung <span id="sSongsN"></span></summary><ol class="slist" id="sSongs"></ol></details>
+        <details class="sx" id="sxRec"><summary>🧾 Night-by-night record <span>what happened, tips</span></summary><div id="sRec" class="srec"></div></details>
       </div>
     </section>
     <div class="tiles" id="tiles"></div>
@@ -249,8 +253,12 @@ async function showSinger(key){
   const ol = $("sSongs"); ol.innerHTML = "";
   d.list.forEach(x => { const li = document.createElement("li"); const t = document.createElement("div"); const b = document.createElement("b"); b.textContent = x.song; const sm = document.createElement("small"); sm.textContent = (x.artist ? x.artist + " · " : "") + "last " + dshort(x.last); t.append(b, sm);
     const c = document.createElement("span"); c.className = "c"; c.textContent = x.count + "×"; const h = document.createElement("span"); h.className = "h"; h.textContent = "❤️ " + x.likes; li.append(t, c, h); ol.appendChild(li); });
-  showRecord(key);
+  $("sSongsN").textContent = d.list.length ? d.list.length + (d.list.length === 1 ? " song" : " songs") : "none";
+  $("sMeta").textContent += " · " + d.songs + " sung" + (d.missed ? " · " + d.missed + " didn't sing" : "") + (d.money && !d.dj && d.money.total ? " · " + usd2(d.money.total) + " tipped" : "");
+  if(key !== recKey){ ["sxStats", "sxSongs", "sxRec"].forEach(id => $(id).open = false); recKey = key; recShown = null; $("sRec").innerHTML = ""; }
 }
+let recKey = null, recShown = null;
+$("sxRec").addEventListener("toggle", () => { if($("sxRec").open && recKey && recShown !== recKey){ recShown = recKey; showRecord(recKey); } });
 const tm = d => new Date(d).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const mins = (a, b) => { const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 60 ? m + " min" : Math.floor(m / 60) + " h " + (m % 60) + " min"; };
 const nightLabel = n => new Date(n + "T12:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
