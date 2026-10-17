@@ -51,6 +51,17 @@ ol.rank .meter i{display:block;height:100%;background:var(--green);border-radius
 ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;white-space:nowrap}
 .stars{color:var(--gold)}
 .slook{border:2px solid var(--gold)}
+.srec{display:flex;flex-direction:column;gap:10px}
+.srec .nt{border:1px solid #2a332a;border-radius:12px;padding:10px 12px;background:#101410}
+.srec .nt>b{display:block;font-size:16px;margin-bottom:6px;color:#ffc93c}
+.srec .su{padding:6px 0;border-top:1px solid #1e251e}
+.srec .su .sg{font-weight:700}
+.srec .su .oc{font-size:14px;margin-top:2px}
+.srec .ok{color:#5fd36e}.srec .bad{color:#ff7b7b}.srec .mid{color:#ffc93c}
+.srec small{display:block;color:#9fb3a2;font-size:12.5px;margin-top:2px}
+.srec .mny{font-size:14px;padding:4px 0}
+.srec details{margin-top:6px;font-size:13px;color:#9fb3a2}
+.srec details div{padding:2px 0}
 .sfind{display:grid;grid-template-columns:1fr;gap:8px;position:relative}
 .sfind input,.sfind select{font:inherit;font-size:17px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);width:100%;box-sizing:border-box}
 .ssugg{position:absolute;left:0;right:0;top:52px;z-index:8;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;max-height:280px;overflow:auto;display:flex;flex-direction:column}
@@ -95,6 +106,8 @@ ol.rank .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;wh
         <div class="tiles" id="sTiles"></div>
         <h2 style="margin:0">Songs sung <span>times sung · ❤️ hearts</span></h2>
         <ol class="slist" id="sSongs"></ol>
+        <h2 style="margin:0">🧾 Night-by-night record <span>every sign-up, what happened, tips</span></h2>
+        <div id="sRec" class="srec"></div>
       </div>
     </section>
     <div class="tiles" id="tiles"></div>
@@ -213,7 +226,7 @@ const dshort = d => d ? new Date(d).toLocaleDateString([], { month: "short", day
 async function loadSingers(){
   try{ const r = await fetch("/api/kj/singers", { headers: { "x-kj-pin": pin }, cache: "no-store" }); if(!r.ok) return; singers = (await r.json()).singers || []; }catch(e){ return; }
   const sel = $("sPick"), cur = sel.value; sel.length = 1;
-  singers.forEach(x => { const o = document.createElement("option"); o.value = x.key; o.textContent = x.name + (x.dj ? " (added by DJ)" : "") + " — " + x.songs + (x.songs === 1 ? " song" : " songs") + (x.likes ? " · ❤️ " + x.likes : ""); sel.appendChild(o); });
+  singers.forEach(x => { const o = document.createElement("option"); o.value = x.key; o.textContent = x.name + (x.dj ? " (added by DJ)" : "") + " — " + x.songs + (x.songs === 1 ? " song" : " songs") + (x.likes ? " · ❤️ " + x.likes : "") + (x.missed ? " · " + x.missed + " didn't sing" : ""); sel.appendChild(o); });
   sel.value = cur;
 }
 function suggest(){
@@ -229,13 +242,48 @@ async function showSinger(key){
   if(!key){ $("sOut").hidden = true; return; }
   let d; try{ const r = await fetch("/api/kj/singer-stats/" + encodeURIComponent(key), { headers: { "x-kj-pin": pin }, cache: "no-store" }); d = await r.json(); if(!r.ok) throw new Error(d.error); }catch(e){ return; }
   $("sOut").hidden = false; $("sName").textContent = d.name + (d.dj ? " (added by DJ)" : "");
-  $("sMeta").textContent = "First sang " + dshort(d.first) + " · last " + dshort(d.last) + (d.aka && d.aka.length ? " · also signed up as " + d.aka.join(", ") : "");
-  const tiles = [[d.songs, "total songs sung"], [d.nights, d.nights === 1 ? "night" : "nights"], ["❤️ " + d.likes, "hearts from the crowd"], [d.list.length, "different songs"]];
+  $("sMeta").textContent = (d.first ? "First sang " + dshort(d.first) + " · last " + dshort(d.last) : "Never got to sing · last signed up " + dshort(d.seen)) + (d.aka && d.aka.length ? " · also signed up as " + d.aka.join(", ") : "");
+  const tiles = [[d.songs, "total songs sung"], [d.missed || 0, (d.missed === 1 ? "sign-up" : "sign-ups") + " that didn't sing"], [d.nights, d.nights === 1 ? "night" : "nights"], ["❤️ " + d.likes, "hearts from the crowd"], [d.list.length, "different songs"]];
   if(d.money && !d.dj){ tiles.push([usd2(d.money.total), "total tipped (all)"], [usd2(d.money.tipped), d.money.tipCount + (d.money.tipCount === 1 ? " tip to DJs" : " tips to DJs")], [usd2(d.money.moveups), d.money.moveCount + (d.money.moveCount === 1 ? " lock-your-spot" : " lock-your-spots")]); }
   $("sTiles").innerHTML = ""; tiles.forEach(([v, l]) => { const t = document.createElement("div"); t.className = "tile"; const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; t.append(b, s); $("sTiles").appendChild(t); });
   const ol = $("sSongs"); ol.innerHTML = "";
   d.list.forEach(x => { const li = document.createElement("li"); const t = document.createElement("div"); const b = document.createElement("b"); b.textContent = x.song; const sm = document.createElement("small"); sm.textContent = (x.artist ? x.artist + " · " : "") + "last " + dshort(x.last); t.append(b, sm);
     const c = document.createElement("span"); c.className = "c"; c.textContent = x.count + "×"; const h = document.createElement("span"); h.className = "h"; h.textContent = "❤️ " + x.likes; li.append(t, c, h); ol.appendChild(li); });
+  showRecord(key);
+}
+const tm = d => new Date(d).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const mins = (a, b) => { const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 60 ? m + " min" : Math.floor(m / 60) + " h " + (m % 60) + " min"; };
+const nightLabel = n => new Date(n + "T12:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const PAY = { venmo: "Venmo", cashapp: "Cash App", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash", dj: "DJ" };
+async function showRecord(key){
+  const box = $("sRec"); box.textContent = "Loading…";
+  let d; try{ const r = await fetch("/api/kj/singer-record/" + encodeURIComponent(key), { headers: { "x-kj-pin": pin }, cache: "no-store" }); d = await r.json(); if(!r.ok) throw new Error(d.error); }catch(e){ box.textContent = "Couldn't load the record."; return; }
+  box.innerHTML = ""; if(!d.nights.length){ box.textContent = "No sign-ups on record."; return; }
+  const el = (tag, cls, txt) => { const x = document.createElement(tag); if(cls) x.className = cls; if(txt != null) x.textContent = txt; return x; };
+  d.nights.forEach(nt => {
+    const card = el("div", "nt"); card.appendChild(el("b", "", nightLabel(nt.night)));
+    nt.signups.forEach(s => {
+      const su = el("div", "su"); su.appendChild(el("div", "sg", "🎵 " + s.song + (s.artist ? " – " + s.artist : "")));
+      let oc, cls;
+      if(s.outcome === "sang"){ cls = "ok"; oc = "✅ Sang at " + tm(s.at) + " (waited " + mins(s.signed, s.at) + ")"; }
+      else if(s.outcome === "removed"){ cls = "bad"; oc = "❌ Removed by " + s.by + (s.role && s.role !== "house" ? " (" + s.role + ")" : "") + " at " + tm(s.at) + " (" + mins(s.signed, s.at) + " after signing up)"; }
+      else if(s.outcome === "canceled"){ cls = "mid"; oc = "↩️ Took themselves off the list from their phone at " + tm(s.at); }
+      else if(s.outcome === "gone"){ cls = "mid"; oc = "↩️ Taken off the list. No DJ or staff removed them, so it was most likely canceled from their own phone."; }
+      else if(s.outcome === "closed"){ cls = "bad"; oc = "⏰ Still in line when the night ended" + (s.at ? " at " + tm(s.at) + " (" + s.how + ")" : "") + (s.place ? " · #" + s.place + " in line" : ""); }
+      else if(s.outcome === "up"){ cls = "ok"; oc = "🎤 Singing now"; }
+      else if(s.outcome === "waiting"){ cls = "mid"; oc = "⏳ Waiting now" + (s.place ? " · #" + s.place + " in line" : ""); }
+      su.appendChild(el("div", "oc " + (cls || ""), oc || s.outcome));
+      su.appendChild(el("small", "", "Signed up " + tm(s.signed) + (s.dj ? " (added by the DJ)" : "") + " · " + s.sungAfter + (s.sungAfter === 1 ? " song" : " songs") + " sung by others after they signed up"));
+      card.appendChild(su);
+    });
+    nt.tips.forEach(t => card.appendChild(el("div", "mny", "💵 Tip " + usd2(t.amount) + " via " + (PAY[t.method] || t.method) + " to " + (t.to || "the DJ") + " at " + tm(t.at) + (t.comment ? " · “" + t.comment + "”" : ""))));
+    if(nt.tips.length) card.appendChild(el("small", "", "Tips are logged when the singer taps Tip and picks an amount. The app can't see the payment itself: check the DJ's " + [...new Set(nt.tips.map(t => PAY[t.method] || t.method))].join(" / ") + " for that time."));
+    nt.bumps.forEach(b => { const st = b.status === "approved" ? "✅ approved" + (b.by ? " by " + b.by : "") : b.status === "denied" ? "❌ denied" + (b.by ? " by " + b.by : "") + " (payment not found)" : b.status === "expired" ? "⌛ expired (no one confirmed)" : b.status === "canceled" ? "↩️ canceled by singer" : "⏳ " + b.status;
+      card.appendChild(el("div", "mny", "🔒 Lock-your-spot " + b.spots + (b.spots === 1 ? " spot" : " spots") + " · " + usd2(b.amount) + " via " + (PAY[b.method] || b.method) + " at " + tm(b.at) + " · " + st)); });
+    if(!d.money) card.appendChild(el("small", "", "Tips and money are shown to owners and managers only."));
+    if(nt.log.length){ const dt = el("details"); dt.appendChild(el("summary", "", "DJ & staff actions that night (" + nt.log.length + ")")); nt.log.forEach(e => dt.appendChild(el("div", "", tm(e.at) + " · " + e.who + " — " + e.text))); card.appendChild(dt); }
+    box.appendChild(card);
+  });
 }
 $("sSearch").addEventListener("input", suggest);
 $("sSearch").addEventListener("focus", suggest);

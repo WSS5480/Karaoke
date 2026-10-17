@@ -313,6 +313,7 @@ if (DB_OK) {
     async setPos(id, p) { await Q(`UPDATE signups SET position=$2 WHERE id=$1 AND tenant=$3`, [id, p, T()]); },
     async get(id) { return (await Q(`SELECT * FROM signups WHERE id=$1 AND tenant=$2`, [id, T()])).rows[0]; },
     async newNight() { await Q(`UPDATE signups SET status='archived' WHERE tenant=$1 AND status IN ('up','queued','done')`, [T()]); },
+    async allSignups() { return (await Q(`SELECT id, name, song, artist, device, status, position, created_at, done_at, likes FROM signups WHERE tenant=$1 ORDER BY created_at`, [T()])).rows; },
     async everCounts() { const r = (await Q(`SELECT count(*)::int AS n, count(DISTINCT device) FILTER (WHERE device NOT LIKE 'kj-%')::int AS phones, count(*) FILTER (WHERE device LIKE 'kj-%')::int AS dj FROM signups WHERE tenant=$1`, [T()])).rows[0]; return { signups: r.n, phones: r.phones, dj: r.dj }; },
     async getSetting(k) { const r = (await Q(`SELECT value FROM settings WHERE key=$1`, [SK(k)])).rows[0]; return r ? r.value : null; },
     async setSetting(k, v) { await Q(`INSERT INTO settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2`, [SK(k), v]); },
@@ -358,6 +359,7 @@ if (DB_OK) {
     async setPos(id, p) { const r = rows.find(x => x.id === id && mine(x)); if (r) r.position = p; },
     async get(id) { return rows.find(x => x.id === id && mine(x)); },
     async newNight() { rows.forEach(r => { if (mine(r) && r.status !== "removed") r.status = "archived"; }); },
+    async allSignups() { return rows.filter(mine).slice().sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))); },
     async everCounts() { const m = rows.filter(mine); return { signups: m.length, phones: new Set(m.filter(r => !String(r.device).startsWith("kj-")).map(r => r.device)).size, dj: m.filter(r => String(r.device).startsWith("kj-")).length }; },
     async getSetting(k) { return settings[SK(k)] ?? null; },
     async setSetting(k, v) { settings[SK(k)] = v; },
@@ -671,6 +673,7 @@ app.post("/api/cancel", wrap(async (req, res) => {
   const d = owner(req, res), mine = await db.byDevice(d);
   if (!mine) return res.status(404).json({ error: "You're not on the list right now." });
   await db.setStatus(mine.id, "removed");
+  audit(mine.name, "singer", "Took themselves off the list: " + mine.name + " (" + mine.song + ")");
   res.json({ ok: true });
 }));
 
@@ -852,7 +855,7 @@ async function kjAuth(req, res, next) {
     const t = Date.now(), l = (pinTries.get(req.ip) || []).filter(x => t - x < 600000);
     if (l.length >= 20) return res.status(429).json({ error: "Too many wrong PINs. Wait 10 minutes." });
     // Analytics also opens with the owner list PIN (app owner) or the Bar Owner PIN: view only, never host controls
-    if (req.method === "GET" && /^\/api\/kj\/(stats|singers|singer-stats)(\?|\/|$)/.test(req.originalUrl)) {
+    if (req.method === "GET" && /^\/api\/kj\/(stats|singers|singer-stats|singer-record)(\?|\/|$)/.test(req.originalUrl)) {
       const pv = String(req.headers["x-kj-pin"] || "");
       if (await pinIs("list", pv)) { req.kj = { name: "App owner", role: "owner", owner: true, admin: false }; return next(); }
       if (await pinIs("bar", pv)) { req.kj = { name: "Bar owner", role: "owner", owner: true, admin: false }; return next(); }
@@ -1191,22 +1194,26 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
 /* ---------- singer lookup (analytics): every singer ever, searchable; one singer's totals, songs, hearts and tips ---------- */
 const singerKey = dev => crypto.createHash("sha1").update(String(dev || "")).digest("hex").slice(0, 12);
 async function singerBook() {
-  const rows = await db.sungSince(0), map = new Map();
+  const rows = await db.allSignups(), map = new Map();
   for (const r of rows) {
     if (!r.device) continue;
     // singers the DJ added by hand have no phone: group them by name instead
     const byDj = String(r.device).startsWith("kj-"), idk = byDj ? "dj|" + String(r.name || "").trim().toLowerCase() : r.device;
-    const k = singerKey(idk), g = map.get(k) || { key: k, device: byDj ? null : r.device, dj: byDj, name: r.name, names: new Set(), songs: 0, likes: 0, nights: new Set(), first: r.done_at, last: r.done_at, list: new Map() };
-    g.name = r.name; g.names.add(r.name); g.songs++; g.likes += r.likes || 0; g.nights.add(nightOf(r.done_at)); g.last = r.done_at;
-    const sk = String(r.song).toLowerCase() + "|" + String(r.artist || "").toLowerCase(), so = g.list.get(sk) || { song: r.song, artist: r.artist || "", count: 0, likes: 0, last: r.done_at };
-    so.count++; so.likes += r.likes || 0; so.last = r.done_at; g.list.set(sk, so);
+    const k = singerKey(idk), g = map.get(k) || { key: k, device: byDj ? null : r.device, dj: byDj, name: r.name, names: new Set(), songs: 0, likes: 0, missed: 0, nights: new Set(), first: null, last: null, seen: r.created_at, list: new Map(), rows: [] };
+    g.name = r.name; g.names.add(r.name); g.rows.push(r); g.seen = r.created_at;
+    if (r.done_at && (r.status === "done" || r.status === "archived")) {
+      g.songs++; g.likes += r.likes || 0; g.nights.add(nightOf(r.done_at));
+      if (!g.first || r.done_at < g.first) g.first = r.done_at; if (!g.last || r.done_at > g.last) g.last = r.done_at;
+      const sk = String(r.song).toLowerCase() + "|" + String(r.artist || "").toLowerCase(), so = g.list.get(sk) || { song: r.song, artist: r.artist || "", count: 0, likes: 0, last: r.done_at };
+      so.count++; so.likes += r.likes || 0; if (r.done_at > so.last) so.last = r.done_at; g.list.set(sk, so);
+    } else if (r.status === "removed" || r.status === "archived") g.missed++;
     map.set(k, g);
   }
   return map;
 }
 app.get("/api/kj/singers", wrap(async (req, res) => {
   const map = await singerBook();
-  res.json({ singers: [...map.values()].map(g => ({ key: g.key, name: g.name, dj: !!g.dj, aka: [...g.names].filter(n => n !== g.name).slice(0, 4), songs: g.songs, likes: g.likes, last: g.last })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) });
+  res.json({ singers: [...map.values()].map(g => ({ key: g.key, name: g.name, dj: !!g.dj, aka: [...g.names].filter(n => n !== g.name).slice(0, 4), songs: g.songs, missed: g.missed, likes: g.likes, last: g.last || g.seen })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) });
 }));
 app.get("/api/kj/singer-stats/:key", wrap(async (req, res) => {
   const g = (await singerBook()).get(String(req.params.key));
@@ -1215,9 +1222,46 @@ app.get("/api/kj/singer-stats/:key", wrap(async (req, res) => {
   let tipped = 0, tipCount = 0, moveups = 0, moveCount = 0;
   if (seeMoney) for (const n of await getTipNights()) for (const t of await getTips(n)) if (g.device && t.who === g.device) { if (t.bump) { moveups += t.amount; moveCount++; } else { tipped += t.amount; tipCount++; } }
   const r2 = x => Math.round(x * 100) / 100;
-  res.json({ name: g.name, dj: !!g.dj, aka: [...g.names].filter(n => n !== g.name), songs: g.songs, nights: g.nights.size, likes: g.likes, first: g.first, last: g.last,
+  res.json({ name: g.name, dj: !!g.dj, aka: [...g.names].filter(n => n !== g.name), songs: g.songs, missed: g.missed, nights: g.nights.size, likes: g.likes, first: g.first, last: g.last, seen: g.seen,
     money: seeMoney ? { tipped: r2(tipped), tipCount, moveups: r2(moveups), moveCount, total: r2(tipped + moveups) } : null,
     list: [...g.list.values()].sort((a, b) => b.count - a.count || b.likes - a.likes || String(b.last).localeCompare(String(a.last))) });
+}));
+app.get("/api/kj/singer-record/:key", wrap(async (req, res) => {
+  const g = (await singerBook()).get(String(req.params.key));
+  if (!g) return res.status(404).json({ error: "Singer not found." });
+  const seeMoney = !!(req.kj.owner || req.kj.manager), all = await db.allSignups(), names = [...g.names].map(n => String(n).toLowerCase());
+  const nights = new Map(), audits = new Map(), used = new Set();
+  const N = n => { if (!nights.has(n)) nights.set(n, { night: n, signups: [], tips: [], bumps: [], log: [] }); return nights.get(n); };
+  const A = async n => { if (!audits.has(n)) audits.set(n, await getAudit(n)); return audits.get(n); };
+  const lc = x => String(x || "").toLowerCase(), ts = x => new Date(x).getTime();
+  for (const r of g.rows) {
+    const n = nightOf(r.created_at), au = await A(n), nt = N(n), t0 = ts(r.created_at), nm = lc(r.name);
+    const o = { id: r.id, song: r.song, artist: r.artist || "", signed: r.created_at, dj: String(r.device).startsWith("kj-") };
+    const same = all.filter(x => nightOf(x.created_at) === n);
+    o.sungAfter = same.filter(x => x.done_at && ts(x.done_at) > t0 && x.id !== r.id).length;
+    if (r.done_at && (r.status === "done" || r.status === "archived")) { o.outcome = "sang"; o.at = r.done_at; }
+    else if (r.status === "up") o.outcome = "up";
+    else if (r.status === "queued") { o.outcome = "waiting"; o.place = (await db.active()).filter(x => x.status === "queued").findIndex(x => x.id === r.id) + 1; }
+    else if (r.status === "removed") {
+      const after = au.filter(e => e.at >= t0 - 60000 && !used.has(e)), full = nm + " (" + lc(r.song) + ")";
+      const pick = pre => after.find(e => lc(e.text) === pre + full) || after.find(e => lc(e.text).startsWith(pre + nm + " ("));
+      const dj = pick("removed "), me = dj ? null : pick("took themselves off the list: ");
+      if (dj) used.add(dj); if (me) used.add(me);
+      if (dj) Object.assign(o, { outcome: "removed", at: dj.at, by: dj.who, role: dj.role });
+      else if (me) Object.assign(o, { outcome: "canceled", at: me.at });
+      else o.outcome = "gone";
+    } else if (r.status === "archived") {
+      const c = au.filter(e => e.at >= t0 && (/^nightly 4 am shutdown/i.test(e.text) || /^started a new night/i.test(e.text))).shift();
+      o.outcome = "closed"; if (c) Object.assign(o, { at: c.at, by: c.who, how: /^nightly/i.test(c.text) ? "4 AM shutdown" : "DJ started a new night" });
+      o.place = 1 + same.filter(x => x.status === "archived" && !x.done_at && x.id !== r.id && Number(x.position) < Number(r.position)).length;
+    }
+    nt.signups.push(o);
+    if (seeMoney) for (const b of await getBumps(n)) if (b.sid === r.id && !b.manual) nt.bumps.push({ at: b.at, spots: b.spots, amount: b.amount, method: b.method, to: b.to, status: b.status, by: b.by || "" });
+  }
+  // everything the DJ / staff did that names this singer that night
+  for (const [n, nt] of nights) nt.log = (await A(n)).filter(e => e.role !== "auto" && names.some(x => x && lc(e.text).includes(x))).slice(-40).map(e => ({ at: e.at, who: e.who, role: e.role, text: e.text }));
+  if (seeMoney && g.device) for (const n of await getTipNights()) for (const t of await getTips(n)) if (t.who === g.device && !t.bump) N(n).tips.push({ at: t.at, amount: t.amount, method: t.method, to: t.to, comment: t.comment || "" });
+  res.json({ name: g.name, money: seeMoney, nights: [...nights.values()].sort((a, b) => b.night.localeCompare(a.night)) });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
 const staffOnly = (req, res, next) => req.kj && req.kj.role !== "dj" ? next() : res.status(403).json({ error: "Only staff can do that." });
