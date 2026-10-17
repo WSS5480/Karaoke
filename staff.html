@@ -79,6 +79,7 @@ body.shared #installBar,body.shared .ghd p,body.shared .gbtns,body.shared .ownon
 .iosguide.top .arrow{order:-1;align-self:flex-end;margin:0 10px 8px 0}
 .iosguide.top .arrow::before{content:"⬆"}
 .iosguide.top .arrow{font-size:0}.iosguide.top .arrow::before{font-size:64px}
+body{padding-top:calc(52px + env(safe-area-inset-top))}
 </style>
 <script src="/forgot.js"></script>
 </head>
@@ -104,7 +105,7 @@ body.shared #installBar,body.shared .ghd p,body.shared .gbtns,body.shared .ownon
     <div class="brand"><img src="/logo.png" alt="The Dive on 495"><h1 id="pageTitle">Karaoke Owner List</h1></div>
     <button class="copyall" id="copyAll" type="button">Copy whole list</button>
     <button class="lockbtn" id="relock" type="button">🔒 Lock this list</button>
-    <a class="copyall" id="liveBtn" href="/watch" style="background:#39b54a;color:#0b0f0b;text-decoration:none;text-align:center;font-weight:800">📺 Live view</a>
+    <a id="liveBtn" href="/watch" style="position:fixed;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:9999;background:#39b54a;color:#0b0f0b;text-decoration:none;font-weight:800;font-size:15px;padding:10px 16px;border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.6)">📺 Live view</a>
     <a class="copyall" id="statsBtn" href="/stats" style="background:#ffc93c;color:#111;text-decoration:none;text-align:center;font-weight:800">📊 Analytics &amp; singer lookup</a>
     <p class="msg" id="msg" role="status"></p>
     <p id="intro" style="margin:0;font-size:14px;color:var(--ink-2)">Each group has its own send button, so you only send people what they need. Every link is its own app: open it and tap <b>Add</b> to put it on the home screen.</p>
