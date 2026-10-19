@@ -30,6 +30,11 @@
   function go() {
     var a = document.activeElement;
     if ((a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) || document.querySelector(".tmodal:not([hidden]),.forcepin:not([hidden])")) return setTimeout(go, 3000);
+    // loop guard: one automatic reload per 5 minutes at most, so a phone can never get stuck reloading itself
+    var k = "dive_autoreload", now = Date.now(), last = 0;
+    try { last = Number(sessionStorage.getItem(k)) || 0; if (now - last >= 300000) sessionStorage.setItem(k, String(now)); }
+    catch (e) { try { last = Number(localStorage.getItem(k)) || 0; if (now - last >= 300000) localStorage.setItem(k, String(now)); } catch (e2) { return; } }
+    if (now - last < 300000) return;
     location.reload();
   }
   window.diveNewBuild = function () { return pending; };
