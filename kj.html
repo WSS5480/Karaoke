@@ -127,7 +127,10 @@ li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
 .asug button:first-child{border-top:0}.asug button span{display:block;font-size:13px;color:var(--ink-2)}
 #queue li .t b{font-size:21px;font-weight:700;color:#ffc93c;line-height:1.2}
 li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
-li .acts{display:flex;gap:6px;flex-wrap:wrap}
+li .acts{display:none;flex-basis:100%;gap:6px;flex-wrap:wrap}
+li.open .acts{display:flex}
+li .more{margin-left:auto;flex:none;width:40px;height:36px;padding:0;border-radius:999px;font-size:22px;line-height:1;letter-spacing:0}
+li.open .more{border-color:var(--green);color:var(--green-hi)}
 li .acts button{padding:6px 11px;font-size:14px}
 .empty{padding:14px;color:var(--ink-2);text-align:center;display:block}
 input{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:20px;letter-spacing:.3em;text-align:center}
@@ -503,8 +506,10 @@ async function showSinger(r, pinned){
   });
   box.appendChild(ol);
 }
+// rows look like the singer app: number, photo, name, song. The DJ's buttons open with ⋯ and stay open while they work on that singer.
+const openRows = new Set();
 function item(r, i, waiting){
-  const li = document.createElement("li"); if(r.paid && waiting) li.classList.add("locked");
+  const li = document.createElement("li"); if(r.paid && waiting) li.classList.add("locked"); if(openRows.has(r.id)) li.classList.add("open");
   const n = document.createElement("span"); n.className = "n"; n.textContent = waiting ? i + 1 : "✓";
   const t = document.createElement("div"); t.className = "t";
   const b = document.createElement("b"); b.textContent = r.name;
@@ -516,6 +521,9 @@ function item(r, i, waiting){
   t.append(b, s); li.append(n);
   if(r.photo && waiting){ const av = document.createElement("img"); av.className = "av" + (r.photoSt === "pending" ? " blur pend" : r.photoSt === "hidden" ? " blur hid" : ""); av.alt = "Photo of " + r.name + (r.photoSt === "pending" ? ", waiting for your OK" : r.photoSt === "hidden" ? ", blurred" : "") + ". Tap to check it."; kjPic(av, r); av.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); }); li.append(av); }
   li.append(t);
+  const more = document.createElement("button"); more.type = "button"; more.className = "more"; more.textContent = "⋯"; more.setAttribute("aria-label", "Buttons for " + r.name); more.setAttribute("aria-expanded", String(openRows.has(r.id)));
+  more.addEventListener("click", () => { if(openRows.has(r.id)) openRows.delete(r.id); else openRows.add(r.id); li.classList.toggle("open", openRows.has(r.id)); more.setAttribute("aria-expanded", String(openRows.has(r.id))); });
+  li.append(more);
   const info = document.createElement("button"); info.textContent = "History"; info.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); });
   if(!waiting){
     const a = document.createElement("div"); a.className = "acts";
