@@ -19,7 +19,7 @@
 [hidden]{display:none!important}
 body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;padding:env(safe-area-inset-top,0px) 16px calc(24px + env(safe-area-inset-bottom,0px))}
 main{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-top:16px}
-.lastclk{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);right:8px;z-index:900;background:rgba(10,12,10,.92);border:2px solid #39b54a;border-radius:14px;padding:6px 10px;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.5);pointer-events:none;min-width:92px}
+.lastclk{position:fixed;top:calc(env(safe-area-inset-top,0px) + 60px);right:8px;z-index:900;background:rgba(10,12,10,.92);border:2px solid #39b54a;border-radius:14px;padding:6px 10px;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.5);pointer-events:none;min-width:92px}
 .lastclk .k{display:block;font-size:10px;font-weight:800;letter-spacing:.06em;color:#9fae9f;text-transform:uppercase}
 .lastclk .v{display:block;font-size:22px;font-weight:900;color:#5fd36e;font-variant-numeric:tabular-nums;line-height:1.1}
 .lastclk .s{display:block;font-size:11px;color:#9fae9f}
@@ -56,6 +56,21 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .addspot select{flex:1;font:inherit;font-size:16px;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px}
 .namepick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 .namepick p{width:100%;margin:0;color:var(--ink-2);font-size:14px}
+/* shout-outs from the crowd run across the top; the DJ puts them on everyone's screen or takes them down, and can announce things */
+.shoutbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:70;display:flex;align-items:center;gap:8px;background:#0f140f;border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 10px;min-height:46px}
+.shoutbar .tk{flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-size:15px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
+.shoutbar .tk span{display:inline-block;padding-left:100%;animation:tkrun var(--dur,18s) linear infinite}
+.shoutbar .tk span.still{padding-left:0;animation:none;color:var(--ink-2)}
+.shoutbar .tk b{color:#ffc93c;font-weight:700}.shoutbar .tk .dj{color:var(--green-hi);font-weight:800}.shoutbar .tk .new{color:var(--ink-2);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.shoutbar>button{position:relative;font-size:15px;padding:8px 12px;border-radius:10px;letter-spacing:0;text-transform:none;white-space:nowrap}
+.shoutbar>button .badge{position:absolute;top:-7px;right:-6px;background:#ff3d6e;color:#fff;font-size:12px;font-weight:800;border-radius:999px;min-width:20px;height:20px;line-height:20px;text-align:center;padding:0 5px}
+@keyframes tkrun{to{transform:translateX(-100%)}}
+@media (prefers-reduced-motion:reduce){.shoutbar .tk span{animation:none;padding-left:0}}
+.shlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;border:0}
+.shlist li{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;border-top:1px solid var(--line)}
+.shlist li .t{flex:1;min-width:0;font-size:15px}.shlist li .t b{display:inline;color:#ffc93c}.shlist li .t small{display:block;color:var(--ink-2);font-size:12px}
+.shlist li button{padding:6px 10px;font-size:13px;flex:none}
+.chipsrow{display:flex;gap:6px;flex-wrap:wrap}.chipsrow button{font-size:14px;padding:7px 11px}
 .forcepin{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.9);display:grid;place-items:center;padding:16px}
 .fpbox{width:100%;max-width:360px;background:var(--panel);border:2px solid var(--green);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:10px}
 .fpbox h2{margin:0}.fpbox p{margin:0;color:var(--ink-2);font-size:14px}
@@ -187,6 +202,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 </head>
 <body>
 <main>
+  <div class="shoutbar" id="shoutBar" aria-live="polite"><div class="tk"><span class="still" id="shoutTkText">Shout-outs from the crowd run here 📣</span></div><button type="button" id="shoutOpen">📢 Announce<span class="badge" id="shoutBadge" hidden>0</span></button></div>
   <div class="install" id="installBar" hidden>
     <img src="/kj-icon-192.png" alt="">
     <div class="tx"><b>Get the Dive KJ app</b><span id="installHow">Open the queue in one tap.</span></div>
@@ -352,6 +368,23 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
     </section>
   </div>
 </main>
+<div class="forcepin" id="shoutModal" hidden role="dialog" aria-modal="true" aria-labelledby="shoutTitle">
+  <div class="fpbox" style="max-width:520px;max-height:100%;overflow:auto">
+    <h2 id="shoutTitle">📢 Shout-outs &amp; announcements</h2>
+    <p>Crowd shout-outs land here first. <b>Show</b> puts one on everyone's app for 25 minutes; ✕ drops it.</p>
+    <ul class="shlist" id="shNew"></ul>
+    <p id="shNone" hidden>No new shout-outs right now.</p>
+    <h3 style="margin:6px 0 0;font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--green-hi)">On everyone's screen</h3>
+    <ul class="shlist" id="shLive"></ul>
+    <p id="shLiveNone" hidden>Nothing on the screen right now.</p>
+    <h3 style="margin:6px 0 0;font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--green-hi)">Announce something</h3>
+    <div class="chipsrow" id="shChips"></div>
+    <input id="shText" maxlength="100" placeholder="Or type it… (Kitchen closes at 11:30)" style="font:inherit;font-size:16px;letter-spacing:0;text-align:left;width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+    <div class="row"><label style="font-size:14px;color:var(--ink-2)">Keep it up for</label><select id="shMin" style="font:inherit;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px"><option value="5">5 min</option><option value="10" selected>10 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hour</option></select><button type="button" class="next" id="shSend" style="flex:1">Send to everyone</button></div>
+    <p class="err" id="shErr" role="alert"></p>
+    <button type="button" id="shClose">Close</button>
+  </div>
+</div>
 <div class="forcepin" id="forcePin" hidden role="dialog" aria-modal="true" aria-labelledby="fpTitle">
   <form class="fpbox" id="fpForm" novalidate>
     <h2 id="fpTitle">Make your own PIN</h2>
@@ -412,6 +445,51 @@ async function act(path, body){
   try{ const j = await api(path, body || {}); if(j && j.note){ $("err").textContent = j.note; errUntil = Date.now() + 6000; } }catch(e){ if(e.message !== "pin"){ $("err").textContent = e.message; errUntil = Date.now() + 6000; } }
   load();
 }
+/* ---------- shout-outs and announcements ---------- */
+let shoutKey = "", shouts = [];
+const SH_CHIPS = ["🍽 Kitchen closing in 15 min", "🍽 Kitchen is closed", "🍻 Last call!", "🎤 Sign-ups closing soon", "⏰ Last song coming up", "🎉 Tip your bartenders!"];
+function paintShouts(list){
+  shouts = list || []; const tk = $("shoutTkText"), pend = shouts.filter(x => !x.ok);
+  $("shoutBadge").hidden = !pend.length; $("shoutBadge").textContent = pend.length;
+  const key = shouts.map(x => x.id + (x.ok ? "y" : "n")).join(",");
+  if(key !== shoutKey){
+    shoutKey = key;
+    if(!shouts.length){ tk.className = "still"; tk.textContent = "Shout-outs from the crowd run here 📣"; tk.style.removeProperty("--dur"); }
+    else {
+      tk.className = ""; tk.innerHTML = "";
+      shouts.slice().reverse().forEach((x, i) => {
+        if(i) tk.appendChild(document.createTextNode("    •    "));
+        if(!x.ok){ const n = document.createElement("span"); n.className = "new"; n.textContent = "new · "; tk.appendChild(n); }
+        const w = document.createElement(x.dj ? "span" : "b"); if(x.dj) w.className = "dj"; w.textContent = (x.dj ? "📢 " + x.who : "💬 " + x.who) + ": "; tk.appendChild(w);
+        tk.appendChild(document.createTextNode(x.text));
+      });
+      tk.style.setProperty("--dur", Math.max(14, Math.round(tk.textContent.length * 0.3)) + "s");
+    }
+  }
+  if(!$("shoutModal").hidden) paintShoutLists();
+}
+function shRow(x, live){
+  const li = document.createElement("li"); const t = document.createElement("div"); t.className = "t";
+  const b = document.createElement("b"); b.textContent = (x.dj ? "📢 " : "💬 ") + x.who + ": "; t.appendChild(b); t.appendChild(document.createTextNode(x.text));
+  const sm = document.createElement("small"); sm.textContent = new Date(x.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + (x.until ? " · until " + new Date(x.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""); t.appendChild(sm);
+  li.appendChild(t);
+  if(!live){ const ok = document.createElement("button"); ok.className = "next"; ok.textContent = "Show"; ok.addEventListener("click", () => shAct(x.id, "show")); li.appendChild(ok); }
+  const no = document.createElement("button"); no.textContent = "✕"; no.setAttribute("aria-label", "Take down"); no.addEventListener("click", () => shAct(x.id, "remove")); li.appendChild(no);
+  return li;
+}
+function paintShoutLists(){
+  const pend = shouts.filter(x => !x.ok), live = shouts.filter(x => x.ok);
+  $("shNew").innerHTML = ""; pend.slice().reverse().forEach(x => $("shNew").appendChild(shRow(x, false))); $("shNone").hidden = !!pend.length;
+  $("shLive").innerHTML = ""; live.slice().reverse().forEach(x => $("shLive").appendChild(shRow(x, true))); $("shLiveNone").hidden = !!live.length;
+}
+async function shAct(id, what){ $("shErr").textContent = ""; try{ const j = await api("/api/kj/shout/" + id + "/" + what, {}); paintShouts(j.shouts); }catch(e){ if(e.message !== "pin") $("shErr").textContent = e.message; } }
+$("shoutOpen").addEventListener("click", () => { $("shErr").textContent = ""; $("shoutModal").hidden = false; if($("lastClk")) $("lastClk").style.visibility = "hidden"; paintShoutLists(); });
+$("shClose").addEventListener("click", () => { $("shoutModal").hidden = true; if($("lastClk")) $("lastClk").style.visibility = ""; });
+SH_CHIPS.forEach(c => { const b = document.createElement("button"); b.type = "button"; b.textContent = c; b.addEventListener("click", () => { $("shText").value = c; $("shText").focus(); }); $("shChips").appendChild(b); });
+$("shSend").addEventListener("click", async () => {
+  $("shErr").textContent = ""; const text = $("shText").value.trim(); if(!text){ $("shErr").textContent = "Pick one or type the announcement."; return; }
+  try{ const j = await api("/api/kj/announce", { text, minutes: Number($("shMin").value) }); paintShouts(j.shouts); $("shText").value = ""; }catch(e){ if(e.message !== "pin") $("shErr").textContent = e.message; }
+});
 /* ---------- singer card: pops up with their past data when they're up ---------- */
 const CHIP = { Facebook: ["fb", "f"], Instagram: ["ig", "IG"], TikTok: ["tt", "TT"] };
 function chips(list){
@@ -599,7 +677,7 @@ function paintLastClk(){
 }
 function render(){
   if(state && state.me && !state.me.admin && (!state.me.own || !state.me.agreed)) showForcePin();
-  paintMe(); paintBiz();
+  paintMe(); paintBiz(); try{ paintShouts(state.shouts || []); }catch(e){}
   const up = state.queue.find(r => r.status === "up"), waiting = state.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
   if(up){ now.textContent = up.name; const s = document.createElement("small"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); now.appendChild(s);

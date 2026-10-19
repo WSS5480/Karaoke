@@ -276,11 +276,22 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 #postCard.sheet{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;max-height:92vh;max-height:92dvh;overflow:auto;z-index:2147482001;border-radius:22px 22px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 40px rgba(0,0,0,.6);-webkit-overflow-scrolling:touch}
 body.posting{overflow:hidden}
 /* specials stay pinned at the top while scrolling */
-#promo{position:sticky;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:50}
+#promo{position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);z-index:50}
+/* shout-outs run across the top: everyone's, plus the DJ's announcements */
+.shoutbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:60;display:flex;align-items:center;gap:8px;background:#0f140f;border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 10px;min-height:44px}
+.shoutbar .tk{flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-size:15px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
+.shoutbar .tk span{display:inline-block;padding-left:100%;animation:tkrun var(--dur,18s) linear infinite}
+.shoutbar .tk span.still{padding-left:0;animation:none;color:var(--ink-2)}
+.shoutbar .tk b{color:#ffc93c;font-weight:700}
+.shoutbar .tk .dj{color:var(--green-hi);font-weight:800}
+.shoutbar>button{font:inherit;font-size:20px;line-height:1;border-radius:10px;padding:7px 12px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
+@keyframes tkrun{to{transform:translateX(-100%)}}
+@media (prefers-reduced-motion:reduce){.shoutbar .tk span{animation:none;padding-left:0}}
 </style>
 </head>
 <body class="booting">
 <main>
+  <div class="shoutbar" id="shoutBar" aria-live="polite"><div class="tk" id="shoutTk"><span class="still" id="shoutTkText">Send a shout-out to the DJ 📣 / Manda un saludo</span></div><button type="button" id="shoutBtn" aria-label="Send a shout-out">📣</button></div>
   <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
   <div class="install" id="installBar" hidden>
     <img src="/icon-192.png?v=2" alt="">
@@ -594,6 +605,18 @@ body.posting{overflow:hidden}
     </div>
     <p class="err" id="bumpErr" role="alert"></p>
     <button class="bigbtn" id="bumpClose" type="button" style="border-color:var(--line)">Close</button>
+  </div>
+</div>
+<div class="tmodal" id="shoutModal" hidden role="dialog" aria-modal="true" aria-labelledby="shoutTitle">
+  <div class="tbox">
+    <h2 id="shoutTitle">📣 Shout-out</h2>
+    <p class="hint" style="margin:0;color:var(--ink-2)">Goes to the DJ. If the DJ puts it up, it runs across everyone's screen. Keep it fun. / Va al DJ; si lo aprueba, sale en la pantalla de todos.</p>
+    <div><label for="shoutName">Your name <span>/ Tu nombre</span></label><input id="shoutName" maxlength="30" autocomplete="nickname"></div>
+    <div><label for="shoutText">Shout-out <span>/ Saludo</span></label><textarea id="shoutText" maxlength="90" rows="2" placeholder="Happy birthday Maria! 🎂"></textarea></div>
+    <p class="err" id="shoutErr" role="alert"></p>
+    <p class="ok" id="shoutOk" role="status" hidden>Sent to the DJ! If the DJ puts it up, it runs across everyone's screen. 📣</p>
+    <button class="go" id="shoutSend" type="button">Send</button>
+    <button class="linkbtn" id="shoutClose" type="button">Close</button>
   </div>
 </div>
 <div class="tmodal" id="tipModal" hidden role="dialog" aria-modal="true" aria-labelledby="tipTitle">
@@ -930,6 +953,7 @@ function render(data){
       }
     }
   }catch(e){ window.diveReportErr && window.diveReportErr("mine: " + e.message); }
+  try{ paintShouts(data.shouts); }catch(e){ window.diveReportErr && window.diveReportErr("shouts: " + e.message); }
   try{ paintNow((data.queue || []).find(r => r.status === "up")); }catch(e){ window.diveReportErr && window.diveReportErr("paintNow: " + e.message); }
   try{ paintLikes(data.sung); }catch(e){ window.diveReportErr && window.diveReportErr("paintLikes: " + e.message); }
   const ol = $("queue"); ol.innerHTML = "";
@@ -1905,6 +1929,36 @@ async function sendLike(id, on){
   try{ const r = await fetch("/api/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, on }) }); const j = await r.json(); if(!r.ok && j.error) alert(j.error); }catch(e){}
   likeBusy = false; try{ refresh(); }catch(e){}
 }
+/* ---------- shout-outs ---------- */
+let shoutKey = "";
+function paintShouts(list){
+  list = list || []; const tk = $("shoutTkText"), key = list.map(x => x.id).join(",");
+  if(key === shoutKey) return; shoutKey = key;
+  if(!list.length){ tk.className = "still"; tk.textContent = "Send a shout-out to the DJ 📣 / Manda un saludo"; tk.style.removeProperty("--dur"); return; }
+  tk.className = ""; tk.innerHTML = "";
+  list.slice().reverse().forEach((x, i) => {
+    if(i) tk.appendChild(document.createTextNode("    •    "));
+    const w = document.createElement(x.dj ? "span" : "b"); if(x.dj) w.className = "dj"; w.textContent = (x.dj ? "📢 " + x.who : "💬 " + x.who) + ": "; tk.appendChild(w);
+    tk.appendChild(document.createTextNode(x.text));
+  });
+  tk.style.setProperty("--dur", Math.max(14, Math.round(tk.textContent.length * 0.3)) + "s");
+}
+$("shoutBtn").addEventListener("click", () => {
+  let nm = (mine && mine.name) || ""; if(!nm){ try{ nm = localStorage.getItem("dive_name") || ""; }catch(e){} }
+  $("shoutName").value = nm; $("shoutErr").textContent = ""; $("shoutOk").hidden = true; $("shoutModal").hidden = false; setTimeout(() => $("shoutText").focus(), 50);
+});
+$("shoutClose").addEventListener("click", () => $("shoutModal").hidden = true);
+$("shoutSend").addEventListener("click", async () => {
+  $("shoutErr").textContent = ""; const text = $("shoutText").value.trim(); if(!text){ $("shoutErr").textContent = "Type your shout-out first."; return; }
+  $("shoutSend").disabled = true;
+  try{
+    const r = await fetch("/api/shout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, name: $("shoutName").value }) });
+    const j = await r.json(); if(!r.ok) throw new Error(j.error || "Couldn't send. Try again.");
+    try{ if($("shoutName").value.trim()) localStorage.setItem("dive_name", $("shoutName").value.trim()); }catch(e){}
+    $("shoutText").value = ""; $("shoutOk").hidden = false; setTimeout(() => { $("shoutModal").hidden = true; }, 1800);
+  }catch(e){ $("shoutErr").textContent = e.message; }
+  $("shoutSend").disabled = false;
+});
 function paintLikes(list){
   list = list || []; const box = $("likeList"); box.innerHTML = "";
   const others = list.filter(x => !x.mine);
