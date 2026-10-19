@@ -182,10 +182,13 @@ function brand(html, t, base, host) {
   return h;
 }
 const pageCache = new Map();
+// changes with every deploy: pages compare it with what the server sends back and reload themselves when it moves on
+const BUILD = String(process.env.RENDER_GIT_COMMIT || "").slice(0, 12) || String(Date.now());
+app.use((req, res, next) => { res.set("X-Dive-Build", BUILD); next(); });
 function rawPage(file, appMeta) {
   let html = fs.readFileSync(path.join(__dirname, file), "utf8");
   // every page keeps its installed app up to date by itself
-  if (file.endsWith(".html") && !html.includes("/update.js")) html = html.replace("</head>", '<script src="/update.js" defer></script>\n</head>');
+  if (file.endsWith(".html") && !html.includes("/update.js")) html = html.replace("</head>", '<meta name="dive-build" content="' + BUILD + '">\n<script src="/update.js" defer></script>\n</head>');
   if (appMeta) {
     html = html.replace(/<link rel="(manifest|apple-touch-icon)"[^>]*>\s*/g, "").replace(/<meta name="apple-mobile-web-app-(title|capable)"[^>]*>\s*/g, "");
     const tags = `<link rel="manifest" href="/m/${appMeta.key}.json">\n<link rel="apple-touch-icon" href="/${appMeta.key}-apple-touch-icon.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="${appMeta.short}">\n<script src="/install.js" defer></script>\n`;

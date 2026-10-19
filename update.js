@@ -20,6 +20,28 @@
   });
 })();
 
+/* New version on the server? Every answer from the server carries its build stamp; when it differs from
+   the one this page was built with, the page reloads itself as soon as nobody is typing. So a deploy
+   reaches every open phone within a few seconds, installed app or not. */
+(function () {
+  var meta = document.querySelector('meta[name="dive-build"]'), mine = meta && meta.content;
+  if (!mine || !window.fetch) return;
+  var pending = false;
+  function go() {
+    var a = document.activeElement;
+    if ((a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) || document.querySelector(".tmodal:not([hidden]),.forcepin:not([hidden])")) return setTimeout(go, 3000);
+    location.reload();
+  }
+  window.diveNewBuild = function () { return pending; };
+  var orig = window.fetch;
+  window.fetch = function () {
+    return orig.apply(this, arguments).then(function (r) {
+      try { var b = r.headers.get("x-dive-build"); if (b && b !== mine && !pending) { pending = true; setTimeout(go, 1500); } } catch (e) {}
+      return r;
+    });
+  };
+})();
+
 /* Pull down to refresh, on every page (installed home-screen apps don't have it built in).
    Only starts when the page is scrolled to the very top and the finger isn't inside a scrolling box or a text field. */
 (function () {
@@ -67,7 +89,7 @@
     if (armed && !busy) {
       busy = true; tip.textContent = "Refreshing…"; tip.style.transform = "translate(-50%,16px)";
       var done = function () { tip.textContent = "Updated ✓"; setTimeout(function () { tip.style.transform = "translate(-50%,-60px)"; busy = false; }, 700); };
-      if (typeof window.diveRefresh === "function") {
+      if (typeof window.diveRefresh === "function" && !(window.diveNewBuild && window.diveNewBuild())) {
         try { Promise.resolve(window.diveRefresh()).then(done, function () { location.reload(); }); } catch (e) { location.reload(); }
       } else setTimeout(function () { location.reload(); }, 150);
     } else if (!busy) tip.style.transform = "translate(-50%,-60px)";
