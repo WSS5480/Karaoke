@@ -38,6 +38,8 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .singer .hd{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:var(--ink-2)}
 .singer .hd b{color:var(--green-hi);font-family:var(--slab);letter-spacing:.1em;text-transform:uppercase;font-size:12px}
 .singer .hd button{padding:4px 10px;font-size:13px}
+.now .statsBtn{display:block;margin-top:8px;font:inherit;font-family:var(--body);font-weight:600;font-size:14px;letter-spacing:0;text-transform:none;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)}
+.now .statsBtn[aria-expanded="true"]{border-color:var(--green);color:var(--green-hi)}
 .sgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .sgrid div{background:var(--wall);border-radius:10px;padding:8px;text-align:center}
 .sgrid b{display:block;font-family:var(--slab);font-size:20px;font-variant-numeric:tabular-nums}
@@ -592,10 +594,15 @@ function render(){
   paintMe(); paintBiz();
   const up = state.queue.find(r => r.status === "up"), waiting = state.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
-  if(up){ now.textContent = up.name; const s = document.createElement("small"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); now.appendChild(s); }
+  if(up){ now.textContent = up.name; const s = document.createElement("small"); s.textContent = up.song + (up.artist ? " – " + up.artist : ""); now.appendChild(s);
+    // the singer's history and photo stay out of the way until the DJ asks for them
+    const st = document.createElement("button"); st.type = "button"; st.className = "statsBtn"; st.textContent = up.photoSt === "pending" ? "📷 Photo to approve · stats" : "📊 Singer stats";
+    st.setAttribute("aria-expanded", String(!$("singer").hidden && singerFor === up.id));
+    st.addEventListener("click", () => { if(!$("singer").hidden && singerFor === up.id){ $("singer").hidden = true; singerPinned = false; singerFor = null; st.setAttribute("aria-expanded", "false"); } else { showSinger(up, true); st.setAttribute("aria-expanded", "true"); } });
+    now.appendChild(st); }
   else now.textContent = waiting.length ? "Tap Next singer to start" : "Nobody yet";
-  // new singer up: pop their history open automatically
-  if(up && up.id !== lastUp){ lastUp = up.id; showSinger(up, false); }
+  // a new singer is up: close the last one's panel; theirs opens on request
+  if(up && up.id !== lastUp){ lastUp = up.id; if(singerFor !== up.id){ $("singer").hidden = true; singerPinned = false; singerFor = null; } }
   if(!up){ lastUp = null; if(!singerPinned){ $("singer").hidden = true; singerFor = null; } }
   $("nextBtn").textContent = up ? "Done, next singer" : "Start first singer";
   $("undoNext").hidden = !state.undo;
