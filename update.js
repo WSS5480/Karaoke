@@ -26,22 +26,26 @@
 (function () {
   var meta = document.querySelector('meta[name="dive-build"]'), mine = meta && meta.content;
   if (!mine || !window.fetch) return;
-  var pending = false;
+  var pending = false, target = "";
   function go() {
     var a = document.activeElement;
     if ((a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) || document.querySelector(".tmodal:not([hidden]),.forcepin:not([hidden])")) return setTimeout(go, 3000);
-    // loop guard: one automatic reload per 5 minutes at most, so a phone can never get stuck reloading itself
-    var k = "dive_autoreload", now = Date.now(), last = 0;
-    try { last = Number(sessionStorage.getItem(k)) || 0; if (now - last >= 300000) sessionStorage.setItem(k, String(now)); }
-    catch (e) { try { last = Number(localStorage.getItem(k)) || 0; if (now - last >= 300000) localStorage.setItem(k, String(now)); } catch (e2) { return; } }
-    if (now - last < 300000) return setTimeout(go, 300000 - (now - last) + 2000);   // too soon after the last reload: try again once the 5 minutes are up, so nobody gets stuck on an old version
+    // loop guard: never reload twice for the SAME new version within 5 minutes (a phone can't get stuck reloading itself),
+    // but every newer version still goes through, so quick back-to-back updates reach everyone
+    var k = "dive_autoreload", now = Date.now(), rec = "", ok = true;
+    function get() { try { return sessionStorage.getItem(k) || ""; } catch (e) { try { return localStorage.getItem(k) || ""; } catch (e2) { return null; } } }
+    function put(v) { try { sessionStorage.setItem(k, v); } catch (e) { try { localStorage.setItem(k, v); } catch (e2) {} } }
+    rec = get(); if (rec === null) return;
+    var p = rec.split("|"), lastTarget = p[0], lastAt = Number(p[1]) || 0;
+    if (lastTarget === target && now - lastAt < 300000) return setTimeout(go, 300000 - (now - lastAt) + 2000);
+    put(target + "|" + now);
     location.reload();
   }
   window.diveNewBuild = function () { return pending; };
   var orig = window.fetch;
   window.fetch = function () {
     return orig.apply(this, arguments).then(function (r) {
-      try { var b = r.headers.get("x-dive-build"); if (b && b !== mine && !pending) { pending = true; setTimeout(go, 1500); } } catch (e) {}
+      try { var b = r.headers.get("x-dive-build"); if (b && b !== mine) { target = b; if (!pending) { pending = true; setTimeout(go, 1500); } } } catch (e) {}
       return r;
     });
   };
