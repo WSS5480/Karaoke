@@ -34,7 +34,7 @@
     var k = "dive_autoreload", now = Date.now(), last = 0;
     try { last = Number(sessionStorage.getItem(k)) || 0; if (now - last >= 300000) sessionStorage.setItem(k, String(now)); }
     catch (e) { try { last = Number(localStorage.getItem(k)) || 0; if (now - last >= 300000) localStorage.setItem(k, String(now)); } catch (e2) { return; } }
-    if (now - last < 300000) return;
+    if (now - last < 300000) return setTimeout(go, 300000 - (now - last) + 2000);   // too soon after the last reload: try again once the 5 minutes are up, so nobody gets stuck on an old version
     location.reload();
   }
   window.diveNewBuild = function () { return pending; };
