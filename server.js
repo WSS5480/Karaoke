@@ -638,11 +638,33 @@ app.get("/api/queue", wrap(async (req, res) => {
   const list = await db.active();
   const open = (await db.getSetting("open")) !== "no";
   const mine = list.find(r => r.device === d);
-  const last = mine ? null : await db.lastSung(d);
+  const last = mine ? null : await lastSungWith(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
   res.json({ venue: TEN().venue || "", shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
     last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, mine) });
 }));
+
+/* ---------- singer numbers + duets: every signed-in singer has a permanent 6-digit number; give it to a partner and the song counts for both ---------- */
+async function singerNum(uid) {
+  let n = await db.getSetting("singernum:" + uid); if (n) return n;
+  for (let i = 0; i < 50; i++) { n = String(100000 + crypto.randomInt(900000)); if (!(await db.getSetting("singerby:" + n))) break; }
+  await db.setSetting("singernum:" + uid, n); await db.setSetting("singerby:" + n, String(uid)); return n;
+}
+async function duetIds(o) { try { return JSON.parse((await db.getSetting("duets:" + o)) || "[]"); } catch (e) { return []; } }
+async function duetPartner(id) { return (await db.getSetting("duet:" + id)) || ""; }
+async function canOwn(r, d) { return !!r && (r.device === d || (await duetPartner(r.id)) === d); }
+async function mineAllWith(d, sort) {
+  const base = await db.mineAll(d, sort), have = new Set(base.map(r => r.id)), extra = [];
+  for (const id of (await duetIds(d)).slice(-200)) { if (have.has(id)) continue; const r = await db.get(id); if (r && r.done_at && (r.status === "done" || r.status === "archived")) extra.push(r); }
+  const all = base.concat(extra);
+  all.sort(sort === "top" ? (a, b) => (b.likes || 0) - (a.likes || 0) || String(b.done_at).localeCompare(String(a.done_at)) : (a, b) => String(b.done_at).localeCompare(String(a.done_at)));
+  return all.slice(0, 200);
+}
+async function lastSungWith(d) {
+  const a = await db.lastSung(d), cut = Date.now() - 12 * 3600e3; let best = a;
+  for (const id of (await duetIds(d)).slice(-20)) { const r = await db.get(id); if (r && r.done_at && Date.parse(r.done_at) > cut && (r.status === "done" || r.status === "archived") && (!best || String(r.done_at) > String(best.done_at))) best = r; }
+  return best;
+}
 
 app.post("/api/signup", wrap(async (req, res) => {
   const dev = device(req, res), uid = currentUser(req), d = uid ? "c" + uid : dev;
@@ -667,7 +689,16 @@ app.post("/api/signup", wrap(async (req, res) => {
   if (!multi && await db.byDevice(d)) return res.status(409).json({ error: "already", message: "You're already on the list. Cancel your song to pick a different one." });
   if (multi && (await db.active()).some(r => r.device === d && r.song.toLowerCase() === song.toLowerCase())) return res.status(409).json({ error: "already", message: "That song is already on the list for you." });
   const via = req.body.qr && req.body.qr === TEN().qr ? "qr" : req.body.app ? "app" : "link";
-  const row = await db.add({ name, song, artist, device: d, via });
+  let pu = 0, pc = null; const wn = String(req.body.with || "").replace(/\D/g, "");
+  if (wn) {
+    if (!uid) return res.status(400).json({ error: "withsignin", message: "Sign in with your phone number to sing with a partner." });
+    pu = parseInt(await db.getSetting("singerby:" + wn), 10);
+    if (!pu) return res.status(400).json({ error: "withnum", message: "That singer number isn't right. Ask your partner to check it in their app." });
+    if (pu === uid) return res.status(400).json({ error: "withnum", message: "That's your own number. Enter your partner's." });
+    pc = await db.customer(pu); if (!pc) return res.status(400).json({ error: "withnum", message: "That singer number isn't right." });
+  }
+  const row = await db.add({ name: pc && pc.name ? clean(name + " & " + pc.name, 60) : name, song, artist, device: d, via });
+  if (pu) { await db.setSetting("duet:" + row.id, "c" + pu); const L = await duetIds("c" + pu); L.push(row.id); await db.setSetting("duets:c" + pu, JSON.stringify(L.slice(-200))); }
   res.json({ ok: true, id: row.id });
 }));
 
@@ -725,7 +756,7 @@ app.post("/api/like", wrap(async (req, res) => {
   if (!r || (r.status !== "up" && r.status !== "done")) return res.status(404).json({ error: "That song isn't open for likes." });
   const night = barDay().date;
   if (r.status === "done" && (!r.done_at || nightOf(r.done_at) !== night)) return res.status(409).json({ error: "Likes are only open the night they sang." });
-  if (r.device === d) return res.status(409).json({ error: "You can't like your own song." });
+  if (await canOwn(r, d)) return res.status(409).json({ error: "You can't like your own song." });
   const t = Date.now(), l = (likeHits.get(d) || []).filter(x => t - x < 60000); if (l.length >= 30) return res.status(429).json({ error: "Slow down a little." }); l.push(t); likeHits.set(d, l);
   const b = await likeBook(night), set = b.get(String(id)) || new Set();
   const want = req.body.on !== false;
@@ -737,7 +768,7 @@ app.post("/api/like", wrap(async (req, res) => {
 // the singer's own choice to be on the Wall of Fame (no self-rating anymore)
 app.post("/api/wall-optin", wrap(async (req, res) => {
   const d = owner(req, res), r = await db.get(parseInt(req.body.id, 10));
-  if (!r || r.device !== d || !r.done_at) return res.status(404).json({ error: "Song not found." });
+  if (!r || !(await canOwn(r, d)) || !r.done_at) return res.status(404).json({ error: "Song not found." });
   await db.setPublic(r.id, !!req.body.public); res.json({ ok: true, public: !!req.body.public });
 }));
 // links to the singer's own posts, so they can find them again (only shown to them)
@@ -745,7 +776,7 @@ const postLinks = r => { try { return JSON.parse((r && r.post_links) || "{}"); }
 const NET_HOSTS = { Facebook: /(^|\.)(facebook\.com|fb\.com|fb\.watch)$/i, Instagram: /(^|\.)instagram\.com$/i, TikTok: /(^|\.)tiktok\.com$/i };
 app.post("/api/postlink", wrap(async (req, res) => {
   const d = owner(req, res), r = await db.get(parseInt(req.body.id, 10));
-  if (!r || r.device !== d) return res.status(404).json({ error: "Song not found." });
+  if (!r || !(await canOwn(r, d))) return res.status(404).json({ error: "Song not found." });
   const net = NETS.includes(req.body.net) ? req.body.net : null; if (!net) return res.status(400).json({ error: "Pick an app." });
   const links = postLinks(r), raw = String(req.body.url || "").trim().slice(0, 400);
   if (!raw) delete links[net];
@@ -762,14 +793,14 @@ app.post("/api/postlink", wrap(async (req, res) => {
 // customer tells us they shared a song (tapped an icon and the share went through)
 app.post("/api/posted", wrap(async (req, res) => {
   const d = owner(req, res), r = await db.get(parseInt(req.body.id, 10));
-  if (!r || r.device !== d) return res.status(404).json({ error: "Song not found." });
+  if (!r || !(await canOwn(r, d))) return res.status(404).json({ error: "Song not found." });
   const net = NETS.includes(req.body.net) ? req.body.net : null; if (!net) return res.status(400).json({ error: "Pick an app." });
   const list = postedList(r); if (!list.includes(net)) { list.push(net); await db.setPosted(r.id, list.join(",")); }
   res.json({ ok: true, posted: list });
 }));
 app.get("/api/mine", wrap(async (req, res) => {
   const d = owner(req, res);
-  res.json({ items: (await db.mineAll(d, req.query.sort === "top" ? "top" : "new")).map(r => ({ ...histRow(r), links: postLinks(r) })) });
+  res.json({ items: (await mineAllWith(d, req.query.sort === "top" ? "top" : "new")).map(r => ({ ...histRow(r), links: postLinks(r) })) });
 }));
 app.get("/api/wall", wrap(async (req, res) => {
   res.json({ items: (await db.history({ onlyPublic: true, sort: req.query.sort === "top" ? "top" : "new", limit: 100 })).map(histRow) });
@@ -819,7 +850,7 @@ app.get("/api/me", wrap(async (req, res) => {
   const u = currentUser(req), c = u ? await db.customer(u) : null, p = await getProfile(device(req, res));
   const dv = device(req, res);
   const pi = await photoInfo(owner(req, res));
-  res.json({ photo: pi.at || null, photoSt: pi.st || null, photoLock: await photoLocked(owner(req, res)), terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4) } : null, profileName: (c && c.name) || (p && p.name) || null });
+  res.json({ photo: pi.at || null, photoSt: pi.st || null, photoLock: await photoLocked(owner(req, res)), terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4), num: await singerNum(c.id) } : null, profileName: (c && c.name) || (p && p.name) || null });
 }));
 const textHits = new Map();
 app.post("/api/auth/start", wrap(async (req, res) => {
@@ -845,7 +876,7 @@ app.post("/api/auth/check", wrap(async (req, res) => {
   await setProfile(dev, { name: c.name || (p && p.name) || "", customer: c.id });
   await db.moveDevice(dev, "c" + c.id);
   setUserCookie(req, res, c.id);
-  res.json({ ok: true, user: { name: c.name, phone: "•••-•••-" + phone.slice(-4) }, isNew: !c.name });
+  res.json({ ok: true, user: { name: c.name, phone: "•••-•••-" + phone.slice(-4), num: await singerNum(c.id) }, isNew: !c.name });
 }));
 app.post("/api/auth/name", wrap(async (req, res) => {
   const u = currentUser(req); if (!u) return res.status(401).json({ error: "Sign in first." });
