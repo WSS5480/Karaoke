@@ -1938,8 +1938,8 @@ function paintShouts(list){
   tk.className = ""; tk.innerHTML = "";
   list.slice().reverse().forEach((x, i) => {
     if(i) tk.appendChild(document.createTextNode("    •    "));
-    const w = document.createElement(x.dj ? "span" : "b"); if(x.dj) w.className = "dj"; w.textContent = (x.dj ? "📢 " + x.who : "💬 " + x.who) + ": "; tk.appendChild(w);
-    tk.appendChild(document.createTextNode(x.text));
+    if(x.dj){ const w = document.createElement("span"); w.className = "dj"; w.textContent = "📢 " + x.who + ": "; tk.appendChild(w); tk.appendChild(document.createTextNode(x.text)); }
+    else { tk.appendChild(document.createTextNode("💬 " + x.text + "  ")); const w = document.createElement("b"); w.textContent = "— " + x.who; tk.appendChild(w); }
   });
   tk.style.setProperty("--dur", Math.max(14, Math.round(tk.textContent.length * 0.3)) + "s");
 }
