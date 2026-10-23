@@ -88,7 +88,7 @@ function paintDj(d){
   const b = document.getElementById("djBadge"); if(!b) return; const k = d ? d.name + "|" + (d.logo ? 1 : 0) : ""; if(b.dataset.k === k) return; b.dataset.k = k; b.textContent = "";
   if(!d){ b.hidden = true; return; }
   if(d.logo){ const im = document.createElement("img"); im.src = "/api/djlogo?n=" + encodeURIComponent(d.name); im.alt = ""; b.appendChild(im); }
-  const sp = document.createElement("span"); sp.textContent = "🎧 DJ " + d.name; b.appendChild(sp); b.hidden = false;
+  const sp = document.createElement("span"); sp.textContent = "🎧 " + (/^dj\b/i.test(d.name) ? "" : "DJ ") + d.name; b.appendChild(sp); b.hidden = false;
 }
 function render(d){ try{ paintDj(d.dj); }catch(e){}
   $("closed").hidden = d.open && !d.paused;

@@ -649,16 +649,24 @@ app.get("/api/queue", wrap(async (req, res) => {
 }));
 
 /* ---------- singer numbers + duets: every signed-in singer has a permanent 6-digit number; give it to a partner and the song counts for both ---------- */
-async function singerNum(uid) {
-  let n = await db.getSetting("singernum:" + uid); if (n) return n;
+const isCust = o => /^c\d{1,9}$/.test(o);
+const numKeyOf = o => isCust(o) ? o.slice(1) : "dev:" + o;          // a signed-in singer's number follows the account; otherwise it follows the phone
+async function singerNum(key) {
+  key = String(key); let n = await db.getSetting("singernum:" + key); if (n) return n;
   for (let i = 0; i < 50; i++) { n = String(100000 + crypto.randomInt(900000)); if (!(await db.getSetting("singerby:" + n))) break; }
-  await db.setSetting("singernum:" + uid, n); await db.setSetting("singerby:" + n, String(uid)); return n;
+  await db.setSetting("singernum:" + key, n); await db.setSetting("singerby:" + n, key); return n;
 }
-const pickTok = uid => crypto.createHmac("sha256", SESSION_SECRET).update("pick:" + uid).digest("hex").slice(0, 12);
+async function ownerOfNum(n) { const v = await db.getSetting("singerby:" + n); if (!v) return null; return v.startsWith("dev:") ? v.slice(4) : /^\d+$/.test(v) ? "c" + v : null; }
+async function nameOfOwner(o) { try { if (isCust(o)) { const c = await db.customer(parseInt(o.slice(1), 10)); return (c && c.name) || ""; } const pr = await getProfile(o); return (pr && pr.name) || ""; } catch (e) { return ""; } }
 app.get("/api/singers", wrap(async (req, res) => {
-  const me = currentUser(req); if (!me) return res.json({ items: [] });
-  const out = []; for (const c of (await db.singerNames())) if (c.id !== me) out.push({ n: c.name, num: await singerNum(c.id) });
-  res.json({ items: out });
+  const me = owner(req, res), seen = new Set([me]), out = [];
+  for (const c of (await db.singerNames())) { const o = "c" + c.id; if (seen.has(o)) continue; seen.add(o); out.push({ n: c.name, num: await singerNum(c.id) }); }
+  const cut = Date.now() - 20 * 3600e3;   // everyone who signed up tonight, signed in or not
+  for (const r of (await db.allSignups()).slice().reverse()) {
+    if (Date.parse(r.created_at) < cut || !r.device || seen.has(r.device)) continue; seen.add(r.device);
+    const nm = String(r.name || "").split(" & ")[0]; if (nm) out.push({ n: nm, num: await singerNum(numKeyOf(r.device)) });
+  }
+  out.sort((x, y) => x.n.toLowerCase().localeCompare(y.n.toLowerCase())); res.json({ items: out.slice(0, 400) });
 }));
 async function duetIds(o) { try { return JSON.parse((await db.getSetting("duets:" + o)) || "[]"); } catch (e) { return []; } }
 async function duetPartner(id) { return (await db.getSetting("duet:" + id)) || ""; }
@@ -699,20 +707,15 @@ app.post("/api/signup", wrap(async (req, res) => {
   if (!multi && await db.byDevice(d)) return res.status(409).json({ error: "already", message: "You're already on the list. Cancel your song to pick a different one." });
   if (multi && (await db.active()).some(r => r.device === d && r.song.toLowerCase() === song.toLowerCase())) return res.status(409).json({ error: "already", message: "That song is already on the list for you." });
   const via = req.body.qr && req.body.qr === TEN().qr ? "qr" : req.body.app ? "app" : "link";
-  let pu = 0, pc = null; const wn = String(req.body.with || "").replace(/\D/g, ""), wt = String(req.body.withTok || "");
-  if (wt) {
-    const [pid, tk] = wt.split("."); pu = parseInt(pid, 10);
-    if (!uid) return res.status(400).json({ error: "withsignin", message: "Sign in with your phone number to sing with a partner." });
-    if (!pu || tk !== pickTok(pu) || pu === uid || !(pc = await db.customer(pu))) return res.status(400).json({ error: "withnum", message: "Pick your partner again from the list." });
-  } else if (wn) {
-    if (!uid) return res.status(400).json({ error: "withsignin", message: "Sign in with your phone number to sing with a partner." });
-    pu = parseInt(await db.getSetting("singerby:" + wn), 10);
-    if (!pu) return res.status(400).json({ error: "withnum", message: "That singer number isn't right. Ask your partner to check it in their app." });
-    if (pu === uid) return res.status(400).json({ error: "withnum", message: "That's your own number. Enter your partner's." });
-    pc = await db.customer(pu); if (!pc) return res.status(400).json({ error: "withnum", message: "That singer number isn't right." });
+  let pk = "", pname = ""; const wn = String(req.body.with || "").replace(/\D/g, "");
+  if (wn) {
+    pk = await ownerOfNum(wn);
+    if (!pk) return res.status(400).json({ error: "withnum", message: "That singer number isn't right. Ask your partner to check it in their app." });
+    if (pk === d) return res.status(400).json({ error: "withnum", message: "That's your own number. Enter your partner's." });
+    pname = await nameOfOwner(pk);
   }
-  const row = await db.add({ name: pc && pc.name ? clean(name + " & " + pc.name, 60) : name, song, artist, device: d, via });
-  if (pu) { await db.setSetting("duet:" + row.id, "c" + pu); const L = await duetIds("c" + pu); L.push(row.id); await db.setSetting("duets:c" + pu, JSON.stringify(L.slice(-200))); }
+  const row = await db.add({ name: pname ? clean(name + " & " + pname, 60) : name, song, artist, device: d, via });
+  if (pk) { await db.setSetting("duet:" + row.id, pk); const L = await duetIds(pk); L.push(row.id); await db.setSetting("duets:" + pk, JSON.stringify(L.slice(-200))); }
   res.json({ ok: true, id: row.id });
 }));
 
@@ -865,7 +868,7 @@ app.get("/api/me", wrap(async (req, res) => {
   const u = currentUser(req), c = u ? await db.customer(u) : null, p = await getProfile(device(req, res));
   const dv = device(req, res);
   const pi = await photoInfo(owner(req, res));
-  res.json({ photo: pi.at || null, photoSt: pi.st || null, photoLock: await photoLocked(owner(req, res)), terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4), num: await singerNum(c.id) } : null, profileName: (c && c.name) || (p && p.name) || null });
+  res.json({ photo: pi.at || null, photoSt: pi.st || null, photoLock: await photoLocked(owner(req, res)), terms: TERMS_V, termsOk: await termsOk(dv), auth: await authOn(), num: await singerNum(c ? c.id : numKeyOf(owner(req, res))), user: c ? { name: c.name, phone: "•••-•••-" + c.phone.slice(-4), num: await singerNum(c.id) } : null, profileName: (c && c.name) || (p && p.name) || null });
 }));
 const textHits = new Map();
 app.post("/api/auth/start", wrap(async (req, res) => {

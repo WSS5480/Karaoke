@@ -1121,7 +1121,7 @@ function paintDj(d){
   const b = $("djBadge"); if(!b) return; const k = d ? d.name + "|" + (d.logo ? 1 : 0) : ""; if(b.dataset.k === k) return; b.dataset.k = k; b.textContent = "";
   if(!d){ b.hidden = true; return; }
   if(d.logo){ const im = document.createElement("img"); im.src = "/api/djlogo?n=" + encodeURIComponent(d.name); im.alt = ""; b.appendChild(im); }
-  const sp = document.createElement("span"); sp.textContent = "🎧 DJ " + d.name; sp.setAttribute("translate", "no"); b.appendChild(sp); b.hidden = false;
+  const sp = document.createElement("span"); sp.textContent = "🎧 " + (/^dj\b/i.test(d.name) ? "" : "DJ ") + d.name; sp.setAttribute("translate", "no"); b.appendChild(sp); b.hidden = false;
 }
 function renderRate(l){
   try{ if(l) noteSung(l); paintChip(); }catch(e){}
@@ -1619,7 +1619,7 @@ document.addEventListener("visibilitychange", () => { if(document.visibilityStat
 loadPromos();
 
 /* ---------- phone sign-in ---------- */
-let authOn = false, me = null, authPhone = "";
+let authOn = false, me = null, authPhone = "", myNumTop = "";
 const lang = (navigator.language || "").toLowerCase().startsWith("es") ? "es" : "en";
 function showAuth(step){
   $("authCard").hidden = !step;
@@ -1628,7 +1628,7 @@ function showAuth(step){
 }
 let pickLoaded = false;
 async function loadPick(){
-  if(pickLoaded || !me) return; pickLoaded = true;
+  if(pickLoaded) return; pickLoaded = true;
   try{ const j = await (await fetch("/api/singers", { cache: "no-store" })).json(), sel = $("withPick");
     (j.items || []).forEach(x => { const o = document.createElement("option"); o.value = x.num; o.textContent = x.n + " · " + x.num; sel.appendChild(o); });
   }catch(e){ pickLoaded = false; }
@@ -1637,14 +1637,14 @@ $("withPick").addEventListener("change", () => { $("withNum").value = $("withPic
 $("withNum").addEventListener("input", () => { if($("withPick").value !== $("withNum").value) $("withPick").value = ""; });
 $("withChk").addEventListener("change", () => { $("withBox").hidden = !$("withChk").checked; if(!$("withChk").checked){ $("withNum").value = ""; $("withPick").value = ""; } else loadPick(); });
 $("shareNum").addEventListener("click", async () => {
-  if(!me || !me.num) return;
-  const t = "Sing with me at The Dive! My singer #: " + me.num;
+  const n = (me && me.num) || myNumTop; if(!n) return;
+  const t = "Sing with me at The Dive! My singer #: " + n;
   try{ if(navigator.share){ await navigator.share({ title: "My singer #", text: t }); return; } }catch(e){ if(e && e.name === "AbortError") return; }
   try{ await navigator.clipboard.writeText(t); $("shareNum").textContent = "Copied ✓"; setTimeout(() => $("shareNum").textContent = "📤 Share my #", 1500); }catch(e){}
 });
 function paintWho(){
-  $("who").hidden = !me; $("withRow").hidden = !me;
-  $("myNum").textContent = me && me.num ? "· My singer #: " + me.num : ""; $("myNum2").textContent = me && me.num ? "My singer #: " + me.num : ""; $("shareNum").hidden = !(me && me.num);
+  $("who").hidden = !me; $("withRow").hidden = !(me || myNumTop); const num = (me && me.num) || myNumTop;
+  $("myNum").textContent = me && me.num ? "· My singer #: " + me.num : ""; $("myNum2").textContent = num ? "My singer #: " + num : ""; $("shareNum").hidden = !num;
   if(me){ $("whoText").textContent = "Signed in as " + (me.name || "you") + " (" + me.phone + ")"; if(me.name && !$("name").value) $("name").value = me.name; }
 }
 /* ---------- user agreement: pops up the first time, must check the box ---------- */
@@ -1794,7 +1794,7 @@ $("picDel").addEventListener("click", async () => {
 async function loadMe(){
   try{
     const j = await (await fetch("/api/me", { cache: "no-store" })).json();
-    authOn = j.auth; me = j.user; paintWho();
+    authOn = j.auth; me = j.user; myNumTop = j.num || ""; paintWho();
     termsV = j.terms || ""; termsAccepted = !!j.termsOk; $("termsHint").hidden = !termsAccepted;
     paintPhoto(j.photo, j.photoSt, j.photoLock);
     loadLists();
