@@ -353,13 +353,12 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
     </section>
 
     <section class="card" id="hostsCard" hidden>
-      <h2>DJs &amp; staff <span>each has their own PIN</span></h2>
-      <p style="margin:0;color:var(--ink-2);font-size:14px"><b>DJ</b>: runs the night and takes tips. One DJ at a time, signed in from the bar. <b>Staff</b>: runs the queue, closes a DJ session, resets PINs, removes logins. Can't touch tips. Only the house PIN adds logins.</p>
+      <h2>DJs <span>each has their own PIN</span></h2>
+      <p style="margin:0;color:var(--ink-2);font-size:14px"><b>DJ</b>: runs the night and takes tips. One DJ at a time, signed in from the bar. Only the owner (house PIN) adds logins, resets PINs, and closes a DJ session.</p>
       <ol id="hostList"></ol>
       <form id="hostForm" class="row" novalidate>
         <input id="hostName" placeholder="Name" aria-label="Name" maxlength="30" style="flex:1 1 140px;letter-spacing:0;font-size:16px;text-align:left">
         <input id="hostPin" placeholder="PIN" aria-label="Host PIN, 4 to 8 digits" inputmode="numeric" maxlength="8" style="flex:0 1 110px;font-size:16px">
-        <select id="hostRole" aria-label="Login type" style="flex:0 1 120px;font:inherit;font-size:16px;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px"><option value="dj">DJ</option><option value="staff">Staff</option></select>
         <button type="submit">Add</button>
       </form>
       <p class="err" id="hostErr" role="alert"></p>
@@ -870,7 +869,7 @@ async function loadHosts(){
     if(!j.hosts.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No hosts yet. Add one below."; ol.appendChild(li); }
     j.hosts.forEach(h => {
       const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
-      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? (h.manager ? "Manager · sees tips" : "Staff") : "DJ") + " · PIN " + h.pin;
+      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? "Old staff login (can't sign in, remove it)" : "DJ") + " · PIN " + h.pin;
       t.append(b, sp); const x = document.createElement("button"); x.className = "danger"; x.textContent = "Remove";
       x.addEventListener("click", async () => {
         if(x.dataset.armed !== "1"){ x.dataset.armed = "1"; x.textContent = "Tap to confirm"; setTimeout(() => { x.dataset.armed = ""; x.textContent = "Remove"; }, 4000); return; }
@@ -884,21 +883,6 @@ async function loadHosts(){
         catch(err){ if(err.message !== "pin") alert(err.message); }
       });
       const acts = document.createElement("span"); acts.className = "row"; acts.style.gap = "6px"; acts.append(rs, x);
-      if(state && state.me && state.me.admin){
-        const sw = document.createElement("button"); sw.textContent = h.role === "staff" ? "Make DJ" : "Make staff";
-        sw.title = h.role === "staff" ? "DJ: runs the night and takes tips. No Close DJ session, no PIN resets." : "Staff: closes DJ sessions, resets PINs. No tips.";
-        sw.addEventListener("click", async () => {
-          try{ await api("/api/kj/hosts/role", { name: h.name, role: h.role === "staff" ? "dj" : "staff" }); loadHosts(); }
-          catch(err){ if(err.message !== "pin") alert(err.message); }
-        });
-        acts.prepend(sw);
-        if(h.role === "staff"){
-          const mg = document.createElement("button"); mg.textContent = h.manager ? "Hide tips" : "Make manager";
-          mg.title = h.manager ? "Stop this login from seeing tip money" : "Let this login see all tips and tip totals";
-          mg.addEventListener("click", async () => { try{ await api("/api/kj/hosts/manager", { name: h.name, on: !h.manager }); loadHosts(); }catch(err){ if(err.message !== "pin") alert(err.message); } });
-          acts.prepend(mg);
-        }
-      }
       li.append(t, acts); ol.appendChild(li);
     });
   }catch(e){}
@@ -932,7 +916,7 @@ function paintMe(){
   $("hostPin").placeholder = state.tempPin ? "Start PIN " + state.tempPin : "PIN";
   $("hostsCard").hidden = state.me.role === "dj"; $("hostForm").hidden = !state.me.admin;
   $("myPinBtn").hidden = false; $("myPinBtn").textContent = state.me.admin ? "Change house PIN" : "Change my PIN";
-  $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "staff" ? " (staff)" : state.me.role === "dj" ? " (DJ)" : " (house)");
+  $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "dj" ? " (DJ)" : " (house)");
   if(state.me.role !== "dj" && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
 }
 $("hostForm").addEventListener("submit", async e => {
@@ -940,7 +924,7 @@ $("hostForm").addEventListener("submit", async e => {
   const name = $("hostName").value.trim(), pin = $("hostPin").value.trim();
   if(!name){ $("hostErr").textContent = "Enter the host's name."; return; }
   if(!(pin === "" && state && state.tempPin) && !/^\d{4,8}$/.test(pin)){ $("hostErr").textContent = "PIN must be 4 to 8 digits."; return; }
-  try{ await api("/api/kj/hosts", { name, pin: pin || (state && state.tempPin) || "", role: $("hostRole").value }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
+  try{ await api("/api/kj/hosts", { name, pin: pin || (state && state.tempPin) || "" }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
   catch(err){ $("hostErr").textContent = err.message; }
 });
 $("fpForm").addEventListener("submit", async e => {
@@ -1038,7 +1022,7 @@ $("tipLinksForm").addEventListener("submit", async e => {
   }catch(err){ if(err.message !== "pin") $("tipLinksErr").textContent = err.message; }
 });
 setInterval(() => { if(pin && !$("panel").hidden) loadTips(); }, 8000);
-if(window.diveForgotLink) diveForgotLink($("pinForm"), { kinds: [{ k: "host", label: "My DJ or staff login", name: true }, { k: "house", label: "The house PIN" }] });
+if(window.diveForgotLink) diveForgotLink($("pinForm"), { kinds: [{ k: "host", label: "My DJ login", name: true }, { k: "house", label: "The house PIN" }] });
 $("myPhoneForm").addEventListener("submit", async e => {
   e.preventDefault();
   try{ const j = await api("/api/kj/my-phone", { phone: $("myPhone").value }); $("myPhoneMsg").textContent = "Saved ✓ " + j.phone; $("myPhone").value = ""; }

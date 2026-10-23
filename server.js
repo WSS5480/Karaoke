@@ -917,7 +917,7 @@ async function whoIs(pin, name) {
   const hs = (await getHosts()).filter(x => same(pin, x.pin));
   let h = hs[0];
   if (hs.length > 1) { h = name ? hs.find(x => x.name === name) : null; if (!h) return { pick: hs.map(x => x.name) }; }
-  return h ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: h.role === "staff" ? "staff" : "dj", manager: h.role === "staff" && h.manager === true } : null;
+  return h && h.role !== "staff" ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: "dj", manager: false } : null;   // staff logins are retired
 }
 const pinTries = new Map();
 async function kjAuth(req, res, next) {
@@ -1356,15 +1356,8 @@ app.get("/api/kj/singer-record/:key", wrap(async (req, res) => {
   res.json({ name: g.name, money: seeMoney, nights: [...nights.values()].sort((a, b) => b.night.localeCompare(a.night)) });
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
-const staffOnly = (req, res, next) => req.kj && req.kj.role !== "dj" ? next() : res.status(403).json({ error: "Only staff can do that." });
+const staffOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the owner can do that." });
 app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj", manager: h.role === "staff" && h.manager === true })) }); }));
-// house PIN can make a staff login a bar manager: sees all tips and tip totals like the owner
-app.post("/api/kj/hosts/manager", ownerOnly, wrap(async (req, res) => {
-  const hosts = await getHosts(), h = hosts.find(x => x.name === String(req.body.name || ""));
-  if (!h) return res.status(404).json({ error: "Login not found." });
-  if (h.role !== "staff") return res.status(400).json({ error: "Only staff logins can be managers. Tap Make staff first." });
-  h.manager = !!req.body.on; await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
-}));
 app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   const name = clean(req.body.name, 30), pin = String(req.body.pin || "").replace(/\D/g, "") || TEMP_PIN;
   if (!name) return res.status(400).json({ error: "Enter the host's name." });
@@ -1372,9 +1365,9 @@ app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   const hosts = await getHosts();
   const isTemp = !!TEMP_PIN && pin === TEMP_PIN;
   if (isTemp ? (await whoIs(pin) || {}).admin : ((await whoIs(pin)) || hosts.some(h => h.pin === pin))) return res.status(409).json({ error: "That PIN is already used. Pick another." });
-  if (T() !== "dive" && req.body.role !== "staff" && hosts.filter(h => h.role !== "staff").length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " DJ logins. Remove one to add another." });
+  if (T() !== "dive" && hosts.filter(h => h.role !== "staff").length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " DJ logins. Remove one to add another." });
   if (hosts.some(h => h.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: "There's already a host with that name." });
-  hosts.push({ name, pin, own: false, role: req.body.role === "staff" ? "staff" : "dj" }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+  hosts.push({ name, pin, own: false, role: "dj" }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
 app.post("/api/kj/host-terms", wrap(async (req, res) => {
   if (req.kj.admin) return res.json({ ok: true });
@@ -1405,15 +1398,6 @@ app.post("/api/kj/hosts/reset", staffOnly, wrap(async (req, res) => {
   if ((taken && taken.admin) || (!isTemp && hosts.some(x => x.pin === pin && x.name !== name))) return res.status(409).json({ error: "That PIN is already used. Pick another." });
   h.pin = pin; h.own = false; await db.setSetting("hosts", JSON.stringify(hosts));
   await endDj(name, "Your PIN was reset. Sign in with the new PIN and change it.");
-  res.json({ ok: true });
-}));
-// switch a login between DJ and staff (house PIN only). A DJ moved to staff loses tips and their DJ session.
-app.post("/api/kj/hosts/role", ownerOnly, wrap(async (req, res) => {
-  const name = String(req.body.name || ""), role = req.body.role === "staff" ? "staff" : "dj", hosts = await getHosts();
-  const h = hosts.find(x => x.name === name); if (!h) return res.status(404).json({ error: "Login not found." });
-  if (role === "dj" && h.role === "staff" && T() !== "dive" && hosts.filter(x => x.role !== "staff").length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " DJ logins. Remove one first." });
-  h.role = role; await db.setSetting("hosts", JSON.stringify(hosts));
-  if (role === "staff") { if ((await db.getSetting("tip_host")) === name) await db.setSetting("tip_host", ""); await endDj(name, "Your login is now a staff login."); }
   res.json({ ok: true });
 }));
 app.post("/api/kj/hosts/remove", staffOnly, wrap(async (req, res) => {
@@ -1516,7 +1500,7 @@ app.post("/api/kj/tips/take", wrap(async (req, res) => {
 }));
 // staff or the house can stop the DJ's tips for tonight (and turn them back on)
 app.post("/api/kj/tips/staff", wrap(async (req, res) => {
-  if (req.kj.role === "dj") return res.status(403).json({ error: "Only staff can do that." });
+  if (!req.kj.admin) return res.status(403).json({ error: "Only the owner can do that." });
   const ds = await djSession(), s = await tipState();
   if (req.body.on) { await setTipsOff(null); return res.json({ ok: true }); }
   const who = s.on ? s.host : ds ? ds.name : null; if (!who) return res.json({ ok: true });
@@ -1662,7 +1646,7 @@ async function tipStats(days, onlyHost) {
 
 app.post("/api/kj/logout", wrap(async (req, res) => { if (req.kj.role === "dj") await endDj(req.kj.name, null); res.json({ ok: true }); }));
 app.post("/api/kj/kick", wrap(async (req, res) => {
-  if (req.kj.role === "dj") return res.status(403).json({ error: "Only staff can close a DJ's session." });
+  if (!req.kj.admin) return res.status(403).json({ error: "Only the owner can close a DJ's session." });
   const ds = await endDj(null, (req.kj.role === "staff" ? req.kj.name : "Staff") + " closed your DJ session."); res.json({ ok: true, kicked: ds ? ds.name : null });
 }));
 // the DJ's phone reports where it is while the console is open; two readings outside the bar closes the session
@@ -2284,10 +2268,10 @@ Object.entries(APPS).forEach(([route, a]) => {
   app.get(route, (req, res) => sendPage(req, res, a.file, a));
 });
 // the owner's list lives at /owner; staff, DJs and guests only get the group links the owner sends (/links/dj ...)
-const LINK_GROUPS = ["customers", "dj", "staff", "bar"];
+const LINK_GROUPS = ["customers", "dj", "bar"];
 app.get("/staff", (req, res) => { const g = String(req.query.for || ""); res.redirect(301, BASE() + (LINK_GROUPS.includes(g) ? "/links/" + g : "/owner")); });
 // group pages get their own title + link preview (iMessage etc.), never the owner's name or app
-const LINK_META = { customers: ["Karaoke Links", "Sign up to sing, the Wall of Fame, and our terms."], dj: ["DJ Links", "Links and how-to for DJs."], staff: ["Staff Links", "Links and how-to for bar staff."], bar: ["Bar Owner Links", "Tips, move-ups and closing the night, for the bar owner and managers."] };
+const LINK_META = { customers: ["Karaoke Links", "Sign up to sing, the Wall of Fame, and our terms."], dj: ["DJ Links", "Links and how-to for DJs."], bar: ["Bar Owner Links", "Tips, move-ups and closing the night, for the bar owner and managers."] };
 app.get("/links/:group", (req, res) => {
   const g = req.params.group; if (!LINK_GROUPS.includes(g)) return res.redirect(BASE() + "/");
   const t = TEN(), key = t.slug + "|links/" + g + "|" + (t.v || 0) + "|" + req.get("host");
