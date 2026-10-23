@@ -428,9 +428,10 @@ async function rhythmGap() {
 }
 async function rhythmGapNow() {
   const done = (await db.done(500)).filter(r => r.done_at).map(r => ({ t: Date.parse(r.done_at), r })).sort((a, b) => a.t - b.t);
-  const gaps = [];
+  const gaps = [], spans = await bandSpans(), nowT = Date.now();
   for (let i = 1; i < done.length; i++) {
     const g = (done[i].t - done[i - 1].t) / 1000; if (g <= 0 || g > 1200) continue;   // a longer gap is a break, not the rhythm
+    if (spans.some(x => x.s < done[i].t && (x.e || nowT) > done[i - 1].t)) continue;   // a gap that includes a band break isn't the DJ's rhythm
     gaps.push(g - songSecs(done[i].r.song, done[i].r.artist));
   }
   const last = gaps.slice(-8); if (last.length < 2) return DEF_GAP;
@@ -613,6 +614,7 @@ async function pauseState() {
 /* ---------- shout-outs: anyone on the app can send one; it runs across the top of the DJ's and everyone's screen.
    The DJ can announce things the same way ("Kitchen closing in 15 min"), pinned for a few minutes. ---------- */
 const SHOUT_MIN = 25 * 60000;   // a shout-out rides the ticker for 25 minutes
+async function bandSpans() { try { return JSON.parse((await db.getSetting("bandspans:" + barDay().date)) || "[]"); } catch (e) { return []; } }
 async function bandPauseOn() { try { return (await db.getSetting("bandpause:" + barDay().date)) === "on"; } catch (e) { return false; } }
 async function getShouts() { try { return JSON.parse((await db.getSetting("shouts:" + barDay().date)) || "[]"); } catch (e) { return []; } }
 async function saveShouts(l) { await db.setSetting("shouts:" + barDay().date, JSON.stringify(l.slice(-300))); }
@@ -1131,6 +1133,9 @@ app.post("/api/kj/announce", wrap(async (req, res) => {
 }));
 app.post("/api/kj/bandpause", wrap(async (req, res) => {
   const on = !!(req.body || {}).on; await db.setSetting("bandpause:" + barDay().date, on ? "on" : "off");
+  { const sp = await bandSpans(), last = sp[sp.length - 1];   // remember when each band break ran, so the time-to-sing estimate can leave it out
+    if (on && (!last || last.e)) sp.push({ s: Date.now(), e: null }); else if (!on && last && !last.e) last.e = Date.now();
+    await db.setSetting("bandspans:" + barDay().date, JSON.stringify(sp.slice(-30))); gapCache.delete(T()); }
   res.json({ ok: true, band: on });
 }));
 app.post("/api/kj/shout/:id/:what(show|remove)", wrap(async (req, res) => {
