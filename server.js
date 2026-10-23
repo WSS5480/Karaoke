@@ -817,7 +817,8 @@ app.get("/api/mine", wrap(async (req, res) => {
   res.json({ items: (await mineAllWith(d, req.query.sort === "top" ? "top" : "new")).map(r => ({ ...histRow(r), links: postLinks(r) })) });
 }));
 app.get("/api/wall", wrap(async (req, res) => {
-  res.json({ items: (await db.history({ onlyPublic: true, sort: req.query.sort === "top" ? "top" : "new", limit: 100 })).map(histRow) });
+  // the wall of fame is made only by songs that were posted to social media and got likes (and the singer left "Add me to the wall of fame" on)
+  res.json({ items: (await db.history({ onlyPublic: true, sort: req.query.sort === "top" ? "top" : "new", limit: 600 })).filter(r => postedList(r).length && (r.likes || 0) > 0).slice(0, 100).map(histRow) });
 }));
 
 /* ---------- customer accounts: phone number + text code (Twilio Verify) ---------- */
