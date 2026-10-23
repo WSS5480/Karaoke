@@ -59,13 +59,13 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 /* shout-outs from the crowd run across the top; the DJ puts them on everyone's screen or takes them down, and can announce things */
 .shoutbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:70;display:flex;align-items:center;gap:8px;background:#0f140f;border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 10px;min-height:46px}
 .shoutbar .tk{flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-size:15px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
-.shoutbar .tk span{display:inline-block;padding-left:100%;animation:tkrun var(--dur,18s) linear infinite}
-.shoutbar .tk span.still{padding-left:0;animation:none;color:var(--ink-2)}
+.shoutbar .tk>span{display:inline-block;padding-left:100%;animation:tkrun var(--dur,18s) linear infinite}
+.shoutbar .tk>span.still{padding-left:0;animation:none;color:var(--ink-2)}
 .shoutbar .tk b{color:#ffc93c;font-weight:700}.shoutbar .tk .dj{color:var(--green-hi);font-weight:800}.shoutbar .tk .new{color:var(--ink-2);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
 .shoutbar>button{position:relative;font-size:15px;padding:8px 12px;border-radius:10px;letter-spacing:0;text-transform:none;white-space:nowrap}
 .shoutbar>button .badge{position:absolute;top:-7px;right:-6px;background:#ff3d6e;color:#fff;font-size:12px;font-weight:800;border-radius:999px;min-width:20px;height:20px;line-height:20px;text-align:center;padding:0 5px}
 @keyframes tkrun{to{transform:translateX(-100%)}}
-@media (prefers-reduced-motion:reduce){.shoutbar .tk span{animation:none;padding-left:0}}
+@media (prefers-reduced-motion:reduce){.shoutbar .tk>span{animation:none;padding-left:0}}
 .shlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;border:0}
 .shlist li{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;border-top:1px solid var(--line)}
 .shlist li .t{flex:1;min-width:0;font-size:15px}.shlist li .t b{display:inline;color:#ffc93c}.shlist li .t small{display:block;color:var(--ink-2);font-size:12px}
