@@ -446,8 +446,9 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
           <div id="withBox" hidden style="margin-top:8px">
             <label for="withNum">Their singer # <span class="es">/ Su número</span></label>
             <input id="withNum" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="6 digits">
-            <p class="hint" style="color:var(--ink-2);margin:4px 0 0">The song shows in both of your lists and posts. <b id="myNum2"></b> <button type="button" class="linkbtn" id="shareNum" style="display:inline;padding:0 4px" hidden>📤 Share my #</button></p>
+            <p class="hint" style="color:var(--ink-2);margin:4px 0 0">The song shows in both of your lists and posts.</p>
           </div>
+          <p class="hint" style="color:var(--ink);margin:8px 0 0;font-size:16px"><b id="myNum2"></b> <button type="button" class="linkbtn" id="shareNum" style="display:inline;padding:0 4px" hidden>📤 Share my #</button></p>
         </div>
         <div class="field">
           <label for="song">Song <span class="es">/ Canción</span></label>
@@ -1625,7 +1626,7 @@ $("shareNum").addEventListener("click", async () => {
 });
 function paintWho(){
   $("who").hidden = !me; $("withRow").hidden = !me;
-  $("myNum").textContent = me && me.num ? "· My singer #: " + me.num : ""; $("myNum2").textContent = me && me.num ? "Your number: " + me.num : ""; $("shareNum").hidden = !(me && me.num);
+  $("myNum").textContent = me && me.num ? "· My singer #: " + me.num : ""; $("myNum2").textContent = me && me.num ? "My singer #: " + me.num : ""; $("shareNum").hidden = !(me && me.num);
   if(me){ $("whoText").textContent = "Signed in as " + (me.name || "you") + " (" + me.phone + ")"; if(me.name && !$("name").value) $("name").value = me.name; }
 }
 /* ---------- user agreement: pops up the first time, must check the box ---------- */
