@@ -644,7 +644,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await lastSungWith(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
+  res.json({ venue: TEN().venue || "", shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), dj: await djPublic(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
     last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, mine) });
 }));
 
@@ -917,7 +917,7 @@ async function whoIs(pin, name) {
   const hs = (await getHosts()).filter(x => same(pin, x.pin));
   let h = hs[0];
   if (hs.length > 1) { h = name ? hs.find(x => x.name === name) : null; if (!h) return { pick: hs.map(x => x.name) }; }
-  return h && h.role !== "staff" ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: "dj", manager: false } : null;   // staff logins are retired
+  return h && h.role !== "staff" && !h.off ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: "dj", manager: false } : null;   // staff logins are retired
 }
 const pinTries = new Map();
 async function kjAuth(req, res, next) {
@@ -949,6 +949,7 @@ async function kjAuth(req, res, next) {
 // session closes if their phone reports it left. Staff / house can close it with one tap.
 const hasSpot = () => { const t = TEN(); return t.lat != null && t.lat !== "" && Number.isFinite(Number(t.lat)); };
 const DJ_SLACK = 100;   // extra meters past the guest radius before we call it "left" (GPS drifts indoors)
+async function djPublic() { try { const ds = await djSession(); if (!ds || !ds.name) return null; return { name: ds.name, logo: !!(await db.getSetting("djlogo:" + ds.name)) }; } catch (e) { return null; } }
 async function djSession() { try { return JSON.parse((await db.getSetting("dj_session")) || "null"); } catch (e) { return null; } }
 function djWhere(req) {
   const lat = Number(req.headers["x-kj-lat"]), lng = Number(req.headers["x-kj-lng"]), acc = Math.min(Math.max(Number(req.headers["x-kj-acc"]) || 0, 0), 200);
@@ -1357,7 +1358,29 @@ app.get("/api/kj/singer-record/:key", wrap(async (req, res) => {
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
 const staffOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the owner can do that." });
-app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { res.json({ hosts: (await getHosts()).map(h => ({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj", manager: h.role === "staff" && h.manager === true })) }); }));
+app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { const out = []; for (const h of await getHosts()) out.push({ name: h.name, pin: "••" + h.pin.slice(-2), role: h.role === "staff" ? "staff" : "dj", manager: false, off: h.off === true, logo: !!(await db.getSetting("djlogo:" + h.name)) }); res.json({ hosts: out }); }));
+// owner: turn a DJ's access off or back on (name and PIN stay saved); turning it off signs them out right away
+app.post("/api/kj/hosts/access", staffOnly, wrap(async (req, res) => {
+  const hosts = await getHosts(), h = hosts.find(x => x.name === String(req.body.name || ""));
+  if (!h) return res.status(404).json({ error: "Login not found." });
+  h.off = req.body.on === false || req.body.on === "off"; await db.setSetting("hosts", JSON.stringify(hosts));
+  if (h.off) { if ((await db.getSetting("tip_host")) === h.name) await db.setSetting("tip_host", ""); await endDj(h.name, "The owner turned your DJ access off."); }
+  res.json({ ok: true, off: h.off });
+}));
+// owner: a DJ's logo (shown with their name on the singer app and the TV while they are the DJ)
+const LOGO_RE = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+=*)$/;
+app.post("/api/kj/hosts/logo", staffOnly, wrap(async (req, res) => {
+  const hosts = await getHosts(), h = hosts.find(x => x.name === String(req.body.name || ""));
+  if (!h) return res.status(404).json({ error: "Login not found." });
+  const d = String(req.body.data || "");
+  if (!d) { await db.setSetting("djlogo:" + h.name, ""); return res.json({ ok: true }); }
+  if (d.length > 200000 || !LOGO_RE.test(d)) return res.status(400).json({ error: "That picture didn't work. Try a smaller one." });
+  await db.setSetting("djlogo:" + h.name, d); res.json({ ok: true });
+}));
+app.get("/api/djlogo", wrap(async (req, res) => {
+  const d = await db.getSetting("djlogo:" + String(req.query.n || "")), m = d && LOGO_RE.exec(d); if (!m) return res.status(404).end();
+  res.set("Content-Type", "image/" + m[1]).set("Cache-Control", "public, max-age=300").send(Buffer.from(m[2], "base64"));
+}));
 app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   const name = clean(req.body.name, 30), pin = String(req.body.pin || "").replace(/\D/g, "") || TEMP_PIN;
   if (!name) return res.status(400).json({ error: "Enter the host's name." });

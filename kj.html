@@ -869,7 +869,7 @@ async function loadHosts(){
     if(!j.hosts.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No hosts yet. Add one below."; ol.appendChild(li); }
     j.hosts.forEach(h => {
       const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
-      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? "Old staff login (can't sign in, remove it)" : "DJ") + " · PIN " + h.pin;
+      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? "Old staff login (can't sign in, remove it)" : h.off ? "DJ · access OFF" : "DJ") + " · PIN " + h.pin;
       t.append(b, sp); const x = document.createElement("button"); x.className = "danger"; x.textContent = "Remove";
       x.addEventListener("click", async () => {
         if(x.dataset.armed !== "1"){ x.dataset.armed = "1"; x.textContent = "Tap to confirm"; setTimeout(() => { x.dataset.armed = ""; x.textContent = "Remove"; }, 4000); return; }
@@ -883,6 +883,27 @@ async function loadHosts(){
         catch(err){ if(err.message !== "pin") alert(err.message); }
       });
       const acts = document.createElement("span"); acts.className = "row"; acts.style.gap = "6px"; acts.append(rs, x);
+      if(state && state.me && state.me.admin){
+        const ac = document.createElement("button"); ac.textContent = h.off ? "Turn on" : "Turn off";
+        ac.title = h.off ? "Let this DJ sign in again" : "Sign this DJ out and block their login. Name and PIN stay saved.";
+        ac.addEventListener("click", async () => { try{ await api("/api/kj/hosts/access", { name: h.name, on: !!h.off }); loadHosts(); }catch(err){ if(err.message !== "pin") alert(err.message); } });
+        const lg = document.createElement("button"); lg.textContent = h.logo ? "Change logo" : "Add logo";
+        lg.addEventListener("click", () => {
+          const f = document.createElement("input"); f.type = "file"; f.accept = "image/*";
+          f.addEventListener("change", () => {
+            const file = f.files && f.files[0]; if(!file) return;
+            const img = new Image(), u = URL.createObjectURL(file);
+            img.onload = async () => {
+              const S = 256, c = document.createElement("canvas"); c.width = c.height = S; const x = c.getContext("2d");
+              const r = Math.min(img.width, img.height); x.drawImage(img, (img.width - r) / 2, (img.height - r) / 2, r, r, 0, 0, S, S); URL.revokeObjectURL(u);
+              try{ await api("/api/kj/hosts/logo", { name: h.name, data: c.toDataURL("image/jpeg", 0.85) }); loadHosts(); }catch(err){ if(err.message !== "pin") alert(err.message); }
+            };
+            img.onerror = () => alert("That picture didn't open. Try another."); img.src = u;
+          }); f.click();
+        });
+        acts.prepend(lg, ac);
+        if(h.logo){ const im = document.createElement("img"); im.src = "/api/djlogo?n=" + encodeURIComponent(h.name) + "&t=" + Date.now(); im.alt = ""; im.style.cssText = "width:28px;height:28px;border-radius:50%;object-fit:cover;margin-right:8px"; t.prepend(im); }
+      }
       li.append(t, acts); ol.appendChild(li);
     });
   }catch(e){}

@@ -16,6 +16,8 @@ html,body{height:100%}
 body{margin:0;background:var(--wall);color:var(--ink);font-family:var(--body);overflow:hidden}
 .screen{height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:4vmin;padding:4vmin 5vmin;align-items:center}
 .scan{display:flex;flex-direction:column;align-items:center;gap:2.2vmin;text-align:center}
+.wm{position:fixed;inset:0;z-index:0;pointer-events:none;background:url(/logo.png) center 55%/min(80vmin,620px) no-repeat;opacity:.045}.djbadge{display:flex;align-items:center;justify-content:center;gap:10px;margin:6px auto 0;font-weight:700;color:var(--ink)}.djbadge img{width:7vmin;height:7vmin;border-radius:50%;object-fit:cover;border:1px solid var(--green-hi,#5fd36e)}
+.djbadge{font-size:3.6vmin}
 .logo{width:22vmin;filter:drop-shadow(0 0 3vmin rgba(57,181,74,.55))}
 h1{font-family:var(--slab);font-weight:800;font-size:7.4vmin;line-height:1;margin:0}
 .es{font-family:var(--slab);font-weight:600;font-size:3.6vmin;color:var(--green-hi);margin:0}
@@ -51,9 +53,11 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 </style>
 </head>
 <body>
+<div class="wm" aria-hidden="true"></div>
 <div class="screen">
   <section class="scan">
     <img class="logo" src="/logo.png" alt="The Dive on 495">
+    <div class="djbadge" id="djBadge" hidden></div>
     <h1>Scan to sing</h1>
     <p class="es">Escanea para cantar</p>
     <div class="qr"><img src="/qr.svg" alt="QR code to the karaoke sign-up page"></div>
@@ -80,7 +84,13 @@ function pic(r, cls){
   if(r && r.photo){ im.src = "/api/photo/" + r.id + "?v=" + r.photo; im.onerror = logo; } else logo();
   return im;
 }
-function render(d){
+function paintDj(d){
+  const b = document.getElementById("djBadge"); if(!b) return; const k = d ? d.name + "|" + (d.logo ? 1 : 0) : ""; if(b.dataset.k === k) return; b.dataset.k = k; b.textContent = "";
+  if(!d){ b.hidden = true; return; }
+  if(d.logo){ const im = document.createElement("img"); im.src = "/api/djlogo?n=" + encodeURIComponent(d.name); im.alt = ""; b.appendChild(im); }
+  const sp = document.createElement("span"); sp.textContent = "🎧 DJ " + d.name; b.appendChild(sp); b.hidden = false;
+}
+function render(d){ try{ paintDj(d.dj); }catch(e){}
   $("closed").hidden = d.open && !d.paused;
   $("closed").textContent = !d.open ? "Sign-ups are closed" : d.pausedUntil ? "Sign-ups paused until " + new Date(d.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Sign-ups paused";
   const up = d.queue.find(r => r.status === "up"), wait = d.queue.filter(r => r.status === "queued");
