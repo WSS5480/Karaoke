@@ -613,6 +613,7 @@ async function pauseState() {
 /* ---------- shout-outs: anyone on the app can send one; it runs across the top of the DJ's and everyone's screen.
    The DJ can announce things the same way ("Kitchen closing in 15 min"), pinned for a few minutes. ---------- */
 const SHOUT_MIN = 25 * 60000;   // a shout-out rides the ticker for 25 minutes
+async function bandPauseOn() { try { return (await db.getSetting("bandpause:" + barDay().date)) === "on"; } catch (e) { return false; } }
 async function getShouts() { try { return JSON.parse((await db.getSetting("shouts:" + barDay().date)) || "[]"); } catch (e) { return []; } }
 async function saveShouts(l) { await db.setSetting("shouts:" + barDay().date, JSON.stringify(l.slice(-300))); }
 // the DJ sees every shout-out as it comes in; everyone else sees only the ones the DJ chose to show (and the DJ's own announcements)
@@ -639,7 +640,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await db.lastSung(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
+  res.json({ venue: TEN().venue || "", shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
     last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, mine) });
 }));
 
@@ -1062,6 +1063,7 @@ async function describeKj(req) {
   const nm = async id => { try { const r = await db.get(parseInt(id, 10)); return r ? r.name + (r.song ? " (" + r.song + ")" : "") : "#" + id; } catch (e) { return "#" + id; } };
   let m;
   if (u === "/api/kj/next") return "Next singer";
+  if (u === "/api/kj/bandpause") return b.on ? "Paused for the band" : "Band break over, back to singers";
   if (u === "/api/kj/announce") return "Announced: " + (b.text || "");
   if ((m = u.match(/^\/api\/kj\/shout\/\w+\/(show|remove)$/))) return m[1] === "show" ? "Put a shout-out on everyone's screen" : "Took a shout-out off the screen";
   if (u === "/api/kj/undo-next") return "Undo next singer";
@@ -1095,6 +1097,10 @@ app.post("/api/kj/announce", wrap(async (req, res) => {
   const min = Math.min(180, Math.max(1, Math.round(Number(b.minutes) || 10)));
   const all = await getShouts(); all.push({ id: crypto.randomBytes(4).toString("hex"), at: Date.now(), who: req.kj.admin ? "DJ" : req.kj.name, text, dj: true, until: Date.now() + min * 60000 }); await saveShouts(all);
   res.json({ ok: true, shouts: liveShouts(all, true) });
+}));
+app.post("/api/kj/bandpause", wrap(async (req, res) => {
+  const on = !!(req.body || {}).on; await db.setSetting("bandpause:" + barDay().date, on ? "on" : "off");
+  res.json({ ok: true, band: on });
 }));
 app.post("/api/kj/shout/:id/:what(show|remove)", wrap(async (req, res) => {
   const all = await getShouts(), x = all.find(y => y.id === req.params.id);
@@ -1135,7 +1141,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ shouts: liveShouts(await getShouts(), true), lastSong: await lastSongEnd().catch(() => null), myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), rp = await repeatsFor(l), rOk = await idSet("repeat_ok"), rAsk = await idSet("repeat_ask"), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}), ...(rAsk.has(r.id) && ns.has(r.id) ? { repeatAsk: true } : rp.has(r.id) && !rOk.has(r.id) && r.status === "queued" ? { repeat: rp.get(r.id) } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ shouts: liveShouts(await getShouts(), true), lastSong: await lastSongEnd().catch(() => null), myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), band: await bandPauseOn(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), rp = await repeatsFor(l), rOk = await idSet("repeat_ok"), rAsk = await idSet("repeat_ask"), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}), ...(rAsk.has(r.id) && ns.has(r.id) ? { repeatAsk: true } : rp.has(r.id) && !rOk.has(r.id) && r.status === "queued" ? { repeat: rp.get(r.id) } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
