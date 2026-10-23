@@ -444,7 +444,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
         <div class="field" id="withRow" hidden>
           <label for="withNum">Singing with a partner? Their singer # <span class="es">/ ¿Cantas con alguien?</span></label>
           <input id="withNum" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Optional">
-          <p class="hint" style="color:var(--ink-2);margin:4px 0 0">The song shows in both of your lists and posts. <b id="myNum2"></b></p>
+          <p class="hint" style="color:var(--ink-2);margin:4px 0 0">The song shows in both of your lists and posts. <b id="myNum2"></b> <button type="button" class="linkbtn" id="shareNum" style="display:inline;padding:0 4px" hidden>📤 Share my #</button></p>
         </div>
         <div class="field">
           <label for="song">Song <span class="es">/ Canción</span></label>
@@ -1613,9 +1613,15 @@ function showAuth(step){
   ["stepPhone", "stepCode", "stepName"].forEach(id => $(id).hidden = id !== step);
   $("authErr").textContent = "";
 }
+$("shareNum").addEventListener("click", async () => {
+  if(!me || !me.num) return;
+  const t = "Sing with me at The Dive! My singer #: " + me.num;
+  try{ if(navigator.share){ await navigator.share({ title: "My singer #", text: t }); return; } }catch(e){ if(e && e.name === "AbortError") return; }
+  try{ await navigator.clipboard.writeText(t); $("shareNum").textContent = "Copied ✓"; setTimeout(() => $("shareNum").textContent = "📤 Share my #", 1500); }catch(e){}
+});
 function paintWho(){
   $("who").hidden = !me; $("withRow").hidden = !me;
-  $("myNum").textContent = me && me.num ? "· My singer #: " + me.num : ""; $("myNum2").textContent = me && me.num ? "Your number: " + me.num : "";
+  $("myNum").textContent = me && me.num ? "· My singer #: " + me.num : ""; $("myNum2").textContent = me && me.num ? "Your number: " + me.num : ""; $("shareNum").hidden = !(me && me.num);
   if(me){ $("whoText").textContent = "Signed in as " + (me.name || "you") + " (" + me.phone + ")"; if(me.name && !$("name").value) $("name").value = me.name; }
 }
 /* ---------- user agreement: pops up the first time, must check the box ---------- */
