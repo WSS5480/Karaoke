@@ -289,14 +289,18 @@ body.posting{overflow:hidden}
 .bandbar small{display:block;font-weight:600;font-size:13px}
 body.bandpause #promo{top:calc(env(safe-area-inset-top,0px) + 112px)}
 body.bandpause #upNext{filter:grayscale(1);opacity:.5}
+body:not(.esp) .es{display:none!important}
+#langBtn{font-size:14px!important;font-weight:800;padding:8px 10px!important;letter-spacing:.04em;color:var(--green-hi)}
 @keyframes tkrun{to{transform:translateX(-100%)}}
 @media (prefers-reduced-motion:reduce){.shoutbar .tk>span{animation:none;padding-left:0}}
 </style>
+<script>var esp=false;try{var _v=localStorage.getItem("dive_lang");esp=_v?_v==="es":(navigator.language||"").toLowerCase().indexOf("es")===0}catch(e){}function bi(en,es){return esp?en+" / "+es:en}</script>
 </head>
 <body class="booting">
+<script>if(esp)document.body.classList.add("esp")</script>
 <main>
-  <div class="shoutbar" id="shoutBar" aria-live="polite"><div class="tk" id="shoutTk"><span class="still" id="shoutTkText">Send a shout-out to the DJ 📣 / Manda un saludo</span></div><button type="button" id="shoutBtn" aria-label="Send a shout-out">📣</button></div>
-  <div class="bandbar" id="bandBar" hidden>⏸ Paused for the band<small>Pausa para la banda · you can still sign up</small></div>
+  <div class="shoutbar" id="shoutBar" aria-live="polite"><button type="button" id="langBtn" aria-label="Español / English">ESP</button><div class="tk" id="shoutTk"><span class="still" id="shoutTkText">Send a shout-out to the DJ 📣<span class="es"> / Manda un saludo</span></span></div><button type="button" id="shoutBtn" aria-label="Send a shout-out">📣</button></div>
+  <div class="bandbar" id="bandBar" hidden>⏸ Paused for the band<small>You can still sign up<span class="es"> · Pausa para la banda, aún puedes anotarte</span></small></div>
   <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
   <div class="install" id="installBar" hidden>
     <img src="/icon-192.png?v=2" alt="">
@@ -305,7 +309,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <button class="x" id="installX" type="button" aria-label="Hide">×</button>
   </div>
   <img class="logo" src="/logo.png" alt="The Dive on 495, Bar + Stage, McAllen, TX">
-  <h1>Sign up to sing<small>Anótate para cantar</small></h1>
+  <h1>Sign up to sing<small class="es">Anótate para cantar</small></h1>
   <p id="venueLine" hidden style="margin:-6px 0 0;text-align:center;color:var(--green-hi);font-weight:600"></p>
 
   <div class="nowbar" id="nowBar" hidden aria-live="polite">
@@ -314,32 +318,32 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <button type="button" class="likebtn" id="nowLike" hidden aria-label="Like this singer">❤️ <span id="nowLikes">0</span></button>
   </div>
   <section class="card likes" id="likeCard" hidden>
-    <h2>❤️ Like tonight's singers <span style="text-transform:none;letter-spacing:0">/ Dale like</span></h2>
+    <h2>❤️ Like tonight's singers <span class="es" style="text-transform:none;letter-spacing:0">/ Dale like</span></h2>
     <ol class="likelist" id="likeList"></ol>
     <p class="hint" style="margin:0;color:var(--ink-2)">One like per song from each phone. Likes are open the night they sing.</p>
   </section>
-  <label class="nowopt" id="nowOpt" hidden for="nowPop"><input type="checkbox" id="nowPop"> Pop up lyrics for every new song / Letra en cada canción</label>
+  <label class="nowopt" id="nowOpt" hidden for="nowPop"><input type="checkbox" id="nowPop"> Pop up lyrics for every new song<span class="es"> / Letra en cada canción</span></label>
   <p class="nowopt lyrwhere" id="lyrWhere" hidden>Lyrics open in: <b id="lyrAppName">not picked</b> <button type="button" class="linkbtn" id="lyrChange" style="font-size:14px;padding:0 4px">Change</button></p>
 
   <section class="card" id="authCard" hidden>
     <div id="stepPhone" style="display:flex;flex-direction:column;gap:14px">
-      <h2>Sign in to sing <span style="text-transform:none;letter-spacing:0">/ Entra para cantar</span></h2>
+      <h2>Sign in to sing <span class="es" style="text-transform:none;letter-spacing:0">/ Entra para cantar</span></h2>
       <p style="margin:0;color:var(--ink-2)">We'll text you a code. Your songs and likes follow you to any phone.</p>
       <div>
-        <label for="phone">Phone number <span>/ Teléfono</span></label>
+        <label for="phone">Phone number <span class="es">/ Teléfono</span></label>
         <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="956-555-0123">
       </div>
       <button class="go" id="sendCode" type="button">Text me a code</button>
     </div>
     <div id="stepCode" hidden style="display:flex;flex-direction:column;gap:14px">
-      <h2>Enter your code <span style="text-transform:none;letter-spacing:0">/ Tu código</span></h2>
+      <h2>Enter your code <span class="es" style="text-transform:none;letter-spacing:0">/ Tu código</span></h2>
       <p style="margin:0;color:var(--ink-2)" id="sentTo"></p>
       <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" aria-label="Code from your text">
       <button class="go" id="checkCode" type="button">Sign in</button>
       <button class="linkbtn" id="resend" type="button">Send a new code</button>
     </div>
     <div id="stepName" hidden style="display:flex;flex-direction:column;gap:14px">
-      <h2>What should we call you? <span style="text-transform:none;letter-spacing:0">/ ¿Cómo te llamas?</span></h2>
+      <h2>What should we call you? <span class="es" style="text-transform:none;letter-spacing:0">/ ¿Cómo te llamas?</span></h2>
       <input id="acctName" maxlength="30" autocomplete="given-name" aria-label="Your name or stage name">
       <button class="go" id="saveName" type="button">Continue</button>
     </div>
@@ -355,7 +359,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
         <button type="button" class="pinfo" id="picInfo" aria-label="Photo settings" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
       </div>
       <div class="ptx">
-        <b id="picTitle">Add your photo <span style="font-weight:400;color:var(--ink-2)">/ Tu foto</span></b>
+        <b id="picTitle">Add your photo <span class="es" style="font-weight:400;color:var(--ink-2)">/ Tu foto</span></b>
         <small>Shows on the TV when you're up. Tap your photo to resize it. No photo? We show The Dive logo.</small>
         <div class="pbtns"><button type="button" class="sm" id="picEdit" hidden>Resize</button><button type="button" class="sm" id="picAdd">Add photo</button><button type="button" class="sm" id="picDel" hidden>Remove</button></div>
       </div>
@@ -369,18 +373,18 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <form id="form" novalidate>
       <div style="display:flex;flex-direction:column;gap:14px">
         <div>
-          <label for="name">Your name <span>/ Tu nombre</span></label>
+          <label for="name">Your name <span class="es">/ Tu nombre</span></label>
           <input id="name" name="name" maxlength="30" autocomplete="given-name" required>
           <p class="hint" id="nameLock" hidden style="color:var(--ink-2)"></p>
         </div>
         <div class="field">
-          <label for="song">Song <span>/ Canción</span></label>
+          <label for="song">Song <span class="es">/ Canción</span></label>
           <input id="song" name="song" maxlength="80" autocomplete="off" placeholder="" required>
           <div class="sugg" id="sugg" hidden></div>
-          <p class="hint" style="color:var(--ink-2);margin:4px 0 0">Not in the list? Just type it in. / ¿No aparece? Escríbela.</p>
+          <p class="hint" style="color:var(--ink-2);margin:4px 0 0">Not in the list? Just type it in.<span class="es"> / ¿No aparece? Escríbela.</span></p>
         </div>
         <div class="field">
-          <label for="artist">Artist <span>/ Artista</span></label>
+          <label for="artist">Artist <span class="es">/ Artista</span></label>
           <input id="artist" name="artist" maxlength="60" autocomplete="off" placeholder="">
           <select id="artistPick" hidden aria-label="Pick the artist"></select>
           <div class="sugg" id="asugg" hidden></div>
@@ -398,9 +402,9 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <div class="num" id="mineNum"></div>
     <p id="mineLine"></p>
     <p class="eta" id="mineEta" hidden></p>
-    <p class="nosong" id="noSongMsg" hidden role="alert">🎵 The DJ doesn't have that song. Pick another one. You keep your spot. / El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.</p>
+    <p class="nosong" id="noSongMsg" hidden role="alert">🎵 The DJ doesn't have that song. Pick another one. You keep your spot.<span class="es"> / El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.</span></p>
     <div class="song" id="mineSong"></div>
-    <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics / Letra</a>
+    <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics<span class="es"> / Letra</span></a>
     <div class="bumpbox" id="bumpBox" hidden>
       <button class="go" id="bumpOpen" type="button">🔒 Lock your spot<small class="bsub">Move up · $<span id="bumpPrice">1</span> a spot · nobody can bump you</small></button>
       <p class="bumpmsg" id="bumpMsg" role="status"></p>
@@ -428,7 +432,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
   </section>
 
   <section class="card rate" id="rateCard" hidden>
-    <h2>Nice singing! <span style="text-transform:none;letter-spacing:0">/ ¡Bien cantado!</span></h2>
+    <h2>Nice singing! <span class="es" style="text-transform:none;letter-spacing:0">/ ¡Bien cantado!</span></h2>
     <div class="song" id="rateSong"></div>
     <p class="mylikes" id="myLikes">❤️ 0 likes</p>
     <p class="hint" style="margin:0;color:var(--ink-2);text-align:center">Likes from the crowd keep coming in tonight.</p>
@@ -440,7 +444,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 
   <div id="postScrim" hidden></div>
   <section class="card" id="postCard" hidden role="dialog" aria-modal="true" aria-label="Post your song">
-    <h2>Post your song <span style="text-transform:none;letter-spacing:0">/ Publícalo</span></h2>
+    <h2>Post your song <span class="es" style="text-transform:none;letter-spacing:0">/ Publícalo</span></h2>
     <div class="postwrap">
       <img id="postPreview" alt="Your karaoke picture" hidden>
       <video id="postVidPreview" muted loop playsinline hidden></video>
@@ -474,7 +478,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <div id="vidStage" aria-hidden="true"></div>
     <p class="ok" id="shareMsg" role="status"></p>
     <div class="linkbox" id="postLinkBox" hidden>
-      <label for="postLinkIn">🔗 Save where you posted <span>/ Guarda tu publicación</span></label>
+      <label for="postLinkIn">🔗 Save where you posted <span class="es">/ Guarda tu publicación</span></label>
       <p class="hint" style="margin:0;color:var(--ink-2)">Paste the link to your <b id="plNet"></b> post (Share → Copy link), or your @username. Then one tap in My songs takes you back to it.</p>
       <div class="row2"><input id="postLinkIn" inputmode="url" autocomplete="off" placeholder="Link or @username"><button type="button" class="sm" id="postLinkSave">Save</button></div>
       <p class="hint" id="postLinkMsg" role="status" style="margin:0"></p>
@@ -491,13 +495,13 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
   </section>
 
   <section class="card tipcard" id="tipCard" hidden>
-    <h2>Tip the DJ <span style="text-transform:none;letter-spacing:0">/ Propina al DJ</span></h2>
+    <h2>Tip the DJ <span class="es" style="text-transform:none;letter-spacing:0">/ Propina al DJ</span></h2>
     <p style="margin:0;color:var(--ink-2)" id="tipLead">Show some love and send a shout-out.</p>
     <button class="go" id="tipOpen" type="button">💵 Tip <span id="tipHostName"></span></button>
   </section>
 
   <section class="card" id="mySongs">
-    <h2>My songs <span style="text-transform:none;letter-spacing:0">/ Mis canciones</span></h2>
+    <h2>My songs <span class="es" style="text-transform:none;letter-spacing:0">/ Mis canciones</span></h2>
     <div class="lifehearts" id="lifeHearts" hidden><b id="lhTotal">0</b><span>lifetime ❤️ hearts</span><i id="lhSub"></i></div>
     <div class="tabs" role="tablist">
       <button type="button" role="tab" id="tabFor" aria-selected="true">✨ For you</button>
@@ -525,7 +529,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     </div>
     <div id="panePrac" hidden>
       <div class="field">
-        <label for="pSong">Add a song to practice <span>/ Para practicar</span></label>
+        <label for="pSong">Add a song to practice <span class="es">/ Para practicar</span></label>
         <input id="pSong" maxlength="80" autocomplete="off" placeholder="Song or artist">
         <div class="sugg" id="pSugg" hidden></div>
       </div>
@@ -543,7 +547,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 </main>
 <div class="tmodal" id="lyrModal" hidden role="dialog" aria-modal="true" aria-labelledby="lyrTitle">
   <div class="tbox" style="gap:12px;max-width:420px">
-    <h2 id="lyrTitle">Open lyrics in… <span style="font-weight:400;color:var(--ink-2)">/ Abrir letra en…</span></h2>
+    <h2 id="lyrTitle">Open lyrics in… <span class="es" style="font-weight:400;color:var(--ink-2)">/ Abrir letra en…</span></h2>
     <p style="margin:0;color:var(--ink-2);font-size:14px">Pick a music app you already have. It opens to your song, and you tap Lyrics there.</p>
     <div class="lyrapps">
       <button type="button" data-app="apple"><i style="background:#fa2d48;color:#fff">♫</i><span>Apple Music<small>Opens your song. Tap ••• then View Full Lyrics</small></span></button>
@@ -552,32 +556,32 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
       <button type="button" data-app="amazon"><i style="background:#25d1da;color:#000">♪</i><span>Amazon Music<small>Open the song, then lyrics</small></span></button>
       <button type="button" data-app="google"><i style="background:#fff;color:#4285f4;font-weight:800">G</i><span>Web search<small>Lyrics usually show right at the top. Free, no app</small></span></button>
     </div>
-    <label class="nowopt" for="lyrRemember" style="margin:0"><input type="checkbox" id="lyrRemember" checked> Remember my choice / Recordar</label>
+    <label class="nowopt" for="lyrRemember" style="margin:0"><input type="checkbox" id="lyrRemember" checked> Remember my choice<span class="es"> / Recordar</span></label>
     <button class="linkbtn" id="lyrCancel" type="button">Cancel</button>
   </div>
 </div>
 <div class="tmodal" id="singModal" hidden role="dialog" aria-modal="true" aria-labelledby="singTitle">
   <div class="tbox" style="text-align:center;gap:12px">
-    <h2 id="singTitle">🎶 Sing along <span style="font-weight:400;color:var(--ink-2)">/ Canta</span></h2>
+    <h2 id="singTitle">🎶 Sing along <span class="es" style="font-weight:400;color:var(--ink-2)">/ Canta</span></h2>
     <p id="singSong" style="margin:0;font-size:18px"></p>
     <p id="singWho" style="margin:0;color:var(--ink-2)"></p>
-    <a class="go" id="singLyr" target="_blank" rel="noopener" style="text-decoration:none;display:block">🔎 Lyrics / Letra</a>
+    <a class="go" id="singLyr" target="_blank" rel="noopener" style="text-decoration:none;display:block">🔎 Lyrics<span class="es"> / Letra</span></a>
     <button class="linkbtn" id="singClose" type="button">Not this one</button>
   </div>
 </div>
 <div class="tmodal" id="upModal" hidden role="dialog" aria-modal="true" aria-labelledby="upTitle">
   <div class="tbox" style="text-align:center;gap:14px">
     <div style="font-size:54px;line-height:1">🎤</div>
-    <h2 id="upTitle" style="font-size:26px;letter-spacing:.06em">You're up! <span style="display:block;font-size:16px;font-weight:400;color:var(--ink-2);letter-spacing:0;text-transform:none">¡Te toca!</span></h2>
+    <h2 id="upTitle" style="font-size:26px;letter-spacing:.06em">You're up! <span class="es" style="display:block;font-size:16px;font-weight:400;color:var(--ink-2);letter-spacing:0;text-transform:none">¡Te toca!</span></h2>
     <p id="upSong" style="margin:0;font-size:18px"></p>
-    <a class="go" id="upLyr" target="_blank" rel="noopener" style="text-decoration:none;display:block">🔎 My lyrics / Mi letra</a>
+    <a class="go" id="upLyr" target="_blank" rel="noopener" style="text-decoration:none;display:block">🔎 My lyrics<span class="es"> / Mi letra</span></a>
     <button class="linkbtn" id="upClose" type="button">Head to the stage</button>
   </div>
 </div>
 <div class="tipnudge" id="tipNudge" hidden role="dialog" aria-labelledby="tnTitle">
   <button type="button" class="tnx" id="tnX" aria-label="Close">×</button>
   <b id="tnTitle">👏 That was <span id="tnWho"></span>!</b>
-  <span>Enjoying the music? Tip the DJ / Propina al DJ</span>
+  <span>Enjoying the music? Tip the DJ<span class="es"> / Propina al DJ</span></span>
   <div class="tnrow"><button type="button" class="go" id="tnTip">💵 Tip <span id="tnHost"></span></button><button type="button" class="linkbtn" id="tnNo">Not now</button></div>
   <button type="button" class="go" id="tnBump" hidden style="background:#ffc93c;color:#111">⏫ Move & lock · $<span id="tnBumpP">1</span> a spot</button>
   <button type="button" class="tnoff" id="tnOff">Don't ask again tonight</button>
@@ -586,7 +590,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
   <div class="tbox" style="overflow:auto">
     <h2 id="bumpTitle">🔒 Lock your spot</h2>
     <div id="bumpStep0" style="display:flex;flex-direction:column;gap:12px">
-      <p style="margin:0;font-weight:700">Before you pay / Antes de pagar</p>
+      <p style="margin:0;font-weight:700">Before you pay<span class="es"> / Antes de pagar</span></p>
       <ul class="bumpterms">
         <li>$<span class="bpr">1</span> a spot is a <b>tip to the DJ</b>, paid straight to them. It does not go to The Dive.</li>
         <li>You move up <b>only after the DJ sees your payment</b> and taps OK.</li>
@@ -595,12 +599,12 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
         <li>The DJ can still skip or remove a singer for conduct or time, and the night may end before your turn.</li>
         <li><b>No refunds</b> through the app or The Dive. Ask the DJ.</li>
       </ul>
-      <button class="go" id="bumpAgree" type="button">I agree / Acepto</button>
+      <button class="go" id="bumpAgree" type="button">I agree<span class="es"> / Acepto</span></button>
       <a href="/terms" target="_blank" rel="noopener" style="text-align:center;color:var(--ink-2);font-size:14px">Full terms</a>
     </div>
     <div id="bumpStep1" hidden style="display:flex;flex-direction:column;gap:12px">
-      <div><label>Pick your spot <span>/ Escoge tu lugar</span></label><div class="bspots" id="bumpSpots"></div></div>
-      <div><label>Pay <span id="bumpHost"></span> with <span>/ Pagar con</span></label><div class="tpay" id="bumpPay"></div></div>
+      <div><label>Pick your spot <span class="es">/ Escoge tu lugar</span></label><div class="bspots" id="bumpSpots"></div></div>
+      <div><label>Pay <span id="bumpHost"></span> with <span class="es">/ Pagar con</span></label><div class="tpay" id="bumpPay"></div></div>
       <p class="hint" style="color:var(--ink-2);margin:0">$<span id="bumpPrice2">1</span> a spot goes straight to the DJ. You move up as soon as the DJ sees your payment and taps OK. If they can't find it, you stay where you are. Ask the DJ about refunds.</p>
     </div>
     <div id="bumpStep2" hidden style="display:flex;flex-direction:column;gap:12px">
@@ -615,9 +619,9 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 <div class="tmodal" id="shoutModal" hidden role="dialog" aria-modal="true" aria-labelledby="shoutTitle">
   <div class="tbox">
     <h2 id="shoutTitle">📣 Shout-out</h2>
-    <p class="hint" style="margin:0;color:var(--ink-2)">Goes to the DJ. If the DJ puts it up, it runs across everyone's screen. Keep it fun. / Va al DJ; si lo aprueba, sale en la pantalla de todos.</p>
-    <div><label for="shoutName">Your name <span>/ Tu nombre</span></label><input id="shoutName" maxlength="30" autocomplete="nickname"></div>
-    <div><label for="shoutText">Shout-out <span>/ Saludo</span></label><textarea id="shoutText" maxlength="90" rows="2" placeholder="Happy birthday Maria! 🎂"></textarea></div>
+    <p class="hint" style="margin:0;color:var(--ink-2)">Goes to the DJ. If the DJ puts it up, it runs across everyone's screen. Keep it fun.<span class="es"> / Va al DJ; si lo aprueba, sale en la pantalla de todos.</span></p>
+    <div><label for="shoutName">Your name <span class="es">/ Tu nombre</span></label><input id="shoutName" maxlength="30" autocomplete="nickname"></div>
+    <div><label for="shoutText">Shout-out <span class="es">/ Saludo</span></label><textarea id="shoutText" maxlength="90" rows="2" placeholder="Happy birthday Maria! 🎂"></textarea></div>
     <p class="err" id="shoutErr" role="alert"></p>
     <p class="ok" id="shoutOk" role="status" hidden>Sent to the DJ! If the DJ puts it up, it runs across everyone's screen. 📣</p>
     <button class="go" id="shoutSend" type="button">Send</button>
@@ -629,12 +633,12 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <h2 id="tipTitle">Tip <span id="tipTo"></span></h2>
     <button type="button" class="go" id="tipBumpLink" hidden style="background:#ffc93c;color:#111">⏫ Move & lock your spot instead</button>
     <div id="tipStep1" style="display:flex;flex-direction:column;gap:12px">
-      <div><label>Amount <span>/ Cantidad</span></label>
+      <div><label>Amount <span class="es">/ Cantidad</span></label>
         <div class="tamts" id="tipAmts"><button type="button" data-a="1">$1</button><button type="button" data-a="5" aria-pressed="true">$5</button><button type="button" data-a="10">$10</button><button type="button" data-a="20">$20</button></div>
         <input id="tipOther" inputmode="decimal" placeholder="Other amount" aria-label="Other amount in dollars" style="margin-top:8px"></div>
-      <div><label for="tipName">Your name <span>/ Tu nombre</span></label><input id="tipName" maxlength="30" autocomplete="nickname"></div>
-      <div><label for="tipNote">Comment <span>/ Comentario (optional)</span></label><textarea id="tipNote" maxlength="140" rows="2" placeholder="Play some Selena next! 🎤"></textarea></div>
-      <div><label>Pay with <span>/ Pagar con</span></label><div class="tpay" id="tipPay"></div></div>
+      <div><label for="tipName">Your name <span class="es">/ Tu nombre</span></label><input id="tipName" maxlength="30" autocomplete="nickname"></div>
+      <div><label for="tipNote">Comment <span class="es">/ Comentario (optional)</span></label><textarea id="tipNote" maxlength="140" rows="2" placeholder="Play some Selena next! 🎤"></textarea></div>
+      <div><label>Pay with <span class="es">/ Pagar con</span></label><div class="tpay" id="tipPay"></div></div>
       <p class="hint" style="color:var(--ink-2);margin:0">Your tip goes straight to the DJ through the app you pick. The Dive never sees your payment info.</p>
     </div>
     <div id="tipStep2" hidden style="display:flex;flex-direction:column;gap:12px">
@@ -648,21 +652,21 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 </div>
 <div class="tmodal" id="cropModal" hidden role="dialog" aria-modal="true" aria-labelledby="cropTitle">
   <div class="tbox cropbox">
-    <h2 id="cropTitle">Size your photo <span style="font-weight:400;color:var(--ink-2)">/ Ajusta tu foto</span></h2>
+    <h2 id="cropTitle">Size your photo <span class="es" style="font-weight:400;color:var(--ink-2)">/ Ajusta tu foto</span></h2>
     <div class="cstage" id="cStage" tabindex="0" aria-label="Photo. Drag or use arrow keys to move."><img id="cImg" alt="Your photo" draggable="false"><div class="cmask"></div></div>
     <div class="czoom"><button type="button" class="sm" id="cOut" aria-label="Zoom out">−</button><input type="range" id="cRange" min="0.4" max="5" step="0.01" value="1" aria-label="Zoom"><button type="button" class="sm" id="cIn" aria-label="Zoom in">+</button></div>
     <div class="czoom cmove" aria-label="Move photo"><button type="button" class="sm" data-mv="-1,0" aria-label="Move left">←</button><button type="button" class="sm" data-mv="0,-1" aria-label="Move up">↑</button><button type="button" class="sm" id="cReset" style="width:auto;padding:0 14px;font-size:14px">Center</button><button type="button" class="sm" data-mv="0,1" aria-label="Move down">↓</button><button type="button" class="sm" data-mv="1,0" aria-label="Move right">→</button></div>
-    <p class="hint" style="color:var(--ink-2);text-align:center;margin:0">Drag the photo to move it. Pinch or slide to zoom. / Arrastra para mover, desliza para acercar.</p>
-    <div class="csave"><button class="go" id="cUse" type="button">Save photo <span style="font-weight:400;text-transform:none">/ Guardar</span></button>
+    <p class="hint" style="color:var(--ink-2);text-align:center;margin:0">Drag the photo to move it. Pinch or slide to zoom.<span class="es"> / Arrastra para mover, desliza para acercar.</span></p>
+    <div class="csave"><button class="go" id="cUse" type="button">Save photo <span class="es" style="font-weight:400;text-transform:none">/ Guardar</span></button>
     <button class="linkbtn" id="cCancel" type="button">Cancel</button></div>
   </div>
 </div>
 <div class="tmodal" id="termsModal" hidden role="dialog" aria-modal="true" aria-labelledby="termsTitle">
   <div class="tbox">
-    <h2 id="termsTitle">Before you sing <span>/ Antes de cantar</span></h2>
+    <h2 id="termsTitle">Before you sing <span class="es">/ Antes de cantar</span></h2>
     <p class="tlead">Please read The Dive's Terms of Use and Privacy Notice.</p>
     <div class="tscroll" id="termsText" tabindex="0">Loading…</div>
-    <label class="tchk" for="termsAgree"><input type="checkbox" id="termsAgree"> <span>I'm 18 or older, and I have read and agree to the Terms of Use and Privacy Notice. <i>Tengo 18 años o más y acepto los términos.</i></span></label>
+    <label class="tchk" for="termsAgree"><input type="checkbox" id="termsAgree"> <span>I'm 18 or older, and I have read and agree to the Terms of Use and Privacy Notice. <i class="es">Tengo 18 años o más y acepto los términos.</i></span></label>
     <p class="err" id="termsErr" role="alert"></p>
     <button class="go" id="termsGo" type="button" disabled>Agree &amp; sign up</button>
     <button class="linkbtn" id="termsNo" type="button">Not now</button>
@@ -757,7 +761,7 @@ function setArtistFor(title, chosen){
   const pick = $("artistPick"), input = $("artist"), hint = $("artistHint");
   if(matches.length > 1){
     pick.innerHTML = "";
-    const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Pick the artist / Elige el artista"; pick.appendChild(o0);
+    const o0 = document.createElement("option"); o0.value = ""; o0.textContent = bi("Pick the artist", "Elige el artista"); pick.appendChild(o0);
     matches.forEach(a => { const o = document.createElement("option"); o.value = a; o.textContent = a; pick.appendChild(o); });
     pick.value = chosen && matches.includes(chosen) ? chosen : "";
     input.value = pick.value; input.hidden = true; pick.hidden = false;
@@ -943,7 +947,7 @@ function render(data){
     if(window.paintBump) window.paintBump(data.bump || { on: false }, mine);
     $("editSong").hidden = mine.status === "up"; if(mine.status === "up") $("editForm").hidden = true;
     $("noSongMsg").hidden = !mine.nosong;
-    $("noSongMsg").textContent = mine.repeat ? "🔁 That song was already sung tonight. The DJ asks you to pick a different one. You keep your spot. / Esa canción ya se cantó hoy. Escoge otra; no pierdes tu lugar." : "🎵 The DJ doesn't have that song. Pick another one. You keep your spot. / El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.";
+    $("noSongMsg").textContent = mine.repeat ? bi("🔁 That song was already sung tonight. The DJ asks you to pick a different one. You keep your spot.", "Esa canción ya se cantó hoy. Escoge otra; no pierdes tu lugar.") : bi("🎵 The DJ doesn't have that song. Pick another one. You keep your spot.", "El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.");
     if(mine.nosong && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; $("editForm").hidden = false; $("editSongIn").value = ""; $("editArtistIn").value = ""; $("editErr").textContent = ""; try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
     // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
     { const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
@@ -1531,9 +1535,9 @@ $("termsGo").addEventListener("click", async () => {
 let pendingPhoto = null;
 function paintPhoto(v, st, lock){
   const has = !!v, img = $("picImg");
-  const note = st === "pending" ? "⏳ The host will OK your photo before it shows on the TV. / El host aprobará tu foto."
-    : st === "hidden" ? "The host hid your photo. Ask them about it. / El host ocultó tu foto." : "";
-  const lk = lock ? "Photos are off for you right now. Ask the host. / Fotos desactivadas, pregunta al host." : "";
+  const note = st === "pending" ? bi("⏳ The host will OK your photo before it shows on the TV.", "El host aprobará tu foto.")
+    : st === "hidden" ? bi("The host hid your photo. Ask them about it.", "El host ocultó tu foto.") : "";
+  const lk = lock ? bi("Photos are off for you right now. Ask the host.", "Fotos desactivadas, pregunta al host.") : "";
   $("picNote").textContent = lk || note; $("picNote").hidden = !(lk || note);
   $("picAdd").disabled = !!lock; $("picEdit").disabled = !!lock; $("picRing").disabled = !!lock;
   $("picRing").classList.toggle("none", !has);
@@ -1622,7 +1626,7 @@ async function uploadPhoto(data){
     if(r.status === 428){ termsAccepted = false; pendingPhoto = data; openTerms(); return; }
     if(!r.ok) throw new Error(j.error || "Couldn't save the photo.");
     paintPhoto(j.photo, j.photoSt); refresh();
-    $("picErr").innerHTML = '<span class="picok">✓ Photo saved / Foto guardada</span>'; clearTimeout(window._picOk); window._picOk = setTimeout(() => { $("picErr").textContent = ""; }, 4000);
+    $("picErr").innerHTML = '<span class="picok">✓ Photo saved' + (esp ? ' / Foto guardada' : '') + '</span>'; clearTimeout(window._picOk); window._picOk = setTimeout(() => { $("picErr").textContent = ""; }, 4000);
   }catch(e){ $("picErr").textContent = e.message || "Couldn't save the photo. Check your signal."; }
   finally{ $("cUse").disabled = false; $("picAdd").disabled = false; if($("picAdd").textContent === "Saving…") $("picAdd").textContent = $("picDel").hidden ? "Add photo" : "Change photo"; }
 }
@@ -1940,7 +1944,7 @@ let shoutKey = "";
 function paintShouts(list){
   list = list || []; const tk = $("shoutTkText"), key = list.map(x => x.id).join(",");
   if(key === shoutKey) return; shoutKey = key;
-  if(!list.length){ tk.className = "still"; tk.textContent = "Send a shout-out to the DJ 📣 / Manda un saludo"; tk.style.removeProperty("--dur"); return; }
+  if(!list.length){ tk.className = "still"; tk.innerHTML = "Send a shout-out to the DJ 📣<span class=\"es\"> / Manda un saludo</span>"; tk.style.removeProperty("--dur"); return; }
   tk.className = ""; tk.innerHTML = "";
   list.slice().reverse().forEach((x, i) => {
     if(i) tk.appendChild(document.createTextNode("    •    "));
@@ -1949,6 +1953,9 @@ function paintShouts(list){
   });
   tk.style.setProperty("--dur", Math.max(14, Math.round(tk.textContent.length * 0.3)) + "s");
 }
+function paintLang(){ document.body.classList.toggle("esp", esp); $("langBtn").textContent = esp ? "EN" : "ESP"; }
+paintLang();
+$("langBtn").addEventListener("click", () => { esp = !esp; try{ localStorage.setItem("dive_lang", esp ? "es" : "en"); }catch(e){} paintLang(); try{ shoutKey = "\u0000"; refresh(); }catch(e){} });
 $("shoutBtn").addEventListener("click", () => {
   let nm = (mine && mine.name) || ""; if(!nm){ try{ nm = localStorage.getItem("dive_name") || ""; }catch(e){} }
   $("shoutName").value = nm; $("shoutErr").textContent = ""; $("shoutOk").hidden = true; $("shoutModal").hidden = false; setTimeout(() => $("shoutText").focus(), 50);
