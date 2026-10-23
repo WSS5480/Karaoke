@@ -288,6 +288,7 @@ if (DB_OK) {
     },
     async customerByPhone(p) { return (await Q(`SELECT * FROM customers WHERE phone=$1`, [p])).rows[0]; },
     async customer(id) { return (await Q(`SELECT * FROM customers WHERE id=$1`, [id])).rows[0]; },
+    async singerNames() { return (await Q(`SELECT id, name FROM customers WHERE name <> '' AND last_seen > now() - interval '60 days' ORDER BY lower(name) LIMIT 400`)).rows; },
     async addCustomer(p) { return (await Q(`INSERT INTO customers (phone) VALUES ($1) ON CONFLICT (phone) DO UPDATE SET last_seen=now() RETURNING *`, [p])).rows[0]; },
     async setCustomerName(id, n) { await Q(`UPDATE customers SET name=$2, last_seen=now() WHERE id=$1`, [id, n]); },
     async moveDevice(from, to) { await Q(`UPDATE signups SET device=$2 WHERE device=$1 AND tenant=$3`, [from, to, T()]); },
@@ -336,6 +337,7 @@ if (DB_OK) {
     customers: [],
     async customerByPhone(p) { return this.customers.find(c => c.phone === p); },
     async customer(id) { return this.customers.find(c => c.id === id); },
+    async singerNames() { return this.customers.filter(c => c.name).map(c => ({ id: c.id, name: c.name })); },
     async addCustomer(p) { let c = this.customers.find(x => x.phone === p); if (!c) { c = { id: this.customers.length + 1, phone: p, name: "", created_at: now() }; this.customers.push(c); } return c; },
     async setCustomerName(id, n) { const c = this.customers.find(x => x.id === id); if (c) c.name = n; },
     async moveDevice(from, to) { rows.forEach(r => { if (mine(r) && r.device === from) r.device = to; }); },
@@ -652,6 +654,12 @@ async function singerNum(uid) {
   for (let i = 0; i < 50; i++) { n = String(100000 + crypto.randomInt(900000)); if (!(await db.getSetting("singerby:" + n))) break; }
   await db.setSetting("singernum:" + uid, n); await db.setSetting("singerby:" + n, String(uid)); return n;
 }
+const pickTok = uid => crypto.createHmac("sha256", SESSION_SECRET).update("pick:" + uid).digest("hex").slice(0, 12);
+app.get("/api/singers", wrap(async (req, res) => {
+  const me = currentUser(req); if (!me) return res.json({ items: [] });
+  const out = []; for (const c of (await db.singerNames())) if (c.id !== me) out.push({ n: c.name, num: await singerNum(c.id) });
+  res.json({ items: out });
+}));
 async function duetIds(o) { try { return JSON.parse((await db.getSetting("duets:" + o)) || "[]"); } catch (e) { return []; } }
 async function duetPartner(id) { return (await db.getSetting("duet:" + id)) || ""; }
 async function canOwn(r, d) { return !!r && (r.device === d || (await duetPartner(r.id)) === d); }
@@ -691,8 +699,12 @@ app.post("/api/signup", wrap(async (req, res) => {
   if (!multi && await db.byDevice(d)) return res.status(409).json({ error: "already", message: "You're already on the list. Cancel your song to pick a different one." });
   if (multi && (await db.active()).some(r => r.device === d && r.song.toLowerCase() === song.toLowerCase())) return res.status(409).json({ error: "already", message: "That song is already on the list for you." });
   const via = req.body.qr && req.body.qr === TEN().qr ? "qr" : req.body.app ? "app" : "link";
-  let pu = 0, pc = null; const wn = String(req.body.with || "").replace(/\D/g, "");
-  if (wn) {
+  let pu = 0, pc = null; const wn = String(req.body.with || "").replace(/\D/g, ""), wt = String(req.body.withTok || "");
+  if (wt) {
+    const [pid, tk] = wt.split("."); pu = parseInt(pid, 10);
+    if (!uid) return res.status(400).json({ error: "withsignin", message: "Sign in with your phone number to sing with a partner." });
+    if (!pu || tk !== pickTok(pu) || pu === uid || !(pc = await db.customer(pu))) return res.status(400).json({ error: "withnum", message: "Pick your partner again from the list." });
+  } else if (wn) {
     if (!uid) return res.status(400).json({ error: "withsignin", message: "Sign in with your phone number to sing with a partner." });
     pu = parseInt(await db.getSetting("singerby:" + wn), 10);
     if (!pu) return res.status(400).json({ error: "withnum", message: "That singer number isn't right. Ask your partner to check it in their app." });
