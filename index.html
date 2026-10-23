@@ -340,7 +340,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     </div>
     <div id="stepName" hidden style="display:flex;flex-direction:column;gap:14px">
       <h2>What should we call you? <span style="text-transform:none;letter-spacing:0">/ ¿Cómo te llamas?</span></h2>
-      <input id="acctName" maxlength="30" autocomplete="given-name" placeholder="Maria" aria-label="Your name or stage name">
+      <input id="acctName" maxlength="30" autocomplete="given-name" aria-label="Your name or stage name">
       <button class="go" id="saveName" type="button">Continue</button>
     </div>
     <p class="err" id="authErr" role="alert"></p>
@@ -370,7 +370,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
       <div style="display:flex;flex-direction:column;gap:14px">
         <div>
           <label for="name">Your name <span>/ Tu nombre</span></label>
-          <input id="name" name="name" maxlength="30" autocomplete="given-name" placeholder="Maria" required>
+          <input id="name" name="name" maxlength="30" autocomplete="given-name" required>
           <p class="hint" id="nameLock" hidden style="color:var(--ink-2)"></p>
         </div>
         <div class="field">
