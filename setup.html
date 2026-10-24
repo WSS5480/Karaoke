@@ -102,6 +102,29 @@ a{color:var(--green-hi)}
     </section>
 
     <section class="card">
+      <h2>Colors</h2>
+      <p class="hint">Your own look on the sign-up app, TV screen, host page and wall. Pick a preset or your own colors.</p>
+      <div class="row" id="thPresets" style="flex-wrap:wrap;gap:6px"></div>
+      <div class="two">
+        <div><label for="thAccent">Accent (buttons, headings)</label><input id="thAccent" type="color" value="#39b54a"></div>
+        <div><label for="thText">Text</label><input id="thText" type="color" value="#eef3ee"></div>
+      </div>
+      <div class="two">
+        <div><label for="thBg">Background</label><input id="thBg" type="color" value="#0a0c0a"></div>
+        <div><label for="thBanner">Banners (shout-outs, ads, band break)</label><input id="thBanner" type="color" value="#183a1d"></div>
+      </div>
+      <div><label for="thBannerText">Banner text</label><input id="thBannerText" type="color" value="#eef3ee"></div>
+      <div id="thPrev" style="border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;border:1px solid #333">
+        <div id="thPrevBan" style="border-radius:10px;padding:8px 10px;font-weight:700">📣 Happy birthday Sam! — Mia</div>
+        <b id="thPrevH" style="font-size:18px">Sign up to sing</b>
+        <span id="thPrevT">Your name, your song, and you're on the list.</span>
+        <span id="thPrevB" style="align-self:flex-start;border-radius:999px;padding:8px 16px;font-weight:800">Put me on the list</span>
+      </div>
+      <div class="row"><button type="button" id="thReset">Back to default colors</button></div>
+      <p class="hint">Tap Save changes to put it live.</p>
+    </section>
+
+    <section class="card">
       <h2>Location check</h2>
       <p class="hint" id="locState"></p>
       <div class="row"><button type="button" id="locBtn">📍 Set to where I am now</button><button type="button" id="locClear">Clear</button></div>
@@ -148,6 +171,7 @@ function paint(j){
   $("tz").value = j.tz; $("hostLimit").textContent = j.hostLimit;
   $("logoPrev").src = j.logo || "/logo.png?" + Date.now(); $("hdrLogo").src = $("logoPrev").src;
   $("locState").textContent = j.lat != null ? "On. Guests must be near the spot you saved" + (j.venue ? " (" + j.venue + ")" : "") + "." : "Not set yet. Until you set it, anyone with the link can sign up. The QR code always works.";
+  thSet(j.theme); themeDirty = false; themeReset = false;
   const p = j.plan;
   $("planLabel").textContent = p.label; $("planPill").textContent = p.active ? "Active" : "Not active"; $("planPill").className = "pill " + (p.active ? "on" : "off");
   $("planHint").textContent = p.paid ? "Paid by card. Thank you!" : p.active ? (p.expires_on ? "Runs through " + new Date(p.expires_on + "T12:00:00").toLocaleDateString([], { month: "long", day: "numeric" }) + ". Subscribe to keep it running." : "") : "Subscribe or enter a code to turn sign-ups back on.";
@@ -164,6 +188,19 @@ async function open(){ paint(await api("/api/setup/me")); $("login").hidden = tr
 $("pinForm").addEventListener("submit", async e => { e.preventDefault(); pin = $("pin").value.trim(); try{ await open(); try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} }catch(e){ if(e.message !== "pin") $("pinErr").textContent = e.message; } });
 if(pin) open().catch(() => {});
 if(/paid=1/.test(location.search)) $("paidMsg").hidden = false;
+const TH_DEF = { accent: "#39b54a", text: "#eef3ee", bg: "#0a0c0a", banner: "#183a1d", bannerText: "#eef3ee" };
+const TH_PRESETS = [["Dive green", TH_DEF], ["Neon pink", { accent: "#ff3ea5", text: "#fdf2f8", bg: "#12060d", banner: "#3a0d26", bannerText: "#ffe4f1" }],
+  ["Electric blue", { accent: "#2f8cff", text: "#eef5ff", bg: "#060b14", banner: "#0e2547", bannerText: "#e3efff" }], ["Gold", { accent: "#f5b700", text: "#fff8e6", bg: "#0f0c05", banner: "#3a2c06", bannerText: "#fff1c2" }],
+  ["Purple night", { accent: "#a35cff", text: "#f5efff", bg: "#0b0714", banner: "#2a1650", bannerText: "#efe3ff" }], ["Red room", { accent: "#ff4d4d", text: "#fff0f0", bg: "#120606", banner: "#3d0e0e", bannerText: "#ffe1e1" }],
+  ["Light", { accent: "#1f8a3b", text: "#14181a", bg: "#f6f7f5", banner: "#dff2e3", bannerText: "#14181a" }]];
+let themeDirty = false, themeReset = false;
+const thIds = { accent: "thAccent", text: "thText", bg: "thBg", banner: "thBanner", bannerText: "thBannerText" };
+function thGet(){ const o = {}; Object.entries(thIds).forEach(([k, id]) => o[k] = $(id).value); return o; }
+function thSet(o){ Object.entries(thIds).forEach(([k, id]) => $(id).value = (o && o[k]) || TH_DEF[k]); thPaint(); }
+function thPaint(){ const o = thGet(); $("thPrev").style.background = o.bg; $("thPrevH").style.color = o.accent; $("thPrevT").style.color = o.text; $("thPrevB").style.background = o.accent; $("thPrevB").style.color = o.bg; $("thPrevBan").style.background = o.banner; $("thPrevBan").style.color = o.bannerText; }
+TH_PRESETS.forEach(([n, o]) => { const b = document.createElement("button"); b.type = "button"; b.textContent = n; b.style.borderLeft = "10px solid " + o.accent; b.addEventListener("click", () => { thSet(o); themeDirty = true; themeReset = false; }); $("thPresets").appendChild(b); });
+Object.values(thIds).forEach(id => $(id).addEventListener("input", () => { themeDirty = true; themeReset = false; thPaint(); }));
+$("thReset").addEventListener("click", () => { thSet(TH_DEF); themeDirty = false; themeReset = true; });
 $("logoBtn").addEventListener("click", () => { $("logoIn").value = ""; $("logoIn").click(); });
 $("logoDel").addEventListener("click", () => { logo = ""; $("logoPrev").src = "/default-logo.png"; });
 $("logoIn").addEventListener("change", async () => {
@@ -190,6 +227,7 @@ $("save").addEventListener("click", async () => {
   const body = { name: $("name").value, short: $("short").value, city: $("city").value, email: $("email").value, address: $("address").value, radius: $("radius").value, tz: $("tz").value,
     tags: { Facebook: $("fb").value, Instagram: $("ig").value, TikTok: $("tt").value }, ...(spot || {}) };
   if(logo !== null) body.logo = logo;
+  if(themeReset) body.theme = null; else if(themeDirty) body.theme = thGet();
   if(np) body.newPin = np;
   $("save").disabled = true;
   try{ const j = await api("/api/setup/save", body); if(np){ pin = np; try{ sessionStorage.setItem("kj_pin", pin); }catch(e){} $("newPin").value = $("newPin2").value = ""; } paint(j); $("ok").textContent = "Saved."; }

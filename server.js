@@ -199,7 +199,7 @@ function rawPage(file, appMeta) {
 function sendPage(req, res, file, appMeta, type) {
   const t = TEN(), key = t.slug + "|" + file + "|" + (t.v || 0) + "|" + req.get("host");
   let h = pageCache.get(key);
-  if (h == null) { h = rawPage(file, appMeta); if (!t.house) h = brand(h, t, BASE(), req.get("host")); pageCache.set(key, h); }
+  if (h == null) { h = rawPage(file, appMeta); if (!t.house) h = brand(h, t, BASE(), req.get("host")); if (t.theme && /\.html$/.test(file) && file !== "setup.html") h = h.replace("</head>", themeCss(t.theme) + "\n</head>"); pageCache.set(key, h); }
   res.type(type || "html").set("Cache-Control", "no-cache").send(h);
 }
 // logo + app icons: The Dive's files, or the bar's own uploaded logo
@@ -2136,7 +2136,18 @@ app.get("/api/url", (req, res) => res.json({ url: siteUrl(req) + BASE() + "/" })
 
 /* ---------- new bar / DJ sign-up (main site only: /start) ---------- */
 const startHits = new Map();
+const HEX = v => /^#[0-9a-f]{6}$/i.test(String(v || "")) ? String(v).toLowerCase() : null;
+function mixHex(a, b, k) { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const x = p(a), y = p(b); return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * k).toString(16).padStart(2, "0")).join(""); }
+// a bar's or KJ's own colors: accent (buttons, headings), text, background, and the banners (shout-out bar, ads, band break)
+function themeCss(th) {
+  if (!th) return "";
+  const bg = th.bg || "#0a0c0a", ink = th.text || "#eef3ee", ac = th.accent || "#39b54a", bn = th.banner || mixHex(bg, ac, 0.18), bt = th.bannerText || ink;
+  return "<style id=\"barTheme\">:root{--wall:" + bg + ";--panel:" + mixHex(bg, ink, 0.06) + ";--panel-2:" + mixHex(bg, ink, 0.1) + ";--line:" + mixHex(bg, ink, 0.18) + ";--green:" + ac + ";--green-hi:" + mixHex(ac, "#ffffff", 0.25) + ";--ink:" + ink + ";--ink-2:" + mixHex(ink, bg, 0.35) + "}" +
+    "body{background:" + bg + "}.shoutbar,.bandbar,.promo{background:" + bn + "!important;color:" + bt + "!important;border-color:" + mixHex(bn, bt, 0.25) + "!important}.shoutbar .tk,.promo b,.promo span{color:" + bt + "!important}.logo{filter:drop-shadow(0 0 22px " + ac + "88)!important}</style>";
+}
 function cleanTenantFields(b, t) {
+  if (b.theme === null) delete t.theme;
+  else if (b.theme && typeof b.theme === "object") { const th = {}; ["accent", "text", "bg", "banner", "bannerText"].forEach(k => { const v = HEX(b.theme[k]); if (v) th[k] = v; }); t.theme = Object.keys(th).length ? th : undefined; if (!t.theme) delete t.theme; }
   if (b.name !== undefined) { const n = cleanName(b.name, 50); if (n) t.name = n; }
   if (b.short !== undefined) t.short = cleanName(b.short, 24) || t.name;
   if (b.city !== undefined) t.city = cleanName(b.city, 40);
@@ -2207,7 +2218,7 @@ async function ownerAuth(req, res) {
   if (!fresh || !pinMatches(String(req.headers["x-kj-pin"] || ""), fresh.pinHash)) { l.push(now); pinTries.set(ip, l); res.status(401).json({ error: "Wrong owner PIN." }); return null; }
   return fresh;
 }
-const ownerView = (t, req) => ({ slug: t.slug, type: t.type || "bar", name: t.name, short: t.short, city: t.city || "", address: t.address || "", email: t.email || "",
+const ownerView = (t, req) => ({ theme: t.theme || null, slug: t.slug, type: t.type || "bar", name: t.name, short: t.short, city: t.city || "", address: t.address || "", email: t.email || "",
   lat: t.lat ?? null, lng: t.lng ?? null, radius: t.radius || 150, tz: t.tz || "America/Chicago", venue: t.venue || "", tags: t.tags || {}, logo: t.logo || "", hasLogo: !!t.logo,
   plan: planSummary(t), price: PRICE_TEXT, cardReady: !!(STRIPE.key && STRIPE.price), paid: !!(t.stripe && t.stripe.customer), hostLimit: HOST_LIMIT,
   links: { app: siteUrl(req) + BASE() + "/", kj: siteUrl(req) + BASE() + "/kj", tv: siteUrl(req) + BASE() + "/tv", poster: siteUrl(req) + BASE() + "/poster", staff: siteUrl(req) + BASE() + "/owner" } });
