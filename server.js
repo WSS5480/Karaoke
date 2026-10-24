@@ -62,6 +62,13 @@ function metersAway(lat, lng) {
 const app = express();
 app.set("trust proxy", true);
 // route /b/<slug>/... to that bar or DJ; everything else is The Dive
+// the KJ / other-bars app is not rolled out yet: until BARS_LIVE=on in Render, The Dive's address serves only The Dive
+// (no /start sign-up, no /b/<name> accounts). My Apps can still list and manage accounts.
+const BARS_LIVE = () => process.env.BARS_LIVE === "on";
+app.use((req, res, next) => {
+  if (BARS_LIVE() || !/^\/(b\/|start(\/|$|\?)|api\/start(\/|$|\?))/.test(req.url)) return next();
+  res.status(404).type("html").send(simplePage("Not found", "<h1>Page not found</h1>"));
+});
 app.use(async (req, res, next) => {
   const m = /^\/b\/([a-z0-9][a-z0-9-]{0,38})(\/[^?]*)?(\?.*)?$/.exec(req.url);
   if (!m) { req._ctx = { t: "dive", tenant: DIVE, base: "" }; return ctx.run(req._ctx, next); }
