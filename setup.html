@@ -40,6 +40,7 @@ button{font:inherit;font-weight:600;font-size:15px;border-radius:999px;padding:9
 .links a span{color:var(--green-hi);font-size:13px;overflow-wrap:anywhere;text-align:right}
 a{color:var(--green-hi)}
 </style>
+<style>#thPrev~*{}.thc input[type=color]{-webkit-appearance:none;appearance:none;width:100%;height:52px;padding:0;border:2px solid #3a463a;border-radius:12px;background:none;cursor:pointer}.thc input[type=color]::-webkit-color-swatch-wrapper{padding:0}.thc input[type=color]::-webkit-color-swatch{border:none;border-radius:10px}.thc input[type=color]::-moz-color-swatch{border:none;border-radius:10px}.thc small{display:block;color:#9fae9f;font-size:12px;margin-top:3px}</style>
 </head>
 <body>
 <main>
@@ -101,19 +102,19 @@ a{color:var(--green-hi)}
       </div>
     </section>
 
-    <section class="card">
+    <section class="card thc">
       <h2>Colors</h2>
-      <p class="hint">Your own look on the sign-up app, TV screen, host page and wall. Pick a preset or your own colors.</p>
+      <p class="hint">Your own look on the sign-up app, TV screen, host page and wall. Start from a preset, then tap any color box to open the full color picker (grid, spectrum or sliders) and set any color you want.</p>
       <div class="row" id="thPresets" style="flex-wrap:wrap;gap:6px"></div>
       <div class="two">
-        <div><label for="thAccent">Accent (buttons, headings)</label><input id="thAccent" type="color" value="#39b54a"></div>
-        <div><label for="thText">Text</label><input id="thText" type="color" value="#eef3ee"></div>
+        <div><label for="thAccent">Accent (buttons, headings)</label><input id="thAccent" class="thpick" type="color" value="#39b54a"></div>
+        <div><label for="thText">Text</label><input id="thText" class="thpick" type="color" value="#eef3ee"></div>
       </div>
       <div class="two">
-        <div><label for="thBg">Background</label><input id="thBg" type="color" value="#0a0c0a"></div>
-        <div><label for="thBanner">Banners (shout-outs, ads, band break)</label><input id="thBanner" type="color" value="#183a1d"></div>
+        <div><label for="thBg">Background</label><input id="thBg" class="thpick" type="color" value="#0a0c0a"></div>
+        <div><label for="thBanner">Banners (shout-outs, ads, band break)</label><input id="thBanner" class="thpick" type="color" value="#183a1d"></div>
       </div>
-      <div><label for="thBannerText">Banner text</label><input id="thBannerText" type="color" value="#eef3ee"></div>
+      <div><label for="thBannerText">Banner text</label><input id="thBannerText" class="thpick" type="color" value="#eef3ee"></div>
       <div id="thPrev" style="border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;border:1px solid #333">
         <div id="thPrevBan" style="border-radius:10px;padding:8px 10px;font-weight:700">📣 Happy birthday Sam! — Mia</div>
         <b id="thPrevH" style="font-size:18px">Sign up to sing</b>
@@ -197,7 +198,7 @@ let themeDirty = false, themeReset = false;
 const thIds = { accent: "thAccent", text: "thText", bg: "thBg", banner: "thBanner", bannerText: "thBannerText" };
 function thGet(){ const o = {}; Object.entries(thIds).forEach(([k, id]) => o[k] = $(id).value); return o; }
 function thSet(o){ Object.entries(thIds).forEach(([k, id]) => $(id).value = (o && o[k]) || TH_DEF[k]); thPaint(); }
-function thPaint(){ const o = thGet(); $("thPrev").style.background = o.bg; $("thPrevH").style.color = o.accent; $("thPrevT").style.color = o.text; $("thPrevB").style.background = o.accent; $("thPrevB").style.color = o.bg; $("thPrevBan").style.background = o.banner; $("thPrevBan").style.color = o.bannerText; }
+function thPaint(){ const o = thGet(); Object.entries(thIds).forEach(([k, id]) => { let h = $(id).nextElementSibling; if(!h || h.tagName !== "SMALL"){ h = document.createElement("small"); $(id).after(h); } h.textContent = o[k].toUpperCase() + " · tap to change"; }); $("thPrev").style.background = o.bg; $("thPrevH").style.color = o.accent; $("thPrevT").style.color = o.text; $("thPrevB").style.background = o.accent; $("thPrevB").style.color = o.bg; $("thPrevBan").style.background = o.banner; $("thPrevBan").style.color = o.bannerText; }
 TH_PRESETS.forEach(([n, o]) => { const b = document.createElement("button"); b.type = "button"; b.textContent = n; b.style.borderLeft = "10px solid " + o.accent; b.addEventListener("click", () => { thSet(o); themeDirty = true; themeReset = false; }); $("thPresets").appendChild(b); });
 Object.values(thIds).forEach(id => $(id).addEventListener("input", () => { themeDirty = true; themeReset = false; thPaint(); }));
 $("thReset").addEventListener("click", () => { thSet(TH_DEF); themeDirty = false; themeReset = true; });
