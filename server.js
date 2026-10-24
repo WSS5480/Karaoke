@@ -293,7 +293,7 @@ if (DB_OK) {
     async setCustomerName(id, n) { await Q(`UPDATE customers SET name=$2, last_seen=now() WHERE id=$1`, [id, n]); },
     async moveDevice(from, to) { await Q(`UPDATE signups SET device=$2 WHERE device=$1 AND tenant=$3`, [from, to, T()]); },
     async mineAll(d, sort) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND device=$1 AND done_at IS NOT NULL AND status IN ('done','archived') ORDER BY ${sort === "top" ? "likes DESC, done_at DESC" : "done_at DESC"} LIMIT 200`, [d, T()])).rows; },
-    async sungSince(t) { return (await Q(`SELECT name, song, artist, device, likes, public, done_at FROM signups WHERE tenant=$2 AND done_at IS NOT NULL AND status IN ('done','archived') AND done_at >= $1 ORDER BY done_at`, [new Date(t), T()])).rows; },
+    async sungSince(t) { return (await Q(`SELECT name, song, artist, device, likes, public, posted_to, done_at FROM signups WHERE tenant=$2 AND done_at IS NOT NULL AND status IN ('done','archived') AND done_at >= $1 ORDER BY done_at`, [new Date(t), T()])).rows; },
     async lastSung(d) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND device=$1 AND status IN ('done','archived') AND done_at > now() - interval '12 hours' ORDER BY done_at DESC LIMIT 1`, [d, T()])).rows[0]; },
     async setPublic(id, pub) { await Q(`UPDATE signups SET public=$2 WHERE id=$1 AND tenant=$3`, [id, pub, T()]); },
     async addLike(id, n) { const r = await Q(`UPDATE signups SET likes=GREATEST(0, likes+$2) WHERE id=$1 AND tenant=$3 RETURNING likes`, [id, n, T()]); return r.rows[0] ? r.rows[0].likes : 0; },
@@ -508,7 +508,9 @@ async function signupStats() {
   for (const r of [...await db.active(), ...await db.done(400)]) {
     if (seen.has(r.id) || nightOf(r.created_at) !== night) continue; seen.add(r.id);
     const v = viaOf(r); c.total++; c[v && v in c ? v : "untracked"]++;
+    const pl = postedList(r); if (pl.length) { c.postedSongs = (c.postedSongs || 0) + 1; c.posts = (c.posts || 0) + pl.length; }
   }
+  c.postedSongs = c.postedSongs || 0; c.posts = c.posts || 0;
   try { c.ever = await everCounts(); } catch (e) {}
   return c;
 }
@@ -1258,7 +1260,16 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
   if (days) since = Date.now() - days * 864e5;
   else if (rq === "week") { const d = new Date(today + "T12:00:00Z"), back = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - back); since = barTime(d.toISOString().slice(0, 10), 6); days = back + 1; }
   else if (rq === "month") { since = barTime(today.slice(0, 8) + "01", 6); days = Number(today.slice(8, 10)); }
-  const rows = await db.sungSince(since);
+  let rows = await db.sungSince(since);
+  // which DJ was running the night when each song finished (from the DJ nights log, plus whoever is on now)
+  const spans = (await getDjLog()).filter(x => x && x.dj && x.start).map(x => ({ dj: x.dj, s: x.start, e: x.end || x.start }));
+  { const cur = await djSession(); if (cur && cur.name) spans.push({ dj: cur.name, s: cur.since || Date.now(), e: Date.now() + 60000 }); }
+  const djOf = t => { const m = spans.find(x => t >= x.s && t <= x.e); return m ? m.dj : ""; };
+  const kjNames = [...new Set(spans.map(x => x.dj))].sort((a, b) => a.localeCompare(b));
+  const kjPick = String(req.query.kj || "");
+  if (kjPick) rows = rows.filter(r => djOf(Date.parse(r.done_at)) === kjPick);
+  let postedSongs = 0, posts = 0; const postsBy = { Facebook: 0, Instagram: 0, TikTok: 0 };
+  for (const r of rows) { const pl = postedList(r); if (pl.length) { postedSongs++; posts += pl.length; pl.forEach(n => postsBy[n] = (postsBy[n] || 0) + 1); } }
   const nights = new Map(), hours = new Array(24).fill(0), singers = new Map(), songs = new Map(), artists = new Map();
   let likes = 0, onWall = 0;
   for (const r of rows) {
@@ -1276,7 +1287,8 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
   const singerList = [...singers.values()].map(x => ({ name: x.name, songs: x.songs, nights: x.nights.size, likes: x.likes, last: x.last }));
   const nightList = [...nights.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-31).map(([night, count]) => ({ night, count }));
   res.json({
-    range: rq || "all",
+    range: rq || "all", kj: kjPick || null, kjs: kjNames,
+    posts: { songs: postedSongs, total: posts, by: postsBy },
     ever: await everCounts().catch(() => null),
     totals: { songs: rows.length, singers: singers.size, nights: nights.size, repeat: singerList.filter(x => x.nights > 1).length,
               likes, likesPerSong: rows.length ? Math.round(likes / rows.length * 10) / 10 : 0, onWall, perNight: nights.size ? Math.round(rows.length / nights.size * 10) / 10 : 0 },
