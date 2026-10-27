@@ -822,20 +822,20 @@ function suggest(){
   const q = norm($("song").value), box = $("sugg"), art = knownArtist();
   box.innerHTML = "";
   if(!songs.length || (q.length < 2 && !art)){ box.hidden = true; return; }
-  const hits = songs.filter(s => (!art || norm(s.a) === art) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q)))).slice(0, art ? 60 : 25);
+  const hits = songs.filter(s => (!art || norm(s.a) === art) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q)))).slice(0, art ? 150 : 50);
   const pickIt = s => () => { $("song").value = s.t; box.hidden = true; $("err").textContent = ""; setArtistFor(s.t, s.a); };
   hits.forEach(s => sugBtn(box, s.t, s.a, pickIt(s)));
   box.hidden = !hits.length;
   // every other song: ask Apple Music's catalog (after a short pause in typing)
   clearTimeout(suggest.t);
-  if(q.length >= 3 && hits.length < 25){
+  if(q.length >= 3 && hits.length < 50){
     const want = $("song").value;
     suggest.t = setTimeout(async () => {
       let more = [];
       try{ more = (await (await fetch("/api/songsearch?q=" + encodeURIComponent(q + (art ? " " + art : "")))).json()).songs || []; }catch(e){ return; }
       if($("song").value !== want) return;
       const have = new Set([...box.querySelectorAll("button")].map(b => norm(b.textContent)));
-      more.filter(s => !have.has(norm(s.t + s.a))).slice(0, 40 - box.children.length).forEach(s => {
+      more.filter(s => !have.has(norm(s.t + s.a))).slice(0, 80 - box.children.length).forEach(s => {
         if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, web: 1 });   // so the artist fills in when picked
         sugBtn(box, s.t, s.a, pickIt(s));
       });
