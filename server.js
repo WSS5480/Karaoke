@@ -1902,7 +1902,7 @@ app.get("/api/songsearch", wrap(async (req, res) => {
   const junk = x => /\b(karaoke|tribute|made famous|in the style of|instrumental|originally performed)\b/i.test(x.t + " " + x.a);
   const apple = (async () => {
     try {
-      const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=" + (by ? "50&attribute=artistTerm" : "15") + "&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
+      const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=" + (by ? "50&attribute=artistTerm" : "40") + "&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
       return r.ok ? ((await r.json()).results || []).map(x => ({ t: x.trackName, a: x.artistName })).filter(x => !junk(x)) : [];
     } catch (e) { return []; }
   })();

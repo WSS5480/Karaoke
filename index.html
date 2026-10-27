@@ -35,7 +35,7 @@ label span{text-transform:none;letter-spacing:0}
 input{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:13px 12px;font:inherit;font-size:17px}
 input:focus-visible,button:focus-visible{outline:3px solid var(--green-hi);outline-offset:2px}
 .field{position:relative}
-.sugg{position:absolute;left:0;right:0;top:100%;z-index:5;margin-top:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sugg{position:absolute;left:0;right:0;top:100%;z-index:5;margin-top:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;overflow-x:hidden;overflow-y:auto;max-height:min(62vh,520px);-webkit-overflow-scrolling:touch;overscroll-behavior:contain;box-shadow:0 10px 28px rgba(0,0,0,.55)}
 .sugg button{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);color:var(--ink);padding:10px 12px;font:inherit;cursor:pointer}
 .sugg button:first-child{border-top:0}
 .sugg button b{font-weight:500}
@@ -822,20 +822,20 @@ function suggest(){
   const q = norm($("song").value), box = $("sugg"), art = knownArtist();
   box.innerHTML = "";
   if(!songs.length || (q.length < 2 && !art)){ box.hidden = true; return; }
-  const hits = songs.filter(s => (!art || norm(s.a) === art) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q)))).slice(0, art ? 12 : 6);
+  const hits = songs.filter(s => (!art || norm(s.a) === art) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q)))).slice(0, art ? 60 : 25);
   const pickIt = s => () => { $("song").value = s.t; box.hidden = true; $("err").textContent = ""; setArtistFor(s.t, s.a); };
   hits.forEach(s => sugBtn(box, s.t, s.a, pickIt(s)));
   box.hidden = !hits.length;
   // every other song: ask Apple Music's catalog (after a short pause in typing)
   clearTimeout(suggest.t);
-  if(q.length >= 3 && hits.length < 6){
+  if(q.length >= 3 && hits.length < 25){
     const want = $("song").value;
     suggest.t = setTimeout(async () => {
       let more = [];
       try{ more = (await (await fetch("/api/songsearch?q=" + encodeURIComponent(q + (art ? " " + art : "")))).json()).songs || []; }catch(e){ return; }
       if($("song").value !== want) return;
       const have = new Set([...box.querySelectorAll("button")].map(b => norm(b.textContent)));
-      more.filter(s => !have.has(norm(s.t + s.a))).slice(0, 8 - box.children.length).forEach(s => {
+      more.filter(s => !have.has(norm(s.t + s.a))).slice(0, 40 - box.children.length).forEach(s => {
         if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, web: 1 });   // so the artist fills in when picked
         sugBtn(box, s.t, s.a, pickIt(s));
       });
@@ -900,6 +900,8 @@ $("song").addEventListener("focus", suggest);
 $("artist").addEventListener("input", () => { $("err").textContent = ""; $("artistHint").hidden = true; suggestArtist(); });
 $("name").addEventListener("input", () => { $("err").textContent = ""; });
 document.addEventListener("click", e => { if(!e.target.closest(".field")){ $("sugg").hidden = true; $("asugg").hidden = true; } });
+// typing a song or artist: lift the box up near the top so the suggestion list has room to open downward
+["song", "artist"].forEach(id => $(id).addEventListener("focus", () => { setTimeout(() => { const y = $(id).getBoundingClientRect().top + window.scrollY - 80; if(Math.abs(window.scrollY - y) > 40) window.scrollTo({ top: y, behavior: "smooth" }); }, 250); }));
 
 // location help that matches the phone and browser (iPhone Safari / iPhone Chrome / Android Chrome / Samsung)
 const LOC_HELP = (() => {
