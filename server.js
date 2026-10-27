@@ -1888,6 +1888,16 @@ async function mbSearch(query) {
     return out;
   } catch (e) { return []; }
 }
+// the songs sung most here (all time), so the song suggestions can list them first
+const popCache = new Map();
+app.get("/api/popular", wrap(async (req, res) => {
+  const c = popCache.get(T()); if (c && Date.now() - c.t < 600000) return res.json({ songs: c.v });
+  const m = new Map();
+  for (const r of await db.sungSince(0)) { const t = String(r.song || "").trim(), a = String(r.artist || "").trim(); if (!t) continue; const k = (t + "|" + a).toLowerCase(), x = m.get(k) || { t, a, n: 0 }; x.n++; m.set(k, x); }
+  // songs typed without an artist count toward the same song with its artist; junk (one or two letters) is dropped
+  for (const [k, x] of [...m]) { if (x.a) continue; const twin = [...m.values()].filter(y => y.a && y.t.toLowerCase() === x.t.toLowerCase()).sort((p, q) => q.n - p.n)[0]; if (twin) { twin.n += x.n; m.delete(k); } }
+  const v = [...m.values()].filter(x => x.a && x.t.length >= 2).sort((x, y) => y.n - x.n).slice(0, 400); popCache.set(T(), { t: Date.now(), v }); res.json({ songs: v });
+}));
 app.get("/api/songsearch", wrap(async (req, res) => {
   const q = String(req.query.q || "").replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 80);
   const by = req.query.by === "artist", ck = (by ? "a:" : "s:") + q;
