@@ -1207,7 +1207,7 @@ let postMode = "dive", photoFile = null;
 const songLife = item => { const k = sKey(item.song, item.artist); let t = 0, found = false; (mineItems || []).forEach(x => { if(sKey(x.song, x.artist) === k){ t += x.likes || 0; if(x.id === item.id) found = true; } }); return t + (found ? 0 : (item.likes || 0)); };
 const shown = item => { const m = $("likeMode").value; const n = m === "night" ? (item.likes || 0) : m === "life" ? songLife(item) : 0;
   const when = item.at && Date.now() - Date.parse(item.at) > 12 * 3600e3 ? "that night" : "tonight";
-  return { ...item, likesShown: n, likesWord: m === "life" ? (n === 1 ? " like all-time" : " likes all-time") : (n === 1 ? " like " : " likes ") + when }; };
+  return { ...item, likesShown: n, likesWord: m === "life" ? (n === 1 ? " like" : " likes") : (n === 1 ? " like " : " likes ") + when }; };
 // make the picture first; the Post button only turns on when it's ready, so the tap opens the share menu instantly
 async function openPost(item){
   postItem = item; postPic = null; $("likeMode").value = "life"; $("postLinkBox").hidden = true;
