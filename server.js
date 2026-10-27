@@ -196,6 +196,10 @@ function rawPage(file, appMeta) {
   let html = fs.readFileSync(path.join(__dirname, file), "utf8");
   // every page keeps its installed app up to date by itself
   if (file.endsWith(".html") && !html.includes("/update.js")) html = html.replace("</head>", '<meta name="dive-build" content="' + BUILD + '">\n<script src="/update.js" defer></script>\n</head>');
+  // the logo sits faint and fixed behind every screen (like the singer app); not on print pages
+  if (file.endsWith(".html") && !html.includes('class="wm"') && !/^(poster|tent|start)\.html$/.test(file))
+    html = html.replace("</head>", "<style>.wm{position:fixed;inset:0;z-index:-1;pointer-events:none;background:url(/logo.png) center 55%/min(80vmin,620px) no-repeat;opacity:.045}</style>\n</head>")
+               .replace(/<body([^>]*)>/, '<body$1>\n<div class="wm" aria-hidden="true"></div>');
   if (appMeta) {
     html = html.replace(/<link rel="(manifest|apple-touch-icon)"[^>]*>\s*/g, "").replace(/<meta name="apple-mobile-web-app-(title|capable)"[^>]*>\s*/g, "");
     const tags = `<link rel="manifest" href="/m/${appMeta.key}.json">\n<link rel="apple-touch-icon" href="/${appMeta.key}-apple-touch-icon.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="${appMeta.short}">\n<script src="/install.js" defer></script>\n`;
