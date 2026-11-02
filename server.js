@@ -1907,19 +1907,23 @@ app.get("/api/songsearch", wrap(async (req, res) => {
   if (l.length >= 240) return res.json({ songs: [] }); l.push(t); songHits.set(req.ip, l);
   const clean = v => String(v || "").replace(/\s*[\(\[](feat\.?|ft\.?|remaster[^\)\]]*|live[^\)\]]*|radio edit|single version|album version)[^\)\]]*[\)\]]/gi, "").replace(/\s*-\s*(remaster(ed)?|live|single version|radio edit).*$/i, "").trim();
   const out = [], seen = new Set();
-  const add = (t, a) => { t = clean(t).slice(0, 80); a = String(a || "").trim().slice(0, 60); const k = (t + "|" + a).toLowerCase(); if (t && a && !seen.has(k)) { seen.add(k); out.push({ t, a }); } };
+  // a featured singer stays with the song: "Run (feat. Sugarland)" by Matt Nathanson -> artist "Matt Nathanson & Sugarland"
+  const add = (t, a) => { const ft = /[\(\[](?:feat\.?|ft\.?|featuring|with) ([^\)\]]+)[\)\]]/i.exec(String(t || "")); if (ft && a && !String(a).toLowerCase().includes(ft[1].toLowerCase())) a = a + " & " + ft[1].trim(); t = clean(t).slice(0, 80); a = String(a || "").trim().slice(0, 60); const k = (t + "|" + a).toLowerCase(); if (t && a && !seen.has(k)) { seen.add(k); out.push({ t, a }); } };
   // Apple Music's catalog + MusicBrainz (the open music database) for artists who aren't on Apple Music, like Garth Brooks
   const junk = x => /\b(karaoke|tribute|made famous|in the style of|instrumental|originally performed)\b/i.test(x.t + " " + x.a);
   const apple = (async () => {
     try {
-      const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=" + (by ? "100&attribute=artistTerm" : "60") + "&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
-      return r.ok ? ((await r.json()).results || []).map(x => ({ t: x.trackName, a: x.artistName })).filter(x => !junk(x)) : [];
+      const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=" + (by ? "200&attribute=artistTerm" : "60") + "&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) });
+      let list = r.ok ? ((await r.json()).results || []).map(x => ({ t: x.trackName, a: x.artistName })).filter(x => !junk(x)) : [];
+      // a whole artist: also their songs as a featured singer on someone else's track
+      if (by) { try { const r2 = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=100&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(3500) }); if (r2.ok) list = list.concat(((await r2.json()).results || []).map(x => ({ t: x.trackName, a: x.artistName })).filter(x => !junk(x) && (x.a + " " + x.t).toLowerCase().includes(q))); } catch (e) {} }
+      return list;
     } catch (e) { return []; }
   })();
   const open = mbSearch(by ? 'artist:"' + q.replace(/"/g, "") + '"' : q.replace(/[:"()\[\]{}^~*?\\/!+-]/g, " "));
   const [A, M] = await Promise.all([apple, open]);
   A.slice(0, 5).forEach(x => add(x.t, x.a)); M.slice(0, 30).forEach(x => add(x.t, x.a)); A.slice(5).forEach(x => add(x.t, x.a));
-  out.splice(by ? 40 : 10);
+  out.splice(by ? 250 : 60);
   if (songSearchCache.size > 5000) songSearchCache.clear();
   songSearchCache.set(ck, out);
   res.set("Cache-Control", "public, max-age=86400").json({ songs: out });

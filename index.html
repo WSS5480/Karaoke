@@ -826,13 +826,23 @@ fetch("/api/popular", { cache: "no-store" }).then(r => r.json()).then(j => {
 }).catch(() => {});
 const popScore = s => [-(popHere.get(popKey(s.t, s.a)) || 0), topRank.has(norm(s.t)) ? topRank.get(norm(s.t)) : 999];
 function byPopularity(list){ return list.map((s, i) => ({ s, i, k: popScore(s) })).sort((x, y) => x.k[0] - y.k[0] || x.k[1] - y.k[1] || x.i - y.i).map(x => x.s); }
+// the whole catalog for an artist (their own songs and songs they're featured on), added to the song list once
+const artistLoaded = new Set();
+async function loadArtist(a){
+  const k = norm(a || ""); if(k.length < 2 || artistLoaded.has(k)) return; artistLoaded.add(k);
+  try{
+    const more = (await (await fetch("/api/songsearch?by=artist&q=" + encodeURIComponent(a))).json()).songs || [];
+    more.forEach(s => { if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, web: 1 }); });
+    if(more.length && document.activeElement === $("song")) suggest();
+  }catch(e){ artistLoaded.delete(k); }
+}
 function knownArtist(){ const a = norm($("artist").value); return a && songs.some(s => norm(s.a) === a) ? a : ""; }
 /* song field: suggestions, filtered to the artist when one is chosen */
 function suggest(){
   const q = norm($("song").value), box = $("sugg"), art = knownArtist();
   box.innerHTML = "";
   if(!songs.length || (q.length < 2 && !art)){ box.hidden = true; return; }
-  const hitsRaw = songs.filter(s => (!art || norm(s.a) === art) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q))));
+  const hitsRaw = songs.filter(s => (!art || norm(s.a) === art || norm(s.a).includes(art)) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q))));
   const hitsAll = byPopularity(hitsRaw); const hits = hitsAll.slice(0, art ? 150 : 50);
   const pickIt = s => () => { $("song").value = s.t; box.hidden = true; $("err").textContent = ""; setArtistFor(s.t, s.a); };
   hits.forEach(s => sugBtn(box, s.t, s.a, pickIt(s)));
@@ -881,6 +891,7 @@ function suggestArtist(again){
   const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   list.forEach(([a, n]) => sugBtn(box, a, n + " song" + (n > 1 ? "s" : ""), () => {
     $("artist").value = a; box.hidden = true; $("artistHint").hidden = true;
+    loadArtist(a);
     const theirs = songs.filter(s => s.a === a);
     if(theirs.length === 1 && !$("song").value.trim()){ $("song").value = theirs[0].t; return; }
     if(!$("song").value.trim() || !theirs.some(s => norm(s.t) === norm($("song").value))){ $("song").value = ""; $("song").focus(); suggest(); }
@@ -899,6 +910,8 @@ function suggestArtist(again){
     }, 300);
   }
 }
+$("artist").addEventListener("change", () => loadArtist($("artist").value.trim()));
+$("song").addEventListener("focus", () => { const a = $("artist").value.trim(); if(a) loadArtist(a); });
 $("song").addEventListener("input", () => {
   $("err").textContent = "";
   if(!$("artistPick").hidden){ $("artistPick").hidden = true; $("artist").hidden = false; $("artist").value = ""; }
