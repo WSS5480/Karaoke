@@ -837,7 +837,8 @@ async function loadArtist(a){
   }catch(e){ artistLoaded.delete(k); }
 }
 // an artist is chosen once the box holds a name we have songs for (or whose catalog we loaded): then the song list shows only them
-function knownArtist(){ const a = norm($("artist").value); return a.length >= 2 && (artistLoaded.has(a) || songs.some(s => norm(s.a).includes(a))) ? a : ""; }
+let artistChosen = "";   // set only when the guest picks an artist from the artist list
+function knownArtist(){ const a = norm($("artist").value); return artistChosen && a === artistChosen ? a : ""; }
 /* song field: suggestions, filtered to the artist when one is chosen */
 function suggest(){
   const q = norm($("song").value), box = $("sugg"), art = knownArtist();
@@ -891,7 +892,7 @@ function suggestArtist(again){
   const counts = new Map(); songs.forEach(s => { if(norm(s.a).includes(q)) counts.set(s.a, (counts.get(s.a) || 0) + 1); });
   const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
   list.forEach(([a, n]) => sugBtn(box, a, n + " song" + (n > 1 ? "s" : ""), () => {
-    $("artist").value = a; box.hidden = true; $("artistHint").hidden = true;
+    $("artist").value = a; box.hidden = true; $("artistHint").hidden = true; artistChosen = norm(a);
     loadArtist(a);
     const theirs = songs.filter(s => s.a === a);
     if(theirs.length === 1 && !$("song").value.trim()){ $("song").value = theirs[0].t; return; }
@@ -914,7 +915,8 @@ function suggestArtist(again){
 // scrolling the suggestion list puts the phone keyboard away, so the whole list can be scrolled and tapped
 ["sugg", "asugg", "pSugg"].forEach(id => { const b = $(id); if(!b) return;
   const hideKb = () => { const a = document.activeElement; if(a && /INPUT|TEXTAREA/.test(a.tagName)) a.blur(); };
-  b.addEventListener("touchmove", hideKb, { passive: true }); b.addEventListener("scroll", hideKb, { passive: true }); });
+  b.addEventListener("touchmove", hideKb, { passive: true }); });
+$("artist").addEventListener("input", () => { if(norm($("artist").value) !== artistChosen) artistChosen = ""; });
 $("artist").addEventListener("change", () => loadArtist($("artist").value.trim()));
 $("song").addEventListener("focus", () => { const a = $("artist").value.trim(); if(a) loadArtist(a); });
 $("song").addEventListener("input", () => {
