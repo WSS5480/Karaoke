@@ -238,6 +238,7 @@ function paintQueue(st){
   people.forEach(r => pl.appendChild(row(r, "📣")));
   const p = st.pause || {}, chips = [
     [st.open ? (p.paused ? "Sign-ups paused" : "Sign-ups open") : "Sign-ups closed", st.open && !p.paused],
+    ...(st.band ? [["⏸ Paused for the band", false]] : []),
     ["Lyrics " + (st.lyrics === false ? "off" : "on"), st.lyrics !== false],
     ["One song per person on the queue: " + (st.multi ? "off" : "on"), !st.multi]
   ];

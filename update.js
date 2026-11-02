@@ -29,7 +29,7 @@
   var pending = false, target = "";
   function go() {
     var a = document.activeElement;
-    if ((a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) || document.querySelector(".tmodal:not([hidden]),.forcepin:not([hidden])")) return setTimeout(go, 3000);
+    if ((a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) || document.querySelector(".tmodal:not([hidden]),.forcepin:not([hidden]),#vidWork:not([hidden]),.sugg:not([hidden])") || document.body.classList.contains("posting")) return setTimeout(go, 3000);   // not while posting, making a video or picking a song
     // loop guard: never reload twice for the SAME new version within 5 minutes (a phone can't get stuck reloading itself),
     // but every newer version still goes through, so quick back-to-back updates reach everyone
     var k = "dive_autoreload", now = Date.now(), rec = "", ok = true;

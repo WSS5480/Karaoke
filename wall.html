@@ -52,7 +52,7 @@ async function load(){
   $("top").setAttribute("aria-pressed", sort === "top"); $("new").setAttribute("aria-pressed", sort === "new");
   try{
     const j = await (await fetch("/api/wall?sort=" + sort, { cache: "no-store" })).json(), ol = $("list"); ol.innerHTML = "";
-    if(!j.items.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No one's on the wall yet. Sing, rate yourself and add your name."; ol.appendChild(li); return; }
+    if(!j.items.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No one's on the wall yet. Sing, post your song to social media, and get likes to make the wall."; ol.appendChild(li); return; }
     j.items.forEach(r => {
       const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
       const b = document.createElement("b"); b.textContent = r.name;

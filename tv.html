@@ -96,11 +96,12 @@ function render(d){ try{ paintDj(d.dj); }catch(e){}
   const up = d.queue.find(r => r.status === "up"), wait = d.queue.filter(r => r.status === "queued");
   const now = $("now"); now.innerHTML = "";
   const b = document.createElement("b"), s = document.createElement("span"), tx = document.createElement("div"); tx.className = "tx";
-  if(up){ b.textContent = up.name; s.textContent = up.song + (up.artist ? " – " + up.artist : ""); }
+  if(d.band){ b.textContent = "🎸 Band break"; s.textContent = "Karaoke is back after the band. Scan to sign up now."; }
+  else if(up){ b.textContent = up.name; s.textContent = up.song + (up.artist ? " – " + up.artist : ""); }
   else if(wait.length){ b.textContent = "Starting soon"; s.textContent = wait.length + " singer" + (wait.length === 1 ? "" : "s") + " on the list"; }
   else { b.textContent = "Who's first?"; s.textContent = "Scan the code to grab the mic."; }
-  tx.append(b, s); now.append(pic(up, "ph"), tx);
-  const key = up ? String(up.id) : "";
+  tx.append(b, s); now.append(pic(d.band ? null : up, "ph"), tx);
+  const key = d.band ? "band" : up ? String(up.id) : "";
   if(key && key !== lastUp){ now.classList.remove("pop"); void now.offsetWidth; now.classList.add("pop"); }
   lastUp = key;
   const ol = $("queue"); ol.innerHTML = "";
