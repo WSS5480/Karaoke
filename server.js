@@ -682,18 +682,20 @@ async function singerNum(key) {
 }
 async function ownerOfNum(n) { const v = await db.getSetting("singerby:" + n); if (!v) return null; return v.startsWith("dev:") ? v.slice(4) : /^\d+$/.test(v) ? "c" + v : null; }
 async function nameOfOwner(o) { try { if (isCust(o)) { const c = await db.customer(parseInt(o.slice(1), 10)); return (c && c.name) || ""; } const pr = await getProfile(o); return (pr && pr.name) || ""; } catch (e) { return ""; } }
-// partner pick list: only the people who signed up tonight (not everyone ever), refreshed once a minute
+// partner pick list: everyone who has ever sung here from their phone (newest name for each phone), plus signed-in singers;
+// refreshed every few minutes (singer numbers are made once and kept)
 const singersCache = new Map();
 app.get("/api/singers", wrap(async (req, res) => {
   const me = owner(req, res);
   let c = singersCache.get(T());
-  if (!c || Date.now() - c.t > 60000) {
-    const cut = Date.now() - 20 * 3600e3, seen = new Set(), list = [];
-    for (const r of (await db.allSignups()).slice().reverse()) {
-      if (new Date(r.created_at).getTime() < cut || !r.device || String(r.device).startsWith("kj-") || seen.has(r.device)) continue; seen.add(r.device);
-      const nm = String(r.name || "").split(" & ")[0]; if (nm) list.push({ o: r.device, n: nm, num: await singerNum(numKeyOf(r.device)) });
+  if (!c || Date.now() - c.t > 300000) {
+    const seen = new Set(), list = [];
+    for (const r of (await db.allSignups()).slice().reverse()) {   // newest first, so each phone keeps its latest name
+      if (!r.device || String(r.device).startsWith("kj-") || seen.has(r.device)) continue; seen.add(r.device);
+      const nm = String(r.name || "").split(" & ")[0].trim(); if (nm) list.push({ o: r.device, n: nm, num: await singerNum(numKeyOf(r.device)) });
     }
-    list.sort((x, y) => x.n.toLowerCase().localeCompare(y.n.toLowerCase())); c = { t: Date.now(), list: list.slice(0, 300) }; singersCache.set(T(), c);
+    for (const cu of (await db.singerNames())) { const o = "c" + cu.id; if (seen.has(o)) continue; seen.add(o); list.push({ o, n: cu.name, num: await singerNum(cu.id) }); }
+    list.sort((x, y) => x.n.toLowerCase().localeCompare(y.n.toLowerCase())); c = { t: Date.now(), list: list.slice(0, 3000) }; singersCache.set(T(), c);
   }
   res.json({ items: c.list.filter(x => x.o !== me).map(x => ({ n: x.n, num: x.num })) });
 }));
