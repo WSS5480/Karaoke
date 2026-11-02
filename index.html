@@ -833,17 +833,18 @@ async function loadArtist(a){
   try{
     const more = (await (await fetch("/api/songsearch?by=artist&q=" + encodeURIComponent(a))).json()).songs || [];
     more.forEach(s => { if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, web: 1 }); });
-    if(more.length && document.activeElement === $("song")) suggest();
+    if(more.length && norm($("artist").value) === k && (document.activeElement === $("song") || !$("song").value.trim())) suggest();
   }catch(e){ artistLoaded.delete(k); }
 }
-function knownArtist(){ const a = norm($("artist").value); return a && songs.some(s => norm(s.a) === a) ? a : ""; }
+// an artist is chosen once the box holds a name we have songs for (or whose catalog we loaded): then the song list shows only them
+function knownArtist(){ const a = norm($("artist").value); return a.length >= 2 && (artistLoaded.has(a) || songs.some(s => norm(s.a).includes(a))) ? a : ""; }
 /* song field: suggestions, filtered to the artist when one is chosen */
 function suggest(){
   const q = norm($("song").value), box = $("sugg"), art = knownArtist();
   box.innerHTML = "";
   if(!songs.length || (q.length < 2 && !art)){ box.hidden = true; return; }
-  const hitsRaw = songs.filter(s => (!art || norm(s.a) === art || norm(s.a).includes(art)) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q))));
-  const hitsAll = byPopularity(hitsRaw); const hits = hitsAll.slice(0, art ? 150 : 50);
+  const hitsRaw = songs.filter(s => (!art || norm(s.a).includes(art)) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q))));
+  const hitsAll = byPopularity(hitsRaw); const hits = hitsAll.slice(0, art ? 300 : 50);
   const pickIt = s => () => { $("song").value = s.t; box.hidden = true; $("err").textContent = ""; setArtistFor(s.t, s.a); };
   hits.forEach(s => sugBtn(box, s.t, s.a, pickIt(s)));
   box.hidden = !hits.length;
@@ -856,7 +857,7 @@ function suggest(){
       try{ more = (await (await fetch("/api/songsearch?q=" + encodeURIComponent(q + (art ? " " + art : "")))).json()).songs || []; }catch(e){ return; }
       if($("song").value !== want) return;
       const have = new Set([...box.querySelectorAll("button")].map(b => norm(b.textContent)));
-      byPopularity(more.filter(s => !have.has(norm(s.t + s.a)))).slice(0, 80 - box.children.length).forEach(s => {
+      byPopularity(more.filter(s => !have.has(norm(s.t + s.a)) && (!art || norm(s.a).includes(art)))).slice(0, (art ? 300 : 80) - box.children.length).forEach(s => {
         if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, web: 1 });   // so the artist fills in when picked
         sugBtn(box, s.t, s.a, pickIt(s));
       });
@@ -888,7 +889,7 @@ function suggestArtist(again){
   box.innerHTML = "";
   if(q.length < 2 || !songs.length){ box.hidden = true; return; }
   const counts = new Map(); songs.forEach(s => { if(norm(s.a).includes(q)) counts.set(s.a, (counts.get(s.a) || 0) + 1); });
-  const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
   list.forEach(([a, n]) => sugBtn(box, a, n + " song" + (n > 1 ? "s" : ""), () => {
     $("artist").value = a; box.hidden = true; $("artistHint").hidden = true;
     loadArtist(a);
@@ -899,7 +900,7 @@ function suggestArtist(again){
   box.hidden = !list.length;
   // any other artist: Apple Music's catalog
   clearTimeout(suggestArtist.t);
-  if(!again && q.length >= 3 && list.length < 6){
+  if(!again && q.length >= 3 && list.length < 15){
     const want = $("artist").value;
     suggestArtist.t = setTimeout(async () => {
       let more = [];
