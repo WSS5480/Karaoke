@@ -855,7 +855,7 @@ function suggest(){
     const want = $("song").value;
     suggest.t = setTimeout(async () => {
       let more = [];
-      try{ more = (await (await fetch("/api/songsearch?q=" + encodeURIComponent(q + (art ? " " + art : "")))).json()).songs || []; }catch(e){ return; }
+      try{ more = (await (await fetch("/api/songsearch?q=" + encodeURIComponent(q + ((art || norm($("artist").value)) ? " " + (art || norm($("artist").value)) : "")))).json()).songs || []; }catch(e){ return; }
       if($("song").value !== want) return;
       const have = new Set([...box.querySelectorAll("button")].map(b => norm(b.textContent)));
       byPopularity(more.filter(s => !have.has(norm(s.t + s.a)) && (!art || norm(s.a).includes(art)))).slice(0, (art ? 300 : 80) - box.children.length).forEach(s => {
