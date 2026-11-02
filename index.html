@@ -837,6 +837,8 @@ async function loadArtist(a){
   }catch(e){ artistLoaded.delete(k); }
 }
 // an artist is chosen once the box holds a name we have songs for (or whose catalog we loaded): then the song list shows only them
+// the song is by this artist, alone or with others ("Matt Nathanson & Sugarland"), but not a different band whose name contains it ("The Sugarland Run")
+const byArtist = (sa, art) => { const a = norm(sa || ""); return a === art || a.split(/\s*(?:&|,|\+|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\band\b|\bx\b)\s*/).includes(art); };
 let artistChosen = "";   // set only when the guest picks an artist from the artist list
 function knownArtist(){ const a = norm($("artist").value); return artistChosen && a === artistChosen ? a : ""; }
 /* song field: suggestions, filtered to the artist when one is chosen */
@@ -844,7 +846,7 @@ function suggest(){
   const q = norm($("song").value), box = $("sugg"), art = knownArtist();
   box.innerHTML = "";
   if(!songs.length || (q.length < 2 && !art)){ box.hidden = true; return; }
-  const hitsRaw = songs.filter(s => (!art || norm(s.a).includes(art)) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q))));
+  const hitsRaw = songs.filter(s => (!art || byArtist(s.a, art)) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q))));
   const hitsAll = byPopularity(hitsRaw); const hits = hitsAll.slice(0, art ? 300 : 50);
   const pickIt = s => () => { $("song").value = s.t; box.hidden = true; $("err").textContent = ""; setArtistFor(s.t, s.a); };
   hits.forEach(s => sugBtn(box, s.t, s.a, pickIt(s)));
@@ -858,7 +860,7 @@ function suggest(){
       try{ more = (await (await fetch("/api/songsearch?q=" + encodeURIComponent(q + ((art || norm($("artist").value)) ? " " + (art || norm($("artist").value)) : "")))).json()).songs || []; }catch(e){ return; }
       if($("song").value !== want) return;
       const have = new Set([...box.querySelectorAll("button")].map(b => norm(b.textContent)));
-      byPopularity(more.filter(s => !have.has(norm(s.t + s.a)) && (!art || norm(s.a).includes(art)))).slice(0, (art ? 300 : 80) - box.children.length).forEach(s => {
+      byPopularity(more.filter(s => !have.has(norm(s.t + s.a)) && (!art || (byArtist(s.a, art) && (!q || norm(s.t).includes(q)))))).slice(0, (art ? 300 : 80) - box.children.length).forEach(s => {
         if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, web: 1 });   // so the artist fills in when picked
         sugBtn(box, s.t, s.a, pickIt(s));
       });
