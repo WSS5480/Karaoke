@@ -695,7 +695,7 @@ app.get("/api/singers", wrap(async (req, res) => {
       const nm = String(r.name || "").split(" & ")[0].trim(); if (nm) list.push({ o: r.device, n: nm, num: await singerNum(numKeyOf(r.device)) });
     }
     for (const cu of (await db.singerNames())) { const o = "c" + cu.id; if (seen.has(o)) continue; seen.add(o); list.push({ o, n: cu.name, num: await singerNum(cu.id) }); }
-    list.sort((x, y) => x.n.toLowerCase().localeCompare(y.n.toLowerCase())); c = { t: Date.now(), list: list.slice(0, 3000) }; singersCache.set(T(), c);
+    list.sort((x, y) => x.n.toLowerCase().localeCompare(y.n.toLowerCase())); c = { t: Date.now(), list }; singersCache.set(T(), c);
   }
   res.json({ items: c.list.filter(x => x.o !== me).map(x => ({ n: x.n, num: x.num })) });
 }));
