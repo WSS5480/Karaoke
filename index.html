@@ -1015,7 +1015,7 @@ $("editForm").addEventListener("submit", async e => {
   catch(err){ $("editErr").textContent = err.message; }
 });
 // sign-up form sits right under the title so a fresh scan can sign up without scrolling
-(function(){ const v = $("venueLine"), f = $("formCard"), pc = $("picCard"); const mc = $("mineCard"); const un = $("upNext"); if(v && f){ v.after(f); if(mc) f.after(mc); if(un) (mc || f).after(un); if(pc) (un || mc || f).after(pc); } })();
+(function(){ const v = $("venueLine"), f = $("formCard"), pc = $("picCard"); const mc = $("mineCard"); const un = $("upNext"); const cc = $("closedCard"); if(v && f){ v.after(f); if(cc) f.before(cc); if(mc) f.after(mc); if(un) (mc || f).after(un); if(pc) (un || mc || f).after(pc); } })();
 $("cancel").addEventListener("click", async () => {
   if($("cancel").dataset.armed !== "1"){ $("cancel").dataset.armed = "1"; $("cancel").textContent = "Tap again to cancel"; setTimeout(() => { $("cancel").dataset.armed = ""; $("cancel").textContent = "Cancel my song"; }, 4000); return; }
   await fetch("/api/cancel", { method: "POST" }).catch(() => {});
