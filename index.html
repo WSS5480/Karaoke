@@ -875,6 +875,16 @@ function suggest(){
 function setArtistFor(title, chosen){
   const matches = [...new Set(songs.filter(s => norm(s.t) === norm(title)).map(s => s.a))];
   const pick = $("artistPick"), input = $("artist"), hint = $("artistHint");
+  // the guest already named an artist: never swap it for a different singer's version of the same title
+  // (picked Sugarland + "Run" must not turn into George Strait)
+  const typed = !pick.hidden ? "" : input.value.trim();
+  if(!chosen && typed) chosen = typed;
+  if(chosen){
+    const mine = matches.filter(a => a === chosen || byArtist(a, norm(chosen)));
+    pick.hidden = true; input.hidden = false; hint.hidden = true;
+    input.value = mine.length === 1 ? mine[0] : chosen;
+    $("asugg").hidden = true; return;
+  }
   if(matches.length > 1){
     pick.innerHTML = "";
     const o0 = document.createElement("option"); o0.value = ""; o0.textContent = bi("Pick the artist", "Elige el artista"); pick.appendChild(o0);
