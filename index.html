@@ -844,6 +844,7 @@ async function loadArtist(a){
 // the song is by this artist, alone or with others ("Matt Nathanson & Sugarland"), but not a different band whose name contains it ("The Sugarland Run")
 const byArtist = (sa, art) => { const a = norm(sa || ""); return a === art || a.split(/\s*(?:&|,|\+|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\band\b|\bx\b)\s*/).includes(art); };
 let artistChosen = "";   // set only when the guest picks an artist from the artist list
+let artistMine = false;  // the artist box holds what the guest typed or picked; anything the app filled in is cleared when the song changes
 function knownArtist(){ const a = norm($("artist").value); return artistChosen && a === artistChosen ? a : ""; }
 /* song field: suggestions, filtered to the artist when one is chosen */
 function suggest(){
@@ -878,7 +879,7 @@ function setArtistFor(title, chosen){
   const pick = $("artistPick"), input = $("artist"), hint = $("artistHint");
   // the guest already named an artist: never swap it for a different singer's version of the same title
   // (picked Sugarland + "Run" must not turn into George Strait)
-  const typed = !pick.hidden ? "" : input.value.trim();
+  const typed = !pick.hidden || !artistMine ? "" : input.value.trim();
   if(!chosen && typed) chosen = typed;
   if(chosen){
     const mine = matches.filter(a => a === chosen || byArtist(a, norm(chosen)));
@@ -908,7 +909,7 @@ function suggestArtist(again){
   const counts = new Map(); songs.forEach(s => { if(norm(s.a).includes(q)) counts.set(s.a, (counts.get(s.a) || 0) + 1); });
   const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
   list.forEach(([a, n]) => sugBtn(box, a, n + " song" + (n > 1 ? "s" : ""), () => {
-    $("artist").value = a; box.hidden = true; $("artistHint").hidden = true; artistChosen = norm(a);
+    $("artist").value = a; box.hidden = true; $("artistHint").hidden = true; artistChosen = norm(a); artistMine = true;
     loadArtist(a);
     const theirs = songs.filter(s => s.a === a);
     if(theirs.length === 1 && !$("song").value.trim()){ $("song").value = theirs[0].t; return; }
@@ -932,12 +933,13 @@ function suggestArtist(again){
 ["sugg", "asugg", "pSugg"].forEach(id => { const b = $(id); if(!b) return;
   const hideKb = () => { const a = document.activeElement; if(a && /INPUT|TEXTAREA/.test(a.tagName)) a.blur(); };
   b.addEventListener("touchmove", hideKb, { passive: true }); });
-$("artist").addEventListener("input", () => { if(norm($("artist").value) !== artistChosen) artistChosen = ""; });
+$("artist").addEventListener("input", () => { if(norm($("artist").value) !== artistChosen) artistChosen = ""; artistMine = !!$("artist").value.trim(); });
 $("artist").addEventListener("change", () => loadArtist($("artist").value.trim()));
 $("song").addEventListener("focus", () => { const a = $("artist").value.trim(); if(a) loadArtist(a); });
 $("song").addEventListener("input", () => {
   $("err").textContent = "";
   if(!$("artistPick").hidden){ $("artistPick").hidden = true; $("artist").hidden = false; $("artist").value = ""; }
+  if(!artistMine && $("artist").value){ $("artist").value = ""; artistChosen = ""; }   // an artist the app filled in goes away with the song
   $("artistHint").hidden = true;
   suggest();
   const exact = songs.filter(s => norm(s.t) === norm($("song").value));
@@ -998,7 +1000,7 @@ $("form").addEventListener("submit", async e => {
   if(!termsAccepted){ openTerms(); return; }
   $("submit").disabled = true; $("submit").textContent = geofenceOn ? "Checking you're at The Dive…" : "Adding you…";
   const ok = await doSignup(name, song, artist, $("err"));
-  if(ok){ $("song").value = ""; $("artist").value = ""; }
+  if(ok){ $("song").value = ""; $("artist").value = ""; artistMine = false; artistChosen = ""; }
   $("submit").disabled = false; $("submit").textContent = "Put me on the list";
   refresh();
 });
