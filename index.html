@@ -1693,7 +1693,7 @@ function paintPick(){
   const sel = $("withPick"), q = norm($("withFind").value || ""), keep = sel.value; sel.innerHTML = "";
   const hits = pickAll.filter(x => !q || norm(x.n).includes(q) || String(x.num).startsWith(q));
   const o0 = document.createElement("option"); o0.value = ""; o0.textContent = hits.length ? (q ? hits.length + " match" + (hits.length === 1 ? "" : "es") + " — pick one" : "Pick a singer… (" + hits.length + ")") : "No singer by that name"; sel.appendChild(o0);
-  hits.slice(0, 500).forEach(x => { const o = document.createElement("option"); o.value = x.num; o.textContent = x.n + " · " + x.num; sel.appendChild(o); });
+  hits.forEach(x => { const o = document.createElement("option"); o.value = x.num; o.textContent = x.n + " · " + x.num; sel.appendChild(o); });
   if(hits.some(x => String(x.num) === keep)) sel.value = keep;
   if(q && hits.length === 1){ sel.value = hits[0].num; $("withNum").value = hits[0].num; }
 }
