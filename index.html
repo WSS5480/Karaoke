@@ -910,6 +910,10 @@ function suggestArtist(again){
     }, 300);
   }
 }
+// scrolling the suggestion list puts the phone keyboard away, so the whole list can be scrolled and tapped
+["sugg", "asugg", "pSugg"].forEach(id => { const b = $(id); if(!b) return;
+  const hideKb = () => { const a = document.activeElement; if(a && /INPUT|TEXTAREA/.test(a.tagName)) a.blur(); };
+  b.addEventListener("touchmove", hideKb, { passive: true }); b.addEventListener("scroll", hideKb, { passive: true }); });
 $("artist").addEventListener("change", () => loadArtist($("artist").value.trim()));
 $("song").addEventListener("focus", () => { const a = $("artist").value.trim(); if(a) loadArtist(a); });
 $("song").addEventListener("input", () => {
