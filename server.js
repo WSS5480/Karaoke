@@ -668,7 +668,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await lastSungWith(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), dj: await djPublic(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
+  res.json({ venue: TEN().venue || "", closeHour: Number(TEN().closeHour ?? 2), shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), dj: await djPublic(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
     last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, mine) });
 }));
 

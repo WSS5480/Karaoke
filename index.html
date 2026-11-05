@@ -905,7 +905,8 @@ function paintMyClock(m){
   $("myClkS").textContent = ahead === 0 ? "You're next" : "about " + e.min + " min" + (ahead ? " · " + ahead + " ahead" : "");
   el.classList.toggle("next", ahead === 0);
   // past 2 AM: red banner, and a tap goes straight to locking the spot (when move-ups are on)
-  const h = new Date(e.at).getHours(), late = h >= 2 && h < 12;
+  const h = new Date(e.at).getHours(), ch = Number.isFinite(window.__closeHour) ? window.__closeHour : 2;   // bar's closing hour (2 AM unless the bar set another)
+  const late = ch < 12 ? (h >= ch && h < 12) : (h >= ch || h < 12);
   const canLock = late && ahead !== 0 && !!(window.diveCanBump && window.diveCanBump());
   el.classList.toggle("late", late); el.classList.toggle("tap", canLock);
   $("myClkLk").hidden = !canLock; el.setAttribute("role", canLock ? "button" : "status");
@@ -1201,6 +1202,7 @@ document.addEventListener("click", e => {
 function render(data){ try{ paintDj(data.dj); }catch(e){}
   document.body.classList.remove("booting");
   mine = data.mine; multiOn = !!data.multi;
+  if(data.closeHour != null) window.__closeHour = Number(data.closeHour);
   try{ paintMyClock(data.mine); }catch(e){}
   lyricsOn = data.lyrics !== false; document.body.classList.toggle("nolyr", !lyricsOn);
   if(!lyricsOn){ $("lyrModal").hidden = true; $("singModal").hidden = true; }
