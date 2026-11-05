@@ -463,9 +463,9 @@ async function etaFor(list, mine) {
   const gap = await rhythmGap(), now = Date.now(), up = list.find(r => r.status === "up");
   let secs = 0;
   if (up) { const u = await upAt(), len = songSecs(up.song, up.artist), el = u && u.id === up.id ? (now - u.at) / 1000 : len / 2; secs += Math.max(30, len - el) + gap; }
-  for (const r of list) { if (r.id === mine.id) break; if (r.status === "queued") secs += songSecs(r.song, r.artist) + gap; }
-  songSecs(mine.song, mine.artist);
-  return { at: now + Math.round(secs) * 1000, min: Math.max(1, Math.round(secs / 60)), gap: Math.round(gap) };
+  const each = [];   // seconds each singer ahead takes, so a move-up can show the new time
+  for (const r of list) { if (r.id === mine.id) break; if (r.status === "queued") { const t = songSecs(r.song, r.artist) + gap; secs += t; each.push(Math.round(t)); } }
+  return { at: now + Math.round(secs) * 1000, min: Math.max(1, Math.round(secs / 60)), gap: Math.round(gap), skip: each.reverse().slice(0, 30) };
 }
 // DJ clock: when the last singer on the list should finish, and closing time (2 AM bar time unless set per bar)
 async function lastSongEnd() {

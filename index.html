@@ -231,6 +231,8 @@ li.up .av{border-color:var(--green)}
 .myclk.next{border-color:#f5c518}.myclk.next .v{color:#f5c518}
 .myclk.late{border-color:#ff4d4d;background:rgba(40,8,8,.95)}.myclk.late .v{color:#ff5a5a}
 .myclk.tap{pointer-events:auto;cursor:pointer}
+#bumpSpots small.bt{display:block;font-size:11px;color:#8fd19a;margin-top:1px}
+.bumpeta{margin:10px 0 0;text-align:center;font-size:16px;color:var(--ink)}.bumpeta b{color:#5fd36e;font-size:18px}.bumpeta small{display:block;font-size:12px;color:var(--ink-2);margin-top:2px}
 .myclk .lk{display:block;margin-top:4px;font-size:11px;font-weight:800;color:#fff;background:#d92b2b;border-radius:8px;padding:3px 6px}
 body.posting .myclk{display:none}
 .eta{margin:0;font-size:17px;font-weight:700;color:#5fd36e}.eta small{display:block;font-size:12px;font-weight:400;color:var(--ink-2)}
@@ -2146,6 +2148,13 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   window.diveCanBump = () => !!(info && info.on && info.max && cur && cur.status === "queued" && !(info.req && info.req.status === "pending")) && !$("bumpBox").hidden && !$("bumpOpen").hidden;
   window.diveBumpPrice = () => info && info.price;
   window.diveOpenBump = () => { $("tipModal").hidden = true; $("bumpOpen").click(); };
+  // estimated time to sing after moving up k spots (skips the k singers just ahead)
+  function etaUp(k){
+    const e = cur && cur.eta; if(!e || !e.at) return "";
+    const sk = e.skip || []; let s = 0; for(let i = 0; i < k && i < sk.length; i++) s += sk[i];
+    const t = Math.max(Date.now(), e.at - s * 1000);
+    return new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
   function paintSpots(){
     const box = $("bumpSpots"); box.innerHTML = "";
     const place = cur.wpos || (cur.spot || 0) + 1, locked = new Set(info.locked || []);   // numbers as they see them on their card
@@ -2154,16 +2163,20 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     if(!open(spots)) spots = best || 1;
     if(best > 1){   // one tap to the best open spot
       const f = document.createElement("button"); f.type = "button"; f.className = "front"; f.setAttribute("aria-pressed", spots === best);
-      f.innerHTML = "⏫ Best open spot: " + ord(place - best) + "<small>" + best + " spots · $" + (best * info.price) + "</small>";
+      f.innerHTML = "⏫ Best open spot: " + ord(place - best) + "<small>" + best + " spots · $" + (best * info.price) + (etaUp(best) ? " · sing ~" + etaUp(best) : "") + "</small>";
       f.addEventListener("click", () => { spots = best; paintSpots(); }); box.appendChild(f);
     }
     for(let k = 1; k <= info.max; k++){
       const b = document.createElement("button"); b.type = "button";
       if(!open(k)){ b.disabled = true; b.className = "lk"; b.innerHTML = "🔒<small>" + ord(place - k) + " taken</small>"; box.appendChild(b); continue; }
       b.setAttribute("aria-pressed", k === spots);
-      b.innerHTML = ord(place - k) + "<small>$" + (k * info.price) + "</small>";
+      b.innerHTML = ord(place - k) + "<small>$" + (k * info.price) + "</small>" + (etaUp(k) ? "<small class=\"bt\">~" + etaUp(k) + "</small>" : "");
       b.addEventListener("click", () => { spots = k; paintSpots(); }); box.appendChild(b);
     }
+    let sel = $("bumpEta"); if(!sel){ sel = document.createElement("p"); sel.id = "bumpEta"; sel.className = "bumpeta"; box.after(sel); }
+    const now = cur && cur.eta && cur.eta.at ? new Date(cur.eta.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+    sel.innerHTML = etaUp(spots) ? "⏱ Est. time to sing at " + ord(place - spots) + ": <b>~" + etaUp(spots) + "</b>" + (now ? "<small>Now ~" + now + " at " + ord(place) + "</small>" : "") : "";
+    sel.hidden = !sel.innerHTML;
   }
 
   $("bumpOpen").addEventListener("click", () => {
