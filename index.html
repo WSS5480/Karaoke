@@ -2006,7 +2006,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     const box = $("pushBox"); if(!box) return;
     if(!can && !ios){ box.hidden = true; return; }
     box.hidden = false;
-    if(await isOn()){ $("pushOn").hidden = true; $("pushHow").hidden = true; $("pushOk").hidden = false; return; }
+    if(await isOn()){ $("pushOn").hidden = true; $("pushHow").hidden = true; $("pushOk").hidden = true; return; }
     $("pushOk").hidden = true;
     if(ios && (!standalone || !can)){ $("pushOn").hidden = true; $("pushHow").hidden = false; $("pushHow").innerHTML = "🔔 <b>Want your iPhone to buzz when you're up?</b> Tap the Share button <b>⬆︎</b> → <b>Add to Home Screen</b>, open <b>The Dive</b> from your home screen, then tap “Buzz my phone”."; return; }
     if(Notification.permission === "denied"){ $("pushOn").hidden = true; $("pushHow").hidden = false; $("pushHow").textContent = "🔕 Alerts are blocked for this site. Turn on notifications for it in your phone's settings."; return; }
@@ -2078,7 +2078,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     $("bumpOpen").querySelector(".bsub").innerHTML = again ? "$" + b.price + " a spot · you stay locked" : "Move up · $<span id=\"bumpPrice\">" + b.price + "</span> a spot · nobody can bump you";
     const m = $("bumpMsg"); m.className = "bumpmsg";
     if(pending) m.textContent = "⏳ Waiting for the DJ to see your $" + r.amount + " and move you up " + r.spots + (r.spots === 1 ? " spot." : " spots.") + " (Your song is still in line.)";
-    else if(r && r.status === "approved"){ m.textContent = r.manual ? "🔒 The DJ locked your spot. Nobody can push you down." : "🔒 Spot locked! You moved up " + r.spots + (r.spots === 1 ? " spot" : " spots") + " and nobody can push you down."; m.classList.add("ok"); }
+    else if(r && r.status === "approved") m.textContent = "";   // locked info shows in the banner, not here
     else if(r && r.status === "denied") m.textContent = "The DJ couldn't find your payment. Ask the DJ.";
     else if(r && r.status === "canceled") m.textContent = "Move-up canceled. Your song is still in line.";
     else if(r && r.status === "expired") m.textContent = "The DJ didn't confirm in time. You can try again.";
