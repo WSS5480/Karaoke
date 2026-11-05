@@ -513,14 +513,13 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
       <p class="hint" id="pushHow" hidden></p>
       <p class="ok" id="pushOk" hidden>🔔 Alerts on: we'll buzz you when you're next and when you're up.</p>
     </div>
-    <button class="ghost" id="editSong" type="button">Change my song</button>
+    <div class="pair" style="display:flex;gap:8px"><button class="ghost" id="editSong" type="button" style="flex:1;margin:0">Change my song</button><button class="ghost" id="cancel" type="button" style="flex:1;margin:0">Cancel my song</button></div>
     <form id="editForm" hidden novalidate style="display:flex;flex-direction:column;gap:8px">
       <input id="editSongIn" maxlength="80" placeholder="Song" aria-label="New song" autocomplete="off">
       <input id="editArtistIn" maxlength="60" placeholder="Artist" aria-label="New artist" autocomplete="off">
       <button class="go" type="submit">Save song</button>
       <p class="err" id="editErr" role="alert" style="margin:0"></p>
     </form>
-    <button class="ghost" id="cancel" type="button">Cancel my song</button>
   </section>
 
   <section class="card" id="upNext">
