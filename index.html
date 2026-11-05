@@ -1655,7 +1655,7 @@ function libFind(song, artist){ const t = norm(song), a = norm(artist || ""); re
 function rand(seed){ let x = Math.sin(seed) * 10000; return x - Math.floor(x); }
 function paintFor(){
   if(!songs.length) return;
-  const mineSongs = [...mineItems.map(x => ({ song: x.song, artist: x.artist, w: 1 + ((x.likes || 0) >= 3 ? 1 : 0) })), ...lists.fav.map(x => ({ ...x, w: 2 })), ...lists.practice.map(x => ({ ...x, w: 1 }))];
+  const mineSongs = [...mineItems.filter(x => !x.partner && !x.withName && !/ & | and /i.test(x.name || "")).map(x => ({ song: x.song, artist: x.artist, w: 1 + ((x.likes || 0) >= 3 ? 1 : 0) })), ...lists.fav.map(x => ({ ...x, w: 2 })), ...lists.practice.map(x => ({ ...x, w: 1 }))];
   const known = new Set(mineSongs.map(x => sKey(x.song, x.artist)));
   const artistW = {}, genreW = {}, langW = {};
   mineSongs.forEach(x => {
