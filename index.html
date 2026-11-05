@@ -671,7 +671,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 <div class="tmodal" id="nextModal" hidden role="dialog" aria-modal="true" aria-labelledby="nextTitle">
   <div class="tbox" style="text-align:center;gap:14px">
     <div id="nextIco" style="font-size:54px;line-height:1">⏭️</div>
-    <h2 id="nextTitle" style="font-size:26px;letter-spacing:.06em">You're up next! <span class="es" id="nextEs" data-keep style="display:block;font-size:16px;font-weight:400;color:var(--ink-2);letter-spacing:0;text-transform:none">¡Sigues tú!</span></h2>
+    <h2 id="nextTitle" style="font-size:26px;letter-spacing:.06em">You're up after this singer <span class="es" id="nextEs" data-keep style="display:block;font-size:16px;font-weight:400;color:var(--ink-2);letter-spacing:0;text-transform:none">Te toca después de este cantante</span></h2>
     <p id="nextLine" style="margin:0;font-size:16px;color:var(--ink-2)"></p>
     <p id="nextSong" style="margin:0;font-size:18px"></p>
     <button class="go" id="nextOk" type="button">OK</button>
@@ -839,12 +839,13 @@ function alertOnce(kind, id){
   go(); fobTimer = setInterval(go, 1000);
   if(kind === "deck") showAlert("deck");
 }
+function onStageName(){ const u = (window.__lastQueue || []).find(r => r.status === "up"); return u ? u.name : ""; }
 function showAlert(kind){
   const m = $("nextModal"); if(!m) return;
   $("nextIco").textContent = kind === "two" ? "⏳" : "⏭️";
-  $("nextTitle").firstChild.textContent = kind === "two" ? "You're up in 2 " : "You're up next! ";
-  $("nextEs").textContent = kind === "two" ? "Te toca en 2" : "¡Sigues tú!";
-  $("nextLine").textContent = kind === "two" ? "Two singers before you. Get your song ready." : "Head toward the stage. You're on after this song.";
+  $("nextTitle").firstChild.textContent = kind === "two" ? "You're up in 2 " : "You're up after this singer ";
+  $("nextEs").textContent = kind === "two" ? "Te toca en 2" : "Te toca después de este cantante";
+  $("nextLine").textContent = kind === "two" ? "Two singers before you. Get your song ready." : (onStageName() ? "On stage now: " + onStageName() + ". " : "") + "Head toward the stage.";
   $("nextSong").textContent = mine ? mine.song + (mine.artist ? " – " + mine.artist : "") : "";
   m.dataset.kind = kind; m.hidden = false;
 }
@@ -1233,7 +1234,7 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
     $("noSongMsg").textContent = mine.repeat ? bi("🔁 That song was already sung tonight. The DJ asks you to pick a different one. You keep your spot.", "Esa canción ya se cantó hoy. Escoge otra; no pierdes tu lugar.") : bi("🎵 The DJ doesn't have that song. Pick another one. You keep your spot.", "El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.");
     if(mine.nosong && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; openEdit("", "", false); try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
     // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
-    { const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
+    { window.__lastQueue = data.queue || []; const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
       if(mine.status === "queued" && upNow && ahead - 1 === 0) alertOnce("deck", mine.id);
       else if(mine.status === "queued" && upNow && ahead - 1 === 1) alertOnce("two", mine.id); }
     if(mine.status !== "queued" && !$("nextModal").hidden){ $("nextModal").hidden = true; if(mine.status === "up") stopFob(); }

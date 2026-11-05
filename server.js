@@ -1132,7 +1132,7 @@ async function pushTo(row, stage, title, body) {
 async function pushTick() {
   const list = await db.active(), up = list.find(r => r.status === "up"), q = list.filter(r => r.status === "queued"), song = r => "“" + r.song + "”" + (r.artist ? " – " + r.artist : "");
   if (up) await pushTo(up, "up", "🎤 You're up! / ¡Te toca!", "Head to the stage: " + song(up));
-  if (q[0] && (up || q.length > 1)) await pushTo(q[0], "deck", "⏭️ You're up next! / ¡Sigues tú!", "Get ready near the stage: " + song(q[0]) + ". Tap OK.");
+  if (q[0] && (up || q.length > 1)) await pushTo(q[0], "deck", "⏭️ You're up after this singer / Te toca después de este cantante", (up ? "On stage now: " + up.name + ". " : "") + "Get ready near the stage: " + song(q[0]) + ". Tap OK.");
   if (q[1] && up) await pushTo(q[1], "two", "⏳ You're up in 2 / Te toca en 2", "Two singers before you. Get ready: " + song(q[1]));
   const ns = await noSongs();
   if (ns.size) { const ask = await idSet("repeat_ask"); for (const r of q) if (ns.has(r.id)) await pushTo(r, "nosong", ask.has(r.id) ? "🔁 Pick a different song" : "🎵 Pick another song", (ask.has(r.id) ? "That song was already sung tonight." : "The DJ doesn't have " + song(r) + ".") + " You keep your spot. Tap to change it."); }
