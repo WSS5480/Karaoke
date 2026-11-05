@@ -668,6 +668,15 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <button class="linkbtn" id="singClose" type="button">Not this one</button>
   </div>
 </div>
+<div class="tmodal" id="nextModal" hidden role="dialog" aria-modal="true" aria-labelledby="nextTitle">
+  <div class="tbox" style="text-align:center;gap:14px">
+    <div id="nextIco" style="font-size:54px;line-height:1">⏭️</div>
+    <h2 id="nextTitle" style="font-size:26px;letter-spacing:.06em">You're up next! <span class="es" id="nextEs" data-keep style="display:block;font-size:16px;font-weight:400;color:var(--ink-2);letter-spacing:0;text-transform:none">¡Sigues tú!</span></h2>
+    <p id="nextLine" style="margin:0;font-size:16px;color:var(--ink-2)"></p>
+    <p id="nextSong" style="margin:0;font-size:18px"></p>
+    <button class="go" id="nextOk" type="button">OK</button>
+  </div>
+</div>
 <div class="tmodal" id="upModal" hidden role="dialog" aria-modal="true" aria-labelledby="upTitle">
   <div class="tbox" style="text-align:center;gap:14px">
     <div style="font-size:54px;line-height:1">🎤</div>
@@ -819,15 +828,25 @@ function chime(notes){
 }
 function buzz(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
 function stopFob(){ clearInterval(fobTimer); fobTimer = null; buzz(0); }
+function ackAlert(stage){ fetch("/api/push/ack", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage }) }).catch(() => {}); }
 function alertOnce(kind, id){
   const key = "dive_alert_" + kind; let seen = null; try{ seen = sessionStorage.getItem(key); }catch(e){}
   if(seen === String(id)) return; try{ sessionStorage.setItem(key, String(id)); }catch(e){}
-  if(kind === "deck"){ buzz([300, 150, 300]); chime([660, 880]); return; }
-  // you're up: pager-style buzzing every few seconds until they tap the screen (max ~30 s)
-  stopFob(); let n = 0; const go = () => { buzz([700, 250, 700, 250, 700]); chime([880, 660, 880]); if(++n >= 10) stopFob(); };
-  go(); fobTimer = setInterval(go, 3000);
-  const stop = () => { stopFob(); document.removeEventListener("pointerdown", stop, true); };
-  setTimeout(() => document.addEventListener("pointerdown", stop, true), 500);
+  stopFob();
+  if(kind === "two"){ buzz([300, 150, 300]); chime([660, 880]); showAlert("two"); return; }
+  // up next / you're up: buzz + chime every second until they tap OK (stops on its own after 5 minutes)
+  let n = 0; const go = () => { buzz(kind === "up" ? [700, 250] : [500, 300]); chime(kind === "up" ? [880, 660, 880] : [660, 880]); if(++n >= 300) stopFob(); };
+  go(); fobTimer = setInterval(go, 1000);
+  if(kind === "deck") showAlert("deck");
+}
+function showAlert(kind){
+  const m = $("nextModal"); if(!m) return;
+  $("nextIco").textContent = kind === "two" ? "⏳" : "⏭️";
+  $("nextTitle").firstChild.textContent = kind === "two" ? "You're up in 2 " : "You're up next! ";
+  $("nextEs").textContent = kind === "two" ? "Te toca en 2" : "¡Sigues tú!";
+  $("nextLine").textContent = kind === "two" ? "Two singers before you. Get your song ready." : "Head toward the stage. You're on after this song.";
+  $("nextSong").textContent = mine ? mine.song + (mine.artist ? " – " + mine.artist : "") : "";
+  m.dataset.kind = kind; m.hidden = false;
 }
 fetch("/songs.json").then(r => r.json()).then(s => { songs = s; if(typeof paintFor === "function") paintFor(); }).catch(() => {});
 
@@ -1195,6 +1214,7 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
   $("formCard").hidden = (!!mine && !multiOn) || !data.open || data.paused || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
   if(!mine && editDraft) closeEdit();
+  if(!mine && (fobTimer || !$("nextModal").hidden || !$("upModal").hidden)){ stopFob(); $("nextModal").hidden = true; $("upModal").hidden = true; }
   if(!mine && window.paintBump) window.paintBump({ on: false }, null);
   document.body.classList.toggle("fresh", !mine && !$("formCard").hidden);
   if(mine) try{
@@ -1214,8 +1234,10 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
     if(mine.nosong && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; openEdit("", "", false); try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
     // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
     { const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
-      if(mine.status === "queued" && upNow && ahead - 1 === 0) alertOnce("deck", mine.id); }
-    if(mine.status === "up") alertOnce("up", mine.id);
+      if(mine.status === "queued" && upNow && ahead - 1 === 0) alertOnce("deck", mine.id);
+      else if(mine.status === "queued" && upNow && ahead - 1 === 1) alertOnce("two", mine.id); }
+    if(mine.status !== "queued" && !$("nextModal").hidden){ $("nextModal").hidden = true; if(mine.status === "up") stopFob(); }
+    if(mine.status === "up"){ $("nextModal").hidden = true; alertOnce("up", mine.id); }
     if(mine.status === "up"){
       let seen = null; try{ seen = sessionStorage.getItem("dive_up_seen"); }catch(e){}
       if(seen !== String(mine.id)){
@@ -2296,8 +2318,9 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   $("tnOff").addEventListener("click", () => { try{ localStorage.setItem("dive_tipnudge_off", night()); }catch(e){} hideNudge(); });
   loadTip(); setInterval(loadTip, 30000);
 })();
-$("upClose").addEventListener("click", () => $("upModal").hidden = true);
-$("upLyr").addEventListener("click", () => setTimeout(() => $("upModal").hidden = true, 300));
+$("upClose").addEventListener("click", () => { $("upModal").hidden = true; stopFob(); ackAlert("up"); });
+$("nextOk").addEventListener("click", () => { const k = $("nextModal").dataset.kind; $("nextModal").hidden = true; stopFob(); if(k === "deck") ackAlert("deck"); });
+$("upLyr").addEventListener("click", () => { stopFob(); ackAlert("up"); setTimeout(() => $("upModal").hidden = true, 300); });
 /* ---------- now singing + sing along, for everyone in the bar ---------- */
 let popOn = false, lastNowId = null;
 try{ popOn = localStorage.getItem("dive_singalong") === "1"; }catch(e){}

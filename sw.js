@@ -1,5 +1,5 @@
 // The Dive Karaoke: keeps the app shell on the phone so it opens fast; live data always comes from the server.
-const CACHE = "dive-v92";
+const CACHE = "dive-v93";
 const SHELL = ["/", "/kj", "/logo.png", "/songs.json", "/manifest.json", "/icon-192.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
@@ -17,9 +17,12 @@ self.addEventListener("fetch", e => {
 // phone alerts: "you're next" / "you're up" (sound + vibrate come from the phone's notification settings)
 self.addEventListener("push", e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { title: "The Dive", body: e.data ? e.data.text() : "" }; }
-  e.waitUntil(self.registration.showNotification(d.title || "The Dive", { body: d.body || "", tag: d.tag || "dive", renotify: true, requireInteraction: d.tag === "dive-up", vibrate: [400, 150, 400, 150, 400], icon: "/icon-192.png", badge: "/icon-192.png", data: { url: d.url || "/" } }));
+  const loud = d.tag === "dive-up" || d.tag === "dive-deck";
+  e.waitUntil(self.registration.showNotification(d.title || "The Dive", { body: d.body || "", tag: d.tag || "dive", renotify: true, requireInteraction: loud, vibrate: [600, 200, 600, 200, 600, 200, 600], icon: "/icon-192.png", badge: "/icon-192.png", actions: loud ? [{ action: "ok", title: "OK" }] : [], data: { url: d.url || "/", stage: d.stage || "" } }));
 });
+// tapping the alert (or OK) tells the server to stop repeating it
+function ackPush(n){ const st = n && n.data && n.data.stage; if(!st) return Promise.resolve(); return fetch(self.registration.scope + "api/push/ack", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage: st }) }).catch(() => {}); }
 self.addEventListener("notificationclick", e => {
-  e.notification.close(); const url = (e.notification.data && e.notification.data.url) || "/";
+  e.notification.close(); e.waitUntil(ackPush(e.notification)); if(e.action === "ok") return; const url = (e.notification.data && e.notification.data.url) || "/";
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => { for (const w of ws) if (new URL(w.url).pathname.startsWith(new URL(url, self.location.origin).pathname)) return w.focus(); return self.clients.openWindow(url); }));
 });

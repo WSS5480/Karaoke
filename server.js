@@ -1105,11 +1105,19 @@ app.post("/api/push/sub", wrap(async (req, res) => {
   await db.setSetting("push:" + owner(req, res), JSON.stringify(clean)); res.json({ ok: true });
 }));
 app.post("/api/push/off", wrap(async (req, res) => { await db.setSetting("push:" + owner(req, res), ""); res.json({ ok: true }); }));
-const pushSentMem = new Map();
+const pushSentMem = new Map(), pushAck = new Map(), pushCount = new Map();
+// "you're next" and "you're up" keep buzzing the phone until the singer taps OK (every tick, up to ~5 minutes)
+const REPEAT_STAGES = new Set(["deck", "up"]), REPEAT_MAX = 30;
 async function pushTo(row, stage, title, body) {
   if (!row || !row.device || String(row.device).startsWith("kj-")) return;
   const key = T() + ":" + row.id + ":" + stage + (stage === "nosong" ? ":" + row.song : "");
-  if (pushSentMem.has(key)) return; pushSentMem.set(key, Date.now());
+  if (REPEAT_STAGES.has(stage)) {
+    if (pushAck.has(key)) return;
+    const n = pushCount.get(key) || 0; if (n >= REPEAT_MAX) return;
+    pushCount.set(key, n + 1); pushSentMem.set(key, Date.now());
+    if (pushCount.size > 3000) { pushCount.clear(); }
+    if (pushAck.size > 3000) { const cut = Date.now() - 12 * 3600e3; for (const [k, t] of pushAck) if (t < cut) pushAck.delete(k); }
+  } else { if (pushSentMem.has(key)) return; pushSentMem.set(key, Date.now()); }
   if (pushSentMem.size > 3000) { const cut = Date.now() - 12 * 3600e3; for (const [k, t] of pushSentMem) if (t < cut) pushSentMem.delete(k); }
   // the singer's phone, and a duet partner's phone too
   const devs = [row.device]; try { const pk = await duetPartner(row.id); if (pk && !isCust(pk) && pk !== row.device) devs.push(pk); } catch (e) {}
@@ -1117,18 +1125,30 @@ async function pushTo(row, stage, title, body) {
     let sub = null; try { sub = JSON.parse((await db.getSetting("push:" + dev)) || "null"); } catch (e) {}
     if (!sub) continue;
     await vapidReady();
-    try { await webpush.sendNotification(sub, JSON.stringify({ title, body, tag: "dive-" + stage, url: (BASE() || "") + "/" }), { TTL: 600, urgency: "high" }); }
+    try { await webpush.sendNotification(sub, JSON.stringify({ title, body, tag: "dive-" + stage, stage, url: (BASE() || "") + "/" }), { TTL: 60, urgency: "high" }); }
     catch (e) { if (e && (e.statusCode === 404 || e.statusCode === 410)) await db.setSetting("push:" + dev, ""); }
   }
 }
 async function pushTick() {
   const list = await db.active(), up = list.find(r => r.status === "up"), q = list.filter(r => r.status === "queued"), song = r => "“" + r.song + "”" + (r.artist ? " – " + r.artist : "");
   if (up) await pushTo(up, "up", "🎤 You're up! / ¡Te toca!", "Head to the stage: " + song(up));
-  if (q[0] && (up || q.length > 1)) await pushTo(q[0], "deck", "⏭️ You're next! / ¡Sigues tú!", "Get ready near the stage: " + song(q[0]));
+  if (q[0] && (up || q.length > 1)) await pushTo(q[0], "deck", "⏭️ You're up next! / ¡Sigues tú!", "Get ready near the stage: " + song(q[0]) + ". Tap OK.");
+  if (q[1] && up) await pushTo(q[1], "two", "⏳ You're up in 2 / Te toca en 2", "Two singers before you. Get ready: " + song(q[1]));
   const ns = await noSongs();
   if (ns.size) { const ask = await idSet("repeat_ask"); for (const r of q) if (ns.has(r.id)) await pushTo(r, "nosong", ask.has(r.id) ? "🔁 Pick a different song" : "🎵 Pick another song", (ask.has(r.id) ? "That song was already sung tonight." : "The DJ doesn't have " + song(r) + ".") + " You keep your spot. Tap to change it."); }
 }
-setInterval(() => { allBars(pushTick).catch(() => {}); }, 15000);
+setInterval(() => { allBars(pushTick).catch(() => {}); }, 10000);
+// singer tapped OK (in the app or on the phone alert): stop repeating that alert
+app.post("/api/push/ack", wrap(async (req, res) => {
+  const stage = String((req.body && req.body.stage) || ""); if (!REPEAT_STAGES.has(stage)) return res.json({ ok: true });
+  const d = owner(req, res), dev = device(req, res);
+  for (const r of await db.active()) {
+    let me = r.device === d || r.device === dev;
+    if (!me) { try { const pk = await duetPartner(r.id); me = pk === d || pk === dev; } catch (e) {} }
+    if (me) pushAck.set(T() + ":" + r.id + ":" + stage, Date.now());
+  }
+  res.json({ ok: true });
+}));
 setTimeout(() => { allBars(async () => { await djIdleCheck(); await nightlyClose(); }).catch(() => {}); }, 20000);
 async function endDj(name, why, how, at) {
   const ds = await djSession();
