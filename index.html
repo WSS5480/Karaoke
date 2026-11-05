@@ -846,8 +846,21 @@ const topRank = new Map(TOP100.map((s, i) => [norm(s.t), i]));
 fetch("/api/popular", { cache: "no-store" }).then(r => r.json()).then(j => {
   (j.songs || []).forEach(s => { popHere.set(popKey(s.t, s.a), s.n); if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, here: 1 }); });
 }).catch(() => {});
-const popScore = s => [-(popHere.get(popKey(s.t, s.a)) || 0), topRank.has(norm(s.t)) ? topRank.get(norm(s.t)) : 999];
-function byPopularity(list){ return list.map((s, i) => ({ s, i, k: popScore(s) })).sort((x, y) => x.k[0] - y.k[0] || x.k[1] - y.k[1] || x.i - y.i).map(x => x.s); }
+// order everywhere: songs sung here first (most sung first), then A to Z by artist, then by song
+const hereCount = s => popHere.get(popKey(s.t, s.a)) || 0;
+function byPopularity(list){ return list.slice().sort((x, y) => hereCount(y) - hereCount(x) || norm(x.a || "").localeCompare(norm(y.a || "")) || norm(x.t).localeCompare(norm(y.t))); }
+// artists: sung here first (all their songs together), then A to Z
+function hereByArtist(a){ let n = 0; const k = "|" + norm(a); popHere.forEach((c, key) => { if(key.endsWith(k)) n += c; }); return n; }
+function artistsInOrder(names){ return names.slice().sort((x, y) => hereByArtist(y) - hereByArtist(x) || norm(x).localeCompare(norm(y))); }
+// every artist who recorded a title, from the online catalog (once per title)
+const titleLoaded = new Map(), titleShown = new Set();
+function loadTitle(title){
+  const k = norm(title || ""); if(k.length < 2) return Promise.resolve();
+  if(!titleLoaded.has(k)) titleLoaded.set(k, fetch("/api/titlesearch?q=" + encodeURIComponent(title)).then(r => r.json()).then(j => {
+    (j.songs || []).forEach(s => { if(!songs.some(x => norm(x.t) === norm(s.t) && norm(x.a) === norm(s.a))) songs.push({ t: s.t, a: s.a, web: 1 }); });
+  }).catch(() => titleLoaded.delete(k)));
+  return titleLoaded.get(k);
+}
 // the whole catalog for an artist (their own songs and songs they're featured on), added to the song list once
 const artistLoaded = new Set();
 async function loadArtist(a){
@@ -879,12 +892,13 @@ function suggest(){
   box.innerHTML = "";
   if(!songs.length || (q.length < 2 && !art)){ box.hidden = true; return; }
   const hitsRaw = songs.filter(s => (!art || byArtist(s.a, art)) && (!q || norm(s.t).includes(q) || (!art && norm(s.a).includes(q))));
-  const hitsAll = byPopularity(hitsRaw); const hits = hitsAll.slice(0, art ? 300 : 50);
+  const hitsAll = byPopularity(hitsRaw).sort((x, y) => (hereCount(y) - hereCount(x)) || ((norm(y.t) === q) - (norm(x.t) === q))); const hits = hitsAll.slice(0, art ? 300 : 50);
   const pickIt = s => () => { $("song").value = s.t; box.hidden = true; $("err").textContent = ""; setArtistFor(s.t, s.a); paintClr(); };
   hits.forEach(s => sugBtn(box, s.t, s.a, pickIt(s)));
   box.hidden = !hits.length;
   // every other song: ask Apple Music's catalog (after a short pause in typing)
   clearTimeout(suggest.t);
+  if(q.length >= 2){ const want0 = $("song").value; loadTitle(want0.trim()).then(() => { if($("song").value === want0 && document.activeElement === $("song")){ const have = new Set([...box.querySelectorAll("button")].map(b => norm(b.textContent))); const add = byPopularity(songs.filter(s => norm(s.t) === q && (!art || byArtist(s.a, art)) && !have.has(norm(s.t + s.a)))); if(add.length && !titleShown.has(q)){ titleShown.add(q); suggest(); } } }); }
   if(q.length >= 3 && hits.length < 50){
     const want = $("song").value;
     suggest.t = setTimeout(async () => {
@@ -902,7 +916,7 @@ function suggest(){
 }
 /* once a song is set: one artist fills in, several artists become a pick list */
 function setArtistFor(title, chosen){
-  const matches = [...new Set(songs.filter(s => norm(s.t) === norm(title)).map(s => s.a))];
+  const matches = artistsInOrder([...new Set(songs.filter(s => norm(s.t) === norm(title)).map(s => s.a))]);
   const pick = $("artistPick"), input = $("artist"), hint = $("artistHint");
   // the guest already named an artist: never swap it for a different singer's version of the same title
   // (picked Sugarland + "Run" must not turn into George Strait)
@@ -933,15 +947,16 @@ function suggestArtist(again){
   const q = norm($("artist").value), box = $("asugg"), title = norm($("song").value || "");
   box.innerHTML = "";
   // a song is picked: only the artists who sing that song
+  if(title.length >= 2 && !artistMine && !again){ loadTitle($("song").value.trim()).then(() => { if(norm($("song").value || "") === title && document.activeElement === $("artist")) suggestArtist(true); }); }
   const bySong = title.length >= 2 ? songs.filter(s => norm(s.t) === title) : [];
   if(bySong.length && !artistMine){
-    const arts = [...new Set(bySong.map(s => s.a))].filter(a => !q || norm(a).includes(q));
+    const arts = artistsInOrder([...new Set(bySong.map(s => s.a))]).filter(a => !q || norm(a).includes(q));
     arts.forEach(a => sugBtn(box, a, bi("sings this song", "canta esta canción"), () => { $("artist").value = a; artistChosen = norm(a); artistMine = true; box.hidden = true; $("artistHint").hidden = true; $("artistPick").hidden = true; $("artist").hidden = false; paintClr(); }));
     box.hidden = !arts.length; return;
   }
   if(q.length < 2 || !songs.length){ box.hidden = true; return; }
   const counts = new Map(); songs.forEach(s => { if(norm(s.a).includes(q)) counts.set(s.a, (counts.get(s.a) || 0) + 1); });
-  const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
+  const list = artistsInOrder([...counts.keys()]).slice(0, 25).map(a => [a, counts.get(a)]);
   list.forEach(([a, n]) => sugBtn(box, a, n + " song" + (n > 1 ? "s" : ""), () => {
     $("artist").value = a; box.hidden = true; $("artistHint").hidden = true; artistChosen = norm(a); artistMine = true;
     loadArtist(a);
@@ -952,7 +967,7 @@ function suggestArtist(again){
   box.hidden = !list.length;
   // any other artist: Apple Music's catalog
   clearTimeout(suggestArtist.t);
-  if(!again && q.length >= 3 && list.length < 15){
+  if(!again && q.length >= 3 && list.length < 25){
     const want = $("artist").value;
     suggestArtist.t = setTimeout(async () => {
       let more = [];

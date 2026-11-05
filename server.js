@@ -1941,6 +1941,28 @@ app.get("/api/popular", wrap(async (req, res) => {
   for (const [k, x] of [...m]) { if (x.a) continue; const twin = [...m.values()].filter(y => y.a && y.t.toLowerCase() === x.t.toLowerCase()).sort((p, q) => q.n - p.n)[0]; if (twin) { twin.n += x.n; m.delete(k); } }
   const v = [...m.values()].filter(x => x.a && x.t.length >= 2).sort((x, y) => y.n - x.n).slice(0, 400); popCache.set(T(), { t: Date.now(), v }); res.json({ songs: v });
 }));
+// every artist who recorded a song title (Run -> George Strait, Matt Nathanson & Sugarland, ...): for "pick the song, then the artist"
+const titleCache = new Map();
+app.get("/api/titlesearch", wrap(async (req, res) => {
+  const q = String(req.query.q || "").replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, " ").trim().slice(0, 80), k = q.toLowerCase();
+  if (k.length < 2) return res.json({ songs: [] });
+  if (titleCache.has(k)) return res.json({ songs: titleCache.get(k) });
+  const t = Date.now(), l = (songHits.get(req.ip) || []).filter(x => t - x < 60000);
+  if (l.length >= 240) return res.json({ songs: [] }); l.push(t); songHits.set(req.ip, l);
+  const base = v => String(v || "").replace(/\s*[\(\[][^\)\]]*[\)\]]/g, "").replace(/\s*-\s*(remaster(ed)?|live|single version|radio edit).*$/i, "").trim().toLowerCase();
+  const out = [], seen = new Set();
+  try {
+    const r = await fetch("https://itunes.apple.com/search?media=music&entity=song&country=us&limit=200&attribute=songTerm&term=" + encodeURIComponent(q), { signal: AbortSignal.timeout(4000) });
+    if (r.ok) for (const x of ((await r.json()).results || [])) {
+      if (base(x.trackName) !== base(q) || /\b(karaoke|tribute|made famous|in the style of|instrumental|originally performed)\b/i.test(x.trackName + " " + x.artistName)) continue;
+      let a = String(x.artistName || "").trim(); const ft = /[\(\[](?:feat\.?|ft\.?|featuring|with) ([^\)\]]+)[\)\]]/i.exec(String(x.trackName || ""));
+      if (ft && !a.toLowerCase().includes(ft[1].toLowerCase())) a += " & " + ft[1].trim();
+      const key = a.toLowerCase(); if (!a || seen.has(key)) continue; seen.add(key); out.push({ t: String(x.trackName).replace(/\s*[\(\[][^\)\]]*[\)\]]/g, "").trim().slice(0, 80), a: a.slice(0, 60) });
+    }
+  } catch (e) {}
+  if (out.length) { if (titleCache.size > 3000) titleCache.clear(); titleCache.set(k, out); }
+  res.json({ songs: out });
+}));
 app.get("/api/songsearch", wrap(async (req, res) => {
   const q = String(req.query.q || "").replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 80);
   const by = req.query.by === "artist", ck = (by ? "a:" : "s:") + q;
