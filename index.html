@@ -476,13 +476,13 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
         </div>
         <div class="field">
           <label for="song">Song <span class="es">/ Canción</span></label>
-          <div class="inbox"><input id="song" name="song" maxlength="80" autocomplete="off" placeholder="Search a song" required><button type="button" class="clr" id="songClr" hidden aria-label="Clear song">×</button></div>
+          <div class="inbox"><input id="song" name="song" enterkeyhint="next" maxlength="80" autocomplete="off" placeholder="Search a song" required><button type="button" class="clr" id="songClr" hidden aria-label="Clear song">×</button></div>
           <div class="sugg" id="sugg" hidden></div>
           <p class="hint" style="color:var(--ink-2);margin:4px 0 0">Not in the list? Just type it in.<span class="es"> / ¿No aparece? Escríbela.</span></p>
         </div>
         <div class="field">
           <label for="artist">Artist <span class="es">/ Artista</span></label>
-          <div class="inbox"><input id="artist" name="artist" maxlength="60" autocomplete="off" placeholder="Search an artist"><button type="button" class="clr" id="artistClr" hidden aria-label="Clear artist">×</button></div>
+          <div class="inbox"><input id="artist" name="artist" enterkeyhint="done" maxlength="60" autocomplete="off" placeholder="Search an artist"><button type="button" class="clr" id="artistClr" hidden aria-label="Clear artist">×</button></div>
           <select id="artistPick" hidden aria-label="Pick the artist"></select>
           <div class="sugg" id="asugg" hidden></div>
           <p class="hint" id="artistHint" hidden></p>
@@ -993,6 +993,18 @@ $("song").addEventListener("input", () => {
   if(exact.length) setArtistFor($("song").value, knownArtist() ? $("artist").value : "");
 });
 $("song").addEventListener("focus", suggest);
+// keyboard check / Enter on the song box: lock the song, close its list, open the artists who sing it
+$("song").addEventListener("keydown", e => {
+  if(e.key !== "Enter") return;
+  e.preventDefault(); $("sugg").hidden = true;
+  if(!$("song").value.trim()){ $("song").blur(); return; }
+  if(!$("artistPick").hidden){ $("artistPick").hidden = true; $("artist").hidden = false; $("artist").value = ""; artistChosen = ""; artistMine = false; }
+  else if(!artistMine){ $("artist").value = ""; artistChosen = ""; }
+  $("artistHint").hidden = true; paintClr();
+  $("artist").focus(); suggestArtist();
+});
+$("artist").addEventListener("keydown", e => { if(e.key !== "Enter") return; e.preventDefault(); $("asugg").hidden = true; $("artist").blur(); });
+$("artist").addEventListener("focus", () => { $("sugg").hidden = true; });
 $("artist").addEventListener("focus", () => { if(!$("artist").value.trim() && $("song").value.trim()) suggestArtist(); });
 function paintClr(){ $("songClr").hidden = !$("song").value; $("artistClr").hidden = !$("artist").value; }
 $("songClr").addEventListener("click", () => {
