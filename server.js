@@ -857,7 +857,17 @@ app.post("/api/posted", wrap(async (req, res) => {
 }));
 app.get("/api/mine", wrap(async (req, res) => {
   const d = owner(req, res);
-  res.json({ items: (await mineAllWith(d, req.query.sort === "top" ? "top" : "new")).map(r => ({ ...histRow(r), links: postLinks(r), partner: r.device !== d })) });
+  const rows = await mineAllWith(d, req.query.sort === "top" ? "top" : "new"), out = [];
+  for (const r of rows) {
+    const x = { ...histRow(r), links: postLinks(r), partner: r.device !== d };
+    // a duet: who it was with, and their singer # (so "sing again with" can offer them)
+    try {
+      const pk = r.device !== d ? r.device : await duetPartner(r.id);
+      if (pk && !String(pk).startsWith("kj-")) { const parts = String(r.name || "").split(" & "); x.withName = (r.device !== d ? parts[0] : parts.slice(1).join(" & ")) || await nameOfOwner(pk); x.withNum = await singerNum(isCust(pk) ? pk.slice(1) : numKeyOf(pk)); }
+    } catch (e) {}
+    out.push(x);
+  }
+  res.json({ items: out });
 }));
 app.get("/api/wall", wrap(async (req, res) => {
   // the wall of fame is made only by songs that were posted to social media and got likes (and the singer left "Add me to the wall of fame" on)
