@@ -945,7 +945,7 @@ function suggestArtist(again){
   const q = norm($("artist").value), box = $("asugg"), title = norm($("song").value || "");
   box.innerHTML = "";
   // a song is picked: only the artists who sing that song
-  if(title.length >= 2 && !artistMine && !again){ loadTitle($("song").value.trim()).then(() => { if(norm($("song").value || "") === title && document.activeElement === $("artist")) suggestArtist(true); }); }
+  if(title.length >= 2 && !artistMine && !again){ loadTitle($("song").value.trim()).then(() => { if(norm($("song").value || "") === title && !artistMine && (document.activeElement === $("artist") || !$("asugg").hidden || lockSong.on)) suggestArtist(true); }); }
   const bySong = title.length >= 2 ? songs.filter(s => norm(s.t) === title) : [];
   if(bySong.length && !artistMine){
     const arts = artistsInOrder([...new Set(bySong.map(s => s.a))]).filter(a => !q || norm(a).includes(q));
@@ -978,7 +978,7 @@ function suggestArtist(again){
 }
 // scrolling the suggestion list puts the phone keyboard away, so the whole list can be scrolled and tapped
 ["sugg", "asugg", "pSugg"].forEach(id => { const b = $(id); if(!b) return;
-  const hideKb = () => { const a = document.activeElement; if(a && /INPUT|TEXTAREA/.test(a.tagName)) a.blur(); };
+  const hideKb = () => { const a = document.activeElement; if(a && /INPUT|TEXTAREA/.test(a.tagName)){ window.__scrollBlur = Date.now(); a.blur(); } };
   b.addEventListener("touchmove", hideKb, { passive: true }); });
 $("artist").addEventListener("input", () => { if(norm($("artist").value) !== artistChosen) artistChosen = ""; artistMine = !!$("artist").value.trim(); });
 $("artist").addEventListener("change", () => loadArtist($("artist").value.trim()));
@@ -994,14 +994,27 @@ $("song").addEventListener("input", () => {
 });
 $("song").addEventListener("focus", suggest);
 // keyboard check / Enter on the song box: lock the song, close its list, open the artists who sing it
-$("song").addEventListener("keydown", e => {
-  if(e.key !== "Enter") return;
-  e.preventDefault(); $("sugg").hidden = true;
-  if(!$("song").value.trim()){ $("song").blur(); return; }
+function lockSong(focusArtist){
+  $("sugg").hidden = true;
+  if(!$("song").value.trim()) return;
   if(!$("artistPick").hidden){ $("artistPick").hidden = true; $("artist").hidden = false; $("artist").value = ""; artistChosen = ""; artistMine = false; }
   else if(!artistMine){ $("artist").value = ""; artistChosen = ""; }
+  if(artistMine) return;
   $("artistHint").hidden = true; paintClr();
-  $("artist").focus(); suggestArtist();
+  lockSong.on = true; setTimeout(() => { lockSong.on = false; }, 4000);
+  if(focusArtist) $("artist").focus();
+  suggestArtist();
+  setTimeout(() => { const f = $("artist").closest(".field"); if(f) f.scrollIntoView({ block: "start", behavior: "smooth" }); }, 50);
+}
+$("song").addEventListener("keydown", e => { if(e.key !== "Enter") return; e.preventDefault(); lockSong(true); });
+// iPhone keyboard check / Done just closes the keyboard: treat it the same (but not when a song was tapped or the list was scrolled)
+$("song").addEventListener("blur", () => {
+  const v = $("song").value;
+  setTimeout(() => {
+    if(Date.now() - (window.__scrollBlur || 0) < 800) return;
+    if(document.activeElement === $("song") || $("song").value !== v || $("sugg").hidden) return;
+    lockSong(false);
+  }, 350);
 });
 $("artist").addEventListener("keydown", e => { if(e.key !== "Enter") return; e.preventDefault(); $("asugg").hidden = true; $("artist").blur(); });
 $("artist").addEventListener("focus", () => { $("sugg").hidden = true; });
