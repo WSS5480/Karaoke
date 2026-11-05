@@ -1145,8 +1145,7 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
     $("mineNum").textContent = mine.status === "up" ? "You're up!" : "#" + mine.wpos;
     $("mineLine").textContent = mine.status === "up" ? "Head to the stage." : ahead === 0 ? "You're next." : ahead === 1 ? "1 singer before you." : ahead + " singers before you.";
     $("mineSong").textContent = mine.song + (mine.artist ? " – " + mine.artist : "");
-    { const e = mine.eta, el = $("mineEta"); el.hidden = !(e && mine.status === "queued");
-      if(e && mine.status === "queued"){ el.textContent = "⏱ Est. time to sing: ~" + new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " (about " + e.min + " min)"; const sm = document.createElement("small"); sm.textContent = "Estimate from song lengths and tonight's pace. It can change."; el.appendChild(sm); } }
+    $("mineEta").hidden = true; // time to sing now lives in the pinned "My time to sing" banner
     setLyr($("mineLyr"), mine);
     if(window.paintBump) window.paintBump(data.bump || { on: false }, mine);
     $("editSong").hidden = mine.status === "up"; if(mine.status === "up") $("editForm").hidden = true;
@@ -1182,7 +1181,6 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
     const av = document.createElement("img"); av.className = "av"; av.alt = ""; av.loading = "lazy";
     av.src = r.photo ? "/api/photo/" + r.id + "?v=" + r.photo : "/logo.png"; av.onerror = () => { av.onerror = null; av.src = "/logo.png"; };
     t.append(b, s);
-    if(r.status === "queued" && mine && r.id === mine.id && mine.eta && mine.eta.at){ const e = document.createElement("small"); e.className = "eta"; e.textContent = "⏱ Your time: ~" + new Date(mine.eta.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); t.appendChild(e); }
     li.append(n, av, t);
     // heart the singer on stage right from the list (not your own song)
     if(r.status === "up" && !(mine && r.id === mine.id)){ const sg = (data.sung || []).find(x => x.id === r.id) || { likes: r.likes || 0, liked: false };
