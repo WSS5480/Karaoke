@@ -515,9 +515,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     </div>
     <div class="pair" style="display:flex;gap:8px"><button class="ghost" id="editSong" type="button" style="flex:1;margin:0">Change my song</button><button class="ghost" id="cancel" type="button" style="flex:1;margin:0">Cancel my song</button></div>
     <form id="editForm" hidden novalidate style="display:flex;flex-direction:column;gap:8px">
-      <input id="editSongIn" maxlength="80" placeholder="Song" aria-label="New song" autocomplete="off">
-      <input id="editArtistIn" maxlength="60" placeholder="Artist" aria-label="New artist" autocomplete="off">
-      <button class="go" type="submit">Save song</button>
+      <button class="go" id="editSave" type="submit">Save song</button>
       <p class="err" id="editErr" role="alert" style="margin:0"></p>
     </form>
   </section>
@@ -1091,16 +1089,42 @@ $("form").addEventListener("submit", async e => {
   refresh();
 });
 
+/* Change my song: borrow the sign-up form's song + artist boxes (with their search lists), then hand them back */
+const songField = $("song").closest(".field"), artistField = $("artist").closest(".field");
+const songHome = document.createComment("song"), artistHome = document.createComment("artist");
+songField.before(songHome); artistField.before(artistHome);
+let editDraft = null;
+function resetPick(){ $("artistPick").hidden = true; $("artist").hidden = false; $("artistHint").hidden = true; $("sugg").hidden = true; $("asugg").hidden = true; }
+function openEdit(song, artist, focus){
+  const f = $("editForm");
+  if(!editDraft) editDraft = { song: $("song").value, artist: $("artist").value, mine: artistMine, chosen: artistChosen };
+  f.insertBefore(songField, $("editSave")); f.insertBefore(artistField, $("editSave"));
+  resetPick(); $("song").value = song || ""; $("artist").value = artist || "";
+  artistMine = false; artistChosen = "";   // the current artist clears once they type a new song, so the list searches every artist
+  paintClr(); $("editErr").textContent = ""; f.hidden = false;
+  if(focus) $("song").focus();
+}
+function closeEdit(){
+  $("editForm").hidden = true;
+  if(!editDraft) return;
+  songHome.after(songField); artistHome.after(artistField); resetPick();
+  $("song").value = editDraft.song; $("artist").value = editDraft.artist; artistMine = editDraft.mine; artistChosen = editDraft.chosen;
+  editDraft = null; paintClr();
+}
 $("editSong").addEventListener("click", () => {
-  if(!mine) return; const f = $("editForm"); f.hidden = !f.hidden; $("editErr").textContent = "";
-  if(!f.hidden){ $("editSongIn").value = mine.song; $("editArtistIn").value = mine.artist || ""; $("editSongIn").focus(); }
+  if(!mine) return;
+  if(!$("editForm").hidden){ closeEdit(); return; }
+  openEdit(mine.song, mine.artist || "", true);
 });
 $("editForm").addEventListener("submit", async e => {
-  e.preventDefault(); const song = $("editSongIn").value.trim(), artist = $("editArtistIn").value.trim();
-  if(!song){ $("editErr").textContent = "Enter the song."; return; }
+  e.preventDefault(); const song = $("song").value.trim(), artist = $("artist").value.trim();
+  if(!song){ $("editErr").textContent = "Enter the song."; $("song").focus(); return; }
+  if(!$("artistPick").hidden && !$("artistPick").value){ $("editErr").textContent = "Pick which artist's version you're singing."; $("artistPick").focus(); return; }
+  $("editSave").disabled = true;
   try{ const r = await fetch("/api/mysong", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song, artist }) }); const j = await r.json().catch(() => ({}));
-    if(!r.ok) throw new Error(j.error || "Couldn't save. Try again."); $("editForm").hidden = true; refresh(); }
+    if(!r.ok) throw new Error(j.error || "Couldn't save. Try again."); closeEdit(); refresh(); }
   catch(err){ $("editErr").textContent = err.message; }
+  $("editSave").disabled = false;
 });
 // sign-up form sits right under the title so a fresh scan can sign up without scrolling
 (function(){ const v = $("venueLine"), f = $("formCard"), pc = $("picCard"); const mc = $("mineCard"); const un = $("upNext"); const cc = $("closedCard"); if(v && f){ v.after(f); if(cc) f.before(cc); if(mc) f.after(mc); if(un) (mc || f).after(un); if(pc) (un || mc || f).after(pc); } })();
@@ -1158,6 +1182,7 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
   // (layout) form first for a fresh scan
   $("formCard").hidden = (!!mine && !multiOn) || !data.open || data.paused || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
+  if(!mine && editDraft) closeEdit();
   if(!mine && window.paintBump) window.paintBump({ on: false }, null);
   document.body.classList.toggle("fresh", !mine && !$("formCard").hidden);
   if(mine) try{
@@ -1171,10 +1196,10 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
     $("mineEta").hidden = true; // time to sing now lives in the pinned "My time to sing" banner
     setLyr($("mineLyr"), mine);
     if(window.paintBump) window.paintBump(data.bump || { on: false }, mine);
-    $("editSong").hidden = mine.status === "up"; if(mine.status === "up") $("editForm").hidden = true;
+    $("editSong").hidden = mine.status === "up"; if(mine.status === "up") closeEdit();
     $("noSongMsg").hidden = !mine.nosong;
     $("noSongMsg").textContent = mine.repeat ? bi("🔁 That song was already sung tonight. The DJ asks you to pick a different one. You keep your spot.", "Esa canción ya se cantó hoy. Escoge otra; no pierdes tu lugar.") : bi("🎵 The DJ doesn't have that song. Pick another one. You keep your spot.", "El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.");
-    if(mine.nosong && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; $("editForm").hidden = false; $("editSongIn").value = ""; $("editArtistIn").value = ""; $("editErr").textContent = ""; try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
+    if(mine.nosong && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; openEdit("", "", false); try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
     // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
     { const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
       if(mine.status === "queued" && upNow && ahead - 1 === 0) alertOnce("deck", mine.id); }
