@@ -328,6 +328,7 @@ if (DB_OK) {
     },
     async active() { return (await Q(`SELECT * FROM signups WHERE tenant=$1 AND status IN ('up','queued') ORDER BY (status='up') DESC, position`, [T()])).rows; },
     async done(limit) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND status='done' ORDER BY done_at DESC LIMIT $1`, [limit, T()])).rows; },
+    async nightDone(since) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND status IN ('done','archived') AND done_at >= $1 ORDER BY done_at DESC LIMIT 500`, [new Date(since).toISOString(), T()])).rows; },
     async byDevice(d) { return (await Q(`SELECT * FROM signups WHERE tenant=$2 AND device=$1 AND status IN ('up','queued') LIMIT 1`, [d, T()])).rows[0]; },
     async add(r) { return (await Q(`INSERT INTO signups (name,song,artist,device,tenant,via,position) VALUES ($1,$2,$3,$4,$5,$6,(SELECT COALESCE(MAX(position),0)+1 FROM signups WHERE tenant=$5)) RETURNING *`, [r.name, r.song, r.artist, r.device, T(), r.via || ""])).rows[0]; },
     async setStatus(id, s) { await Q(`UPDATE signups SET status=$2, done_at=CASE WHEN $2='done' THEN now() ELSE done_at END WHERE id=$1 AND tenant=$3`, [id, s, T()]); },
@@ -375,6 +376,7 @@ if (DB_OK) {
     },
     async active() { return rows.filter(r => mine(r) && (r.status === "up" || r.status === "queued")).sort((a, b) => (b.status === "up") - (a.status === "up") || a.position - b.position); },
     async done(limit) { return rows.filter(r => mine(r) && r.status === "done").sort((a, b) => b.done_at.localeCompare(a.done_at)).slice(0, limit); },
+    async nightDone(since) { return rows.filter(r => mine(r) && (r.status === "done" || r.status === "archived") && r.done_at && Date.parse(r.done_at) >= since).sort((a, b) => b.done_at.localeCompare(a.done_at)).slice(0, 500); },
     async byDevice(d) { return rows.find(r => mine(r) && r.device === d && (r.status === "up" || r.status === "queued")); },
     async add(r) { const row = { ...r, tenant: T(), id: ++seq, status: "queued", position: Math.max(0, ...rows.filter(mine).map(x => x.position)) + 1, created_at: now(), done_at: null, rating: null, public: false }; rows.push(row); return row; },
     async setStatus(id, s) { const r = rows.find(x => x.id === id && mine(x)); if (r) { r.status = s; if (s === "done") r.done_at = now(); } },
@@ -800,19 +802,21 @@ async function likeBook(night) {
   return b;
 }
 async function saveLikeBook(night, b) { const o = {}; b.forEach((set, id) => { o[id] = [...set].slice(-2000); }); await db.setSetting("likes:" + night, JSON.stringify(o)); }
+// everyone who sang tonight (the bar night runs 6 AM to 6 AM), even if the night was restarted
+async function tonightDone() { return db.nightDone(barTime(barDay().date, 6)); }
 async function sungTonightFor(d) {
   const night = barDay().date, b = await likeBook(night), up = (await db.active()).find(r => r.status === "up");
-  const rows = (await db.done(40)).filter(r => r.done_at && nightOf(r.done_at) === night).slice(0, 12);
+  const rows = await tonightDone();
   if (up) rows.unshift(up);
-  const partners = new Map(); for (const r of rows) partners.set(r.id, await duetPartner(r.id));   // a duet counts as "mine" for both singers
-  return rows.map(r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist || "", likes: r.likes || 0, up: r.status === "up", liked: !!(b.get(String(r.id)) && b.get(String(r.id)).has(d)), mine: r.device === d || partners.get(r.id) === d }));
+  const myDuets = new Set((await duetIds(d)).map(Number));   // a duet counts as "mine" for both singers
+  return rows.map(r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist || "", likes: r.likes || 0, up: r.status === "up", liked: !!(b.get(String(r.id)) && b.get(String(r.id)).has(d)), mine: r.device === d || myDuets.has(Number(r.id)) }));
 }
 const likeHits = new Map();
 app.post("/api/like", wrap(async (req, res) => {
   const d = owner(req, res), id = parseInt(req.body.id, 10), r = await db.get(id);
-  if (!r || (r.status !== "up" && r.status !== "done")) return res.status(404).json({ error: "That song isn't open for likes." });
+  if (!r || (r.status !== "up" && r.status !== "done" && r.status !== "archived")) return res.status(404).json({ error: "That song isn't open for likes." });
   const night = barDay().date;
-  if (r.status === "done" && (!r.done_at || nightOf(r.done_at) !== night)) return res.status(409).json({ error: "Likes are only open the night they sang." });
+  if (r.status !== "up" && (!r.done_at || nightOf(r.done_at) !== night)) return res.status(409).json({ error: "Likes are only open the night they sang." });
   if (await canOwn(r, d)) return res.status(409).json({ error: "You can't like your own song." });
   const t = Date.now(), l = (likeHits.get(d) || []).filter(x => t - x < 60000); if (l.length >= 30) return res.status(429).json({ error: "Slow down a little." }); l.push(t); likeHits.set(d, l);
   const b = await likeBook(night), set = b.get(String(id)) || new Set();
@@ -1268,7 +1272,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ shouts: liveShouts(await getShouts(), true), lastSong: await lastSongEnd().catch(() => null), myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), band: await bandPauseOn(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), rp = await repeatsFor(l), rOk = await idSet("repeat_ok"), rAsk = await idSet("repeat_ask"), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}), ...(rAsk.has(r.id) && ns.has(r.id) ? { repeatAsk: true } : rp.has(r.id) && !rOk.has(r.id) && r.status === "queued" ? { repeat: rp.get(r.id) } : {}) })); })(), done: (await db.done(500)).map(kjRow) });
+  res.json({ shouts: liveShouts(await getShouts(), true), lastSong: await lastSongEnd().catch(() => null), myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), band: await bandPauseOn(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), rp = await repeatsFor(l), rOk = await idSet("repeat_ok"), rAsk = await idSet("repeat_ask"), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}), ...(rAsk.has(r.id) && ns.has(r.id) ? { repeatAsk: true } : rp.has(r.id) && !rOk.has(r.id) && r.status === "queued" ? { repeat: rp.get(r.id) } : {}) })); })(), done: (await tonightDone()).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -2047,7 +2051,7 @@ app.get("/api/bar", wrap(async (req, res) => {
     audit: await auditView(), djLog: await djLogView(), moneyOff: await moneyOff(), who, ownerPhone: who.owner ? maskPhone(await recoveryPhone("bar")) : "",
     dj: djNow ? { name: djNow.name, since: djNow.since || null } : null, tipsStopped: !!(djNow && off && off.name === djNow.name && off.night === barDay().date),
     state: { lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
-      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), band: await bandPauseOn(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
+      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), band: await bandPauseOn(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await tonightDone()).map(kjRow) },
     moneyOff: await moneyOff(), signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 },
     history: await tipStats(30)
@@ -2195,7 +2199,7 @@ app.get("/api/watch", wrap(async (req, res) => {
   const byDj = {}; all.forEach(x => { byDj[x.to] = Math.round(((byDj[x.to] || 0) + x.amount) * 100) / 100; });
   res.json({
     state: { djOn: djNow ? djNow.name : null, lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no",
-      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), band: await bandPauseOn(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await db.done(500)).map(kjRow) },
+      geofence: geofenceActive(await db.getSetting("geofence")), pause: await pauseState(), band: await bandPauseOn(), queue: await (async () => { const paid = await paidIds(); return (await withPhotosKJ(act.map(kjRow), act)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), done: (await tonightDone()).map(kjRow) },
     audit: await auditView(), djLog: await djLogView(), moneyOff: await moneyOff(), signups: await signupStats(), phones: await phoneStats(), bump: { on: await bumpOn(), price: await bumpPrice(), list: (await getBumps()).slice().reverse() },
     tips: { on: s.on, host: s.on ? s.host : null, tonight: all.slice().reverse(), byDj, total: Math.round(all.reduce((a, x) => a + x.amount, 0) * 100) / 100 }
   });
