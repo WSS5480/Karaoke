@@ -724,7 +724,15 @@ async function lastSungWith(d) {
   return best;
 }
 
+// one sign-up at a time per bar, so a double tap or two fast taps can't both get in
+const signupLocks = new Map();
+function signupLock(key) { const prev = signupLocks.get(key) || Promise.resolve(); let done; const p = new Promise(r => { done = r; }); const chain = prev.then(() => p); signupLocks.set(key, chain); return prev.then(() => () => { done(); if (signupLocks.get(key) === chain) signupLocks.delete(key); }); }
+const nameKey = n => String(n || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9&]+/g, "");
 app.post("/api/signup", wrap(async (req, res) => {
+  const release = await signupLock(T() || "dive");
+  try { await signupInner(req, res); } finally { release(); }
+}));
+async function signupInner(req, res) {
   const dev = device(req, res), uid = currentUser(req), d = uid ? "c" + uid : dev;
   if ((await db.getSetting("open")) === "no") return res.status(403).json({ error: "Sign-ups are closed for tonight." });
   { const ps = await pauseState(); if (ps.paused) return res.status(403).json({ error: ps.until ? "Sign-ups are paused until " + new Date(ps.until).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: ZONE() }) + ". Try again then." : "Sign-ups are paused for a bit. Try again soon." }); }
@@ -744,8 +752,12 @@ app.post("/api/signup", wrap(async (req, res) => {
   if (!song) return res.status(400).json({ error: "Enter the song you want to sing." });
   // one song in line per person unless the host turned on multiple sign-ups
   const multi = (await db.getSetting("multi")) === "on";
-  if (!multi && await db.byDevice(d)) return res.status(409).json({ error: "already", message: "You're already on the list. Cancel your song to pick a different one." });
-  if (multi && (await db.active()).some(r => r.device === d && r.song.toLowerCase() === song.toLowerCase())) return res.status(409).json({ error: "already", message: "That song is already on the list for you." });
+  // the same person can show up as the phone, the signed-in account, or the Home Screen app (separate cookies): check them all
+  const ids = new Set([d, dev]); if (profile && profile.customer) ids.add("c" + profile.customer);
+  const act = await db.active(), nk = nameKey(name);
+  if (!multi && act.some(r => ids.has(r.device))) return res.status(409).json({ error: "already", message: "You're already on the list. Cancel your song to pick a different one." });
+  if (!multi && nk && act.some(r => nameKey(r.name) === nk)) return res.status(409).json({ error: "already", message: name + " is already on the list. If that's someone else, add your last initial (like " + name + " R)." });
+  if (multi && act.some(r => (ids.has(r.device) || nameKey(r.name) === nk) && r.song.toLowerCase() === song.toLowerCase())) return res.status(409).json({ error: "already", message: "That song is already on the list for you." });
   const via = req.body.qr && req.body.qr === TEN().qr ? "qr" : req.body.app ? "app" : "link";
   let pk = "", pname = ""; const wn = String(req.body.with || "").replace(/\D/g, "");
   if (wn) {
@@ -758,7 +770,7 @@ app.post("/api/signup", wrap(async (req, res) => {
   singersCache.delete(T());   // the partner list picks up new singers right away
   if (pk) { await db.setSetting("duet:" + row.id, pk); const L = await duetIds(pk); L.push(row.id); await db.setSetting("duets:" + pk, JSON.stringify(L.slice(-200))); }
   res.json({ ok: true, id: row.id });
-}));
+}
 
 /* ---------- favorites + practice list (per person, saved on the server) ---------- */
 async function getLists(o) { try { const v = JSON.parse((await db.getSetting("lists:" + o)) || "{}"); return { fav: v.fav || [], practice: v.practice || [] }; } catch (e) { return { fav: [], practice: [] }; } }
