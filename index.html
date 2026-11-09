@@ -2346,11 +2346,11 @@ $("nowPop").checked = popOn;
 $("nowPop").addEventListener("change", () => { popOn = $("nowPop").checked; try{ localStorage.setItem("dive_singalong", popOn ? "1" : "0"); }catch(e){} });
 let prevUp = null;   // who was singing, so we know when their song ends
 /* crowd likes */
-let likeBusy = false;
+const likeBusy = new Set();   // one request per singer at a time, so liking down the list never gets dropped
 async function sendLike(id, on){
-  if(likeBusy) return; likeBusy = true;
-  try{ const r = await fetch("/api/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, on }) }); const j = await r.json(); if(!r.ok && j.error) alert(j.error); }catch(e){}
-  likeBusy = false; try{ refresh(); }catch(e){}
+  if(likeBusy.has(id)) return; likeBusy.add(id);
+  try{ await fetch("/api/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, on }) }); }catch(e){}   // no pop-up: if it didn't take, the refresh puts the heart back
+  likeBusy.delete(id); try{ refresh(); }catch(e){}
 }
 /* ---------- shout-outs ---------- */
 let shoutKey = "";

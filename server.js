@@ -840,7 +840,7 @@ app.post("/api/like", wrap(async (req, res) => {
   const night = barDay().date;
   if (r.status !== "up" && (!r.done_at || nightOf(r.done_at) !== night)) return res.status(409).json({ error: "Likes are only open the night they sang." });
   if (await canOwn(r, d)) return res.status(409).json({ error: "You can't like your own song." });
-  const t = Date.now(), l = (likeHits.get(d) || []).filter(x => t - x < 60000); if (l.length >= 30) return res.status(429).json({ error: "Slow down a little." }); l.push(t); likeHits.set(d, l);
+  const t = Date.now(), l = (likeHits.get(d) || []).filter(x => t - x < 60000); if (l.length >= 150) return res.status(429).json({ error: "Slow down a little." }); l.push(t); likeHits.set(d, l);
   const b = await likeBook(night), set = b.get(String(id)) || new Set();
   const want = req.body.on !== false;
   if (want === set.has(d)) return res.json({ ok: true, liked: want, likes: r.likes || 0 });
