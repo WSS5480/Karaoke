@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Menu Admin · The Dive</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/icon-192.png">
+<style>
+:root{--bg:#0b100d;--card:#151e18;--line:#2a3a2f;--ink:#f4efe4;--mute:#a9b5ad;--green:#39b54a;--amber:#ffb547;--red:#ff6b6b}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;padding:16px 16px 110px}
+main{max-width:760px;margin:0 auto}
+h1{font-size:26px;margin:6px 0 2px}
+.sub{color:var(--mute);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:10px 0 4px}
+input,textarea,select{width:100%;font:inherit;color:var(--ink);background:#0d1310;border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+textarea{min-height:56px;resize:vertical}
+input:focus,textarea:focus{outline:2px solid var(--green);outline-offset:1px}
+button,.btn{font:inherit;font-weight:700;border-radius:999px;border:1px solid var(--line);background:#1d2a21;color:var(--ink);padding:11px 16px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+button.main,.btn.main{background:var(--green);border-color:var(--green);color:#041206}
+button.warn{color:var(--red)}
+button.sm{padding:7px 12px;font-size:14px}
+button:disabled{opacity:.5}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1 1 auto}
+.err{color:var(--red);font-weight:600;margin:8px 0 0}
+.ok{color:#7fe0a4;font-weight:600;margin:8px 0 0}
+.up{border:2px dashed #3a5a44;border-radius:16px;padding:20px;text-align:center}
+.up b{display:block;font-size:18px;margin-bottom:4px}
+.mode{display:flex;gap:16px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.mode label{display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink);margin:0}
+.mode input{width:auto}
+.prog{margin-top:12px;color:var(--amber);font-weight:700}
+.cat{border-color:#2f4a38}
+.cathead{display:flex;gap:8px;align-items:center}
+.cathead input{font-weight:800;font-size:18px}
+.item{display:grid;grid-template-columns:84px 1fr;gap:12px;border-top:1px dashed var(--line);padding:14px 0 4px;margin-top:12px}
+.ph{width:84px;height:84px;border-radius:12px;border:1px solid var(--line);background:#0d1310 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:12px;text-align:center;cursor:pointer;position:relative}
+.ph .x{position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;padding:0;background:#000;border:1px solid var(--line);font-size:14px}
+.f2{display:grid;grid-template-columns:1fr 110px;gap:8px}
+.f2 label{margin-top:0}
+.iact{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(11,16,13,.95);border-top:1px solid var(--line);display:flex;gap:10px;justify-content:center;z-index:5}
+.bar button,.bar a{flex:1 1 0;max-width:280px}
+@media(max-width:480px){.item{grid-template-columns:70px 1fr}.ph{width:70px;height:70px}.f2{grid-template-columns:1fr 92px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>🍔 Website menu</h1>
+  <p class="sub">Upload photos of the menu. The app reads the items and prices and cuts out any food pictures. Check it, fix anything, then <b>Save</b>.</p>
+
+  <div class="card" id="gate">
+    <label for="pin">House PIN</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Admin only">
+    <div class="row" style="margin-top:12px"><button class="main" id="go" type="button">Open</button></div>
+    <p class="err" id="gateErr" role="alert"></p>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card">
+      <div class="up">
+        <b>📷 Upload menu photos</b>
+        <span style="color:var(--mute)">Take a straight, bright photo of each page. Several at once is fine.</span>
+        <div class="row" style="margin-top:12px;justify-content:center"><button class="main" id="pick" type="button" style="flex:0 1 auto">Choose photos</button></div>
+        <input id="file" type="file" accept="image/*" multiple hidden>
+        <div class="mode"><label><input type="radio" name="mode" value="replace" checked> Replace the menu</label><label><input type="radio" name="mode" value="add"> Add to it</label></div>
+        <div class="prog" id="prog" hidden></div>
+        <p class="err" id="upErr" role="alert"></p>
+      </div>
+    </div>
+    <div id="cats"></div>
+    <div class="row"><button id="addCat" type="button">+ Add a category</button></div>
+    <p class="ok" id="saved" role="status"></p>
+    <p class="err" id="saveErr" role="alert"></p>
+  </div>
+</main>
+<input id="itemFile" type="file" accept="image/*" hidden>
+<div class="bar" id="bar" hidden><a class="btn" href="/site#menu" target="_blank" rel="noopener">👀 View site</a><button class="main" id="save" type="button">💾 Save menu</button></div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  let PIN = ""; try { PIN = sessionStorage.getItem("dive_menu_pin") || ""; } catch(e){}
+  let cats = [], dirty = false;
+  const api = (u, body) => fetch(u, { method: body ? "POST" : "GET", headers: Object.assign({ "x-kj-pin": PIN }, body ? { "Content-Type": "application/json" } : {}), body: body ? JSON.stringify(body) : undefined })
+    .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ("Error " + r.status)); return j; });
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  async function open(){
+    $("gateErr").textContent = "";
+    try { await api("/api/kj/hosts"); }
+    catch(e){ $("gateErr").textContent = /Only the owner/.test(e.message) ? "That PIN can't change the menu. Use the house PIN." : e.message; return; }
+    try { sessionStorage.setItem("dive_menu_pin", PIN); } catch(e){}
+    $("gate").hidden = true; $("app").hidden = false; $("bar").hidden = false;
+    const m = await fetch("/api/menu", { cache: "no-store" }).then(r => r.json()).catch(() => ({}));
+    cats = (m.cats || []).map(c => ({ name: c.name, items: c.items.map(i => Object.assign({}, i)) }));
+    paint();
+  }
+  $("go").addEventListener("click", () => { PIN = $("pin").value.trim(); open(); });
+  $("pin").addEventListener("keydown", e => { if (e.key === "Enter"){ PIN = $("pin").value.trim(); open(); } });
+  if (PIN) open();
+
+  /* ---------- editor ---------- */
+  function paint(){
+    $("cats").innerHTML = cats.length ? cats.map((c, ci) => '<div class="card cat" data-c="' + ci + '"><div class="cathead"><input data-k="cname" value="' + esc(c.name) + '" placeholder="Category (Wings, Burgers…)" aria-label="Category name">' +
+      (ci ? '<button class="sm" data-a="cup" type="button" aria-label="Move up">↑</button>' : '') + '<button class="sm warn" data-a="cdel" type="button" aria-label="Delete category">🗑</button></div>' +
+      c.items.map((it, ii) => '<div class="item" data-i="' + ii + '"><div><div class="ph" data-a="photo" style="' + (it.photo ? "background-image:url(/api/menuimg/" + it.photo + ")" : "") + '">' + (it.photo ? '<button class="x" data-a="nophoto" type="button" aria-label="Remove photo">✕</button>' : "📷<br>Add photo") + '</div></div>' +
+        '<div><div class="f2"><div><label>Item</label><input data-k="name" value="' + esc(it.name) + '"></div><div><label>Price</label><input data-k="price" value="' + esc(it.price) + '" placeholder="$9"></div></div>' +
+        '<label>Description</label><textarea data-k="desc" placeholder="Optional">' + esc(it.desc) + '</textarea>' +
+        '<div class="iact"><label style="display:flex;gap:6px;align-items:center;margin:0;text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink)"><input type="checkbox" data-k="tag" style="width:auto"' + (it.tag ? " checked" : "") + '> Fan fave</label>' +
+        (ii ? '<button class="sm" data-a="iup" type="button">↑ Up</button>' : '') + '<button class="sm warn" data-a="idel" type="button">Remove</button></div></div></div>').join("") +
+      '<div class="row" style="margin-top:12px"><button class="sm" data-a="iadd" type="button">+ Add an item</button></div></div>').join("")
+      : '<div class="card" style="color:var(--mute);text-align:center">No menu yet. Upload photos above, or add a category to type it in.</div>';
+  }
+  const where = el => { const c = el.closest("[data-c]"), i = el.closest("[data-i]"); return { ci: c ? +c.dataset.c : -1, ii: i ? +i.dataset.i : -1 }; };
+  $("cats").addEventListener("input", e => {
+    const k = e.target.dataset.k; if (!k) return; const { ci, ii } = where(e.target); dirty = true; $("saved").textContent = "";
+    if (k === "cname") cats[ci].name = e.target.value;
+    else if (k === "tag") cats[ci].items[ii].tag = e.target.checked ? "Fan fave" : "";
+    else cats[ci].items[ii][k] = e.target.value;
+  });
+  let photoFor = null;
+  $("cats").addEventListener("click", e => {
+    const b = e.target.closest("[data-a]"); if (!b) return; const a = b.dataset.a, { ci, ii } = where(b);
+    if (a === "nophoto"){ e.stopPropagation(); cats[ci].items[ii].photo = ""; }
+    else if (a === "photo"){ photoFor = { ci, ii }; $("itemFile").value = ""; $("itemFile").click(); return; }
+    else if (a === "idel") cats[ci].items.splice(ii, 1);
+    else if (a === "iup") cats[ci].items.splice(ii - 1, 0, cats[ci].items.splice(ii, 1)[0]);
+    else if (a === "iadd") cats[ci].items.push({ name: "", price: "", desc: "", tag: "", photo: "" });
+    else if (a === "cdel"){ if (!confirm("Delete the whole " + (cats[ci].name || "category") + " section?")) return; cats.splice(ci, 1); }
+    else if (a === "cup") cats.splice(ci - 1, 0, cats.splice(ci, 1)[0]);
+    dirty = true; $("saved").textContent = ""; paint();
+  });
+  $("addCat").addEventListener("click", () => { cats.push({ name: "", items: [{ name: "", price: "", desc: "", tag: "", photo: "" }] }); dirty = true; paint(); });
+
+  /* ---------- pictures ---------- */
+  const loadImg = f => new Promise((ok, no) => { const u = URL.createObjectURL(f), im = new Image(); im.onload = () => ok(im); im.onerror = () => no(new Error("That file isn't a picture.")); im.src = u; });
+  function toJpeg(im, max, q, crop){
+    const sx = crop ? crop.x * im.naturalWidth : 0, sy = crop ? crop.y * im.naturalHeight : 0, sw = crop ? crop.w * im.naturalWidth : im.naturalWidth, sh = crop ? crop.h * im.naturalHeight : im.naturalHeight;
+    const k = Math.min(1, max / Math.max(sw, sh)), c = document.createElement("canvas"); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+    c.getContext("2d").drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height); return c.toDataURL("image/jpeg", q);
+  }
+  async function savePhoto(im, crop){ let d = toJpeg(im, 800, .82, crop); if (d.length > 440000) d = toJpeg(im, 560, .72, crop); return (await api("/api/kj/menu/photo", { data: d })).id; }
+  $("itemFile").addEventListener("change", async () => {
+    const f = $("itemFile").files[0]; if (!f || !photoFor) return;
+    try { const im = await loadImg(f); const s = Math.min(im.naturalWidth, im.naturalHeight); // square crop from the middle
+      const id = await savePhoto(im, { x: (im.naturalWidth - s) / 2 / im.naturalWidth, y: (im.naturalHeight - s) / 2 / im.naturalHeight, w: s / im.naturalWidth, h: s / im.naturalHeight });
+      cats[photoFor.ci].items[photoFor.ii].photo = id; dirty = true; paint(); }
+    catch(e){ alert(e.message); }
+  });
+
+  /* ---------- read menu photos ---------- */
+  $("pick").addEventListener("click", () => { $("file").value = ""; $("file").click(); });
+  $("file").addEventListener("change", async () => {
+    const files = [...$("file").files]; if (!files.length) return;
+    const mode = (document.querySelector('input[name="mode"]:checked') || {}).value;
+    $("upErr").textContent = ""; $("prog").hidden = false; $("pick").disabled = true;
+    const found = [];
+    try {
+      for (let n = 0; n < files.length; n++){
+        $("prog").textContent = "📖 Reading photo " + (n + 1) + " of " + files.length + "… (about 20 seconds each)";
+        const im = await loadImg(files[n]);
+        let d = toJpeg(im, 2200, .85); if (d.length > 6500000) d = toJpeg(im, 1600, .8);
+        const r = await api("/api/kj/menu/read", { data: d });
+        let pics = 0;
+        for (const c of r.cats) for (const it of c.items){
+          if (it.box){ try { const pad = .01, b = it.box, cr = { x: Math.max(0, b.x - pad), y: Math.max(0, b.y - pad) }; cr.w = Math.min(1 - cr.x, b.w + pad * 2); cr.h = Math.min(1 - cr.y, b.h + pad * 2);
+            $("prog").textContent = "✂️ Cutting out food pictures… " + (++pics); it.photo = await savePhoto(im, cr); } catch(e){ it.photo = ""; } }
+          else it.photo = "";
+          delete it.box; it.tag = "";
+        }
+        found.push(...r.cats);
+      }
+      if (mode === "replace") cats = [];
+      for (const c of found){ const same = cats.find(x => x.name.toLowerCase() === c.name.toLowerCase()); if (same) same.items.push(...c.items); else cats.push(c); }
+      dirty = true; paint();
+      const n = found.reduce((s, c) => s + c.items.length, 0);
+      $("prog").textContent = "✅ Found " + n + " items. Check them below, then tap Save menu.";
+    } catch(e){ $("prog").hidden = true; $("upErr").textContent = e.message; }
+    $("pick").disabled = false;
+  });
+
+  /* ---------- save ---------- */
+  $("save").addEventListener("click", async () => {
+    $("saveErr").textContent = ""; $("saved").textContent = ""; $("save").disabled = true;
+    try { const r = await api("/api/kj/menu", { cats }); cats = r.cats; dirty = false; paint(); $("saved").textContent = "✅ Saved. It's live on the website now."; $("saved").scrollIntoView({ block: "center", behavior: "smooth" }); }
+    catch(e){ $("saveErr").textContent = e.message; }
+    $("save").disabled = false;
+  });
+  window.addEventListener("beforeunload", e => { if (dirty){ e.preventDefault(); e.returnValue = ""; } });
+})();
+</script>
+</body>

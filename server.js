@@ -204,7 +204,7 @@ function rawPage(file, appMeta) {
   // every page keeps its installed app up to date by itself
   if (file.endsWith(".html") && !html.includes("/update.js")) html = html.replace("</head>", '<meta name="dive-build" content="' + BUILD + '">\n<script src="/update.js" defer></script>\n</head>');
   // the logo sits faint and fixed behind every screen (like the singer app); not on print pages
-  if (file.endsWith(".html") && !html.includes('class="wm"') && !/^(poster|tent|start|site)\.html$/.test(file))
+  if (file.endsWith(".html") && !html.includes('class="wm"') && !/^(poster|tent|start|site|menuadmin)\.html$/.test(file))
     html = html.replace("</head>", "<style>.wm{position:fixed;inset:0;z-index:-1;pointer-events:none;background:url(/logo.png) center 55%/min(80vmin,620px) no-repeat;opacity:.045}</style>\n</head>")
                .replace(/<body([^>]*)>/, '<body$1>\n<div class="wm" aria-hidden="true"></div>');
   if (appMeta) {
@@ -270,6 +270,9 @@ app.use("/api/kj/promos", express.json({ limit: "1mb" })); // ad pictures
 app.use(["/api/setup", "/api/start"], express.json({ limit: "1mb" })); // logos
 app.use("/api/photo", express.json({ limit: "400kb" })); // singer photos
 app.use("/api/kj/hosts/logo", express.json({ limit: "400kb" })); // DJ logos
+app.use("/api/kj/menu/read", express.json({ limit: "8mb" }));   // menu photos to read
+app.use("/api/kj/menu/photo", express.json({ limit: "500kb" }));  // food pictures
+app.use("/api/kj/menu", express.json({ limit: "200kb" }));        // the menu itself
 app.use(express.json({ limit: "20kb" }));
 // reading a request body loses track of which bar it is for, so put it back
 app.use((req, res, next) => req._ctx ? ctx.run(req._ctx, next) : next());
@@ -1481,6 +1484,59 @@ app.post("/api/kj/hosts/logo", staffOnly, wrap(async (req, res) => {
   if (d.length > 200000 || !LOGO_RE.test(d)) return res.status(400).json({ error: "That picture didn't work. Try a smaller one." });
   await db.setSetting("djlogo:" + h.name, d); res.json({ ok: true });
 }));
+/* ---------- the kitchen menu on The Dive's website: the owner uploads menu photos, AI reads them, the owner edits and saves ---------- */
+const cleanMenu = m => {
+  const cats = Array.isArray(m && m.cats) ? m.cats.slice(0, 30) : [];
+  return cats.map(c => ({ name: cleanName(c && c.name, 40) || "Menu",
+    items: (Array.isArray(c && c.items) ? c.items.slice(0, 80) : []).map(i => ({ name: cleanName(i && i.name, 60), desc: String((i && i.desc) || "").replace(/\s+/g, " ").trim().slice(0, 200), price: String((i && i.price) || "").replace(/\s+/g, " ").trim().slice(0, 20), tag: cleanName(i && i.tag, 16), photo: /^[a-f0-9]{16}$/.test(String((i && i.photo) || "")) ? i.photo : "" })).filter(i => i.name)
+  })).filter(c => c.items.length);
+};
+async function getMenu() { try { return JSON.parse((await db.getSetting("menu")) || "{}"); } catch (e) { return {}; } }
+app.get("/api/menu", wrap(async (req, res) => { const m = await getMenu(); res.set("Cache-Control", "no-cache").json({ cats: m.cats || [], updated: m.updated || null }); }));
+app.get("/api/menuimg/:id", wrap(async (req, res) => {
+  const id = String(req.params.id || ""); if (!/^[a-f0-9]{16}$/.test(id)) return res.status(404).end();
+  const d = await db.getSetting("menuimg:" + id), m = d && LOGO_RE.exec(d); if (!m) return res.status(404).end();
+  res.set("Content-Type", "image/" + m[1]).set("Cache-Control", "public, max-age=604800, immutable").send(Buffer.from(m[2], "base64"));
+}));
+app.post("/api/kj/menu", staffOnly, wrap(async (req, res) => {
+  const cats = cleanMenu(req.body || {});
+  await db.setSetting("menu", JSON.stringify({ cats, updated: new Date().toISOString(), by: req.kj.name }));
+  res.json({ ok: true, cats });
+}));
+app.post("/api/kj/menu/photo", staffOnly, wrap(async (req, res) => {
+  const d = String(req.body.data || "");
+  if (d.length > 450000 || !LOGO_RE.test(d)) return res.status(400).json({ error: "That picture didn't work. Try a smaller one." });
+  const id = crypto.randomBytes(8).toString("hex"); await db.setSetting("menuimg:" + id, d); res.json({ ok: true, id });
+}));
+// read a menu photo with Claude: items, prices, and where any food pictures sit on the page (so the app can cut them out)
+app.post("/api/kj/menu/read", staffOnly, wrap(async (req, res) => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(503).json({ error: "Menu reading isn't turned on yet. Add ANTHROPIC_API_KEY in Render. You can still type the menu in by hand." });
+  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+=*)$/.exec(String(req.body.data || ""));
+  if (!m) return res.status(400).json({ error: "That picture didn't work. Try another photo." });
+  const prompt = "This is a photo of a bar/restaurant menu. Read every food and drink item on it.\n" +
+    "Return ONLY JSON, no other text, in this shape:\n" +
+    '{"cats":[{"name":"Category","items":[{"name":"Item","desc":"short description or empty","price":"$9.99 or empty","box":null}]}]}\n' +
+    "Rules: keep the menu's own category names and order; copy names and prices exactly as printed (fix obvious photo glare typos); " +
+    "if a price has sizes write them like \"6 for $8 / 12 for $14\"; " +
+    "if there is a PHOTO of a dish printed on the menu, set that item's box to {\"x\":left,\"y\":top,\"w\":width,\"h\":height} as fractions 0-1 of the whole image, tight around just the food picture; otherwise box is null. " +
+    "Do not invent items, prices or pictures.";
+  let r;
+  try {
+    r = await fetch(process.env.MENU_AI_URL || "https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: process.env.MENU_AI_MODEL || "claude-sonnet-5-5", max_tokens: 6000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/" + m[1], data: m[2] } }, { type: "text", text: prompt }] }] }) });
+  } catch (e) { return res.status(502).json({ error: "Couldn't reach the menu reader. Try again." }); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { console.error("menu read", r.status, JSON.stringify(j).slice(0, 300)); return res.status(502).json({ error: "The menu reader said no (" + r.status + "). Try again in a minute." }); }
+  const txt = ((j.content || []).find(c => c.type === "text") || {}).text || "", a = txt.indexOf("{"), b = txt.lastIndexOf("}");
+  let out; try { out = JSON.parse(txt.slice(a, b + 1)); } catch (e) { return res.status(502).json({ error: "Couldn't read that photo. Try a straighter, brighter shot." }); }
+  const num = v => Math.min(Math.max(Number(v) || 0, 0), 1);
+  const cats = (Array.isArray(out.cats) ? out.cats : []).map(c => ({ name: cleanName(c.name, 40) || "Menu", items: (Array.isArray(c.items) ? c.items : []).map(i => {
+    const bx = i && i.box && typeof i.box === "object" ? { x: num(i.box.x), y: num(i.box.y), w: num(i.box.w), h: num(i.box.h) } : null;
+    return { name: cleanName(i && i.name, 60), desc: String((i && i.desc) || "").slice(0, 200), price: String((i && i.price) || "").slice(0, 20), box: bx && bx.w > 0.03 && bx.h > 0.03 ? bx : null };
+  }).filter(i => i.name) })).filter(c => c.items.length);
+  res.json({ ok: true, cats });
+}));
 app.get("/api/djlogo", wrap(async (req, res) => {
   const d = await db.getSetting("djlogo:" + String(req.query.n || "")), m = d && LOGO_RE.exec(d); if (!m) return res.status(404).end();
   res.set("Content-Type", "image/" + m[1]).set("Cache-Control", "public, max-age=300").send(Buffer.from(m[2], "base64"));
@@ -2474,6 +2530,7 @@ app.get("/links/:group", (req, res) => {
   res.type("html").set("Cache-Control", "no-cache").send(h);
 });
 // The Dive's public website (menu, hours, live from the stage): only for The Dive itself
+app.get("/menu-admin", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "menuadmin.html"); });
 app.get("/site", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "site.html"); });
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => {
   if (route === "/start" && !TEN().house) return res.redirect("/start");          // sign-up is only on the main site

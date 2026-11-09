@@ -129,6 +129,13 @@ section.block{padding:70px 0}
 .item{display:flex;gap:10px;align-items:baseline;padding:12px 0;border-bottom:1px dashed #cfc6b3}
 .item b{font-size:17px}
 .item small{display:block;color:#6b6456;font-size:14px;font-weight:500}
+.item{align-items:center}
+.itx{flex:1;min-width:0}
+.ihd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.ihd .tag{margin-left:0}
+.pr{margin-left:auto;font-weight:800;font-size:17px;color:var(--green);white-space:nowrap}
+.fph{width:92px;height:92px;object-fit:cover;border-radius:14px;flex:none;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+@media(max-width:520px){.fph{width:76px;height:76px}}
 .tag{margin-left:auto;flex:none;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:#16130d;color:var(--cream);padding:4px 8px;border-radius:6px}
 .menu .note{margin:28px 0 0;font-weight:700;color:#5d574b}
 @media(max-width:720px){.cats{grid-template-columns:1fr}}
@@ -347,7 +354,10 @@ footer a{color:var(--mute)}
     { cat: "Burgers & Melts", items: [["The Dive Burger", "Hot off the grill with all the fixings"], ["Patty Melt", "Grilled melt with BBQ sauce"]] },
     { cat: "Sides", items: [["Sweet Potato Crinkle Fries", "Crispy crinkle-cut sweet potato fries"]] }
   ];
-  $("cats").innerHTML = MENU.map(c => '<div class="cat"><h3>' + esc(c.cat) + '</h3>' + c.items.map(i => '<div class="item"><div><b>' + esc(i[0]) + '</b><small>' + esc(i[1]) + '</small></div>' + (i[2] ? '<span class="tag">' + esc(i[2]) + '</span>' : '') + '</div>').join("") + '</div>').join("");
+  const paintMenu = list => { $("cats").innerHTML = list.map(c => '<div class="cat"><h3>' + esc(c.name) + '</h3>' + c.items.map(i => '<div class="item' + (i.photo ? ' hasph' : '') + '">' + (i.photo ? '<img class="fph" loading="lazy" alt="' + esc(i.name) + '" src="/api/menuimg/' + esc(i.photo) + '">' : '') + '<div class="itx"><div class="ihd"><b>' + esc(i.name) + '</b>' + (i.tag ? '<span class="tag">' + esc(i.tag) + '</span>' : '') + (i.price ? '<span class="pr">' + esc(i.price) + '</span>' : '') + '</div>' + (i.desc ? '<small>' + esc(i.desc) + '</small>' : '') + '</div></div>').join("") + '</div>').join(""); };
+  paintMenu(MENU.map(c => ({ name: c.cat, items: c.items.map(i => ({ name: i[0], desc: i[1], tag: i[2] || "" })) })));
+  // the owner's real menu (uploaded on the Menu admin page) replaces the starter list
+  fetch("/api/menu", { cache: "no-store" }).then(r => r.json()).then(m => { if (m.cats && m.cats.length){ paintMenu(m.cats); const n = document.querySelector("#menu .head p"); if (n && m.cats.some(c => c.items.some(i => i.price))) n.textContent = "Our menu, straight from the kitchen. Prices may change; ask your server for today's specials."; } }).catch(() => {});
 
   /* ---- hours, open now (McAllen time) ---- */
   const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
