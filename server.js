@@ -214,10 +214,17 @@ function rawPage(file, appMeta) {
   }
   return html;
 }
+// link previews (iMessage, Facebook, WhatsApp): The Dive's logo on The Dive's dark green, never the see-through logo on grey
+function ogTags(h, req) {
+  if (!/<\/head>/.test(h)) return h;
+  const img = "https://" + req.get("host") + "/og.png";
+  h = h.replace(/<meta (property|name)="(og:image[^"]*|twitter:card|twitter:image)"[^>]*>\s*/g, "");
+  return h.replace("</head>", '<meta property="og:image" content="' + img + '">\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:image" content="' + img + '">\n</head>');
+}
 function sendPage(req, res, file, appMeta, type) {
   const t = TEN(), key = t.slug + "|" + file + "|" + (t.v || 0) + "|" + req.get("host");
   let h = pageCache.get(key);
-  if (h == null) { h = rawPage(file, appMeta); if (!t.house) h = brand(h, t, BASE(), req.get("host")); if (t.theme && /\.html$/.test(file) && file !== "setup.html") h = h.replace("</head>", themeCss(t.theme) + "\n</head>"); pageCache.set(key, h); }
+  if (h == null) { h = rawPage(file, appMeta); if (!t.house) h = brand(h, t, BASE(), req.get("host")); if (t.house && /\.html$/.test(file)) h = ogTags(h, req); if (t.theme && /\.html$/.test(file) && file !== "setup.html") h = h.replace("</head>", themeCss(t.theme) + "\n</head>"); pageCache.set(key, h); }
   res.type(type || "html").set("Cache-Control", "no-cache").send(h);
 }
 // logo + app icons: The Dive's files, or the bar's own uploaded logo
@@ -2316,7 +2323,7 @@ app.get("/s/:id", wrap(async (req, res) => {
   const title = `${r.name} sang ${r.song} at The Dive on 495`;
   res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc((stars ? stars + " · " : "") + "Karaoke night at The Dive on 495, McAllen, TX. Scan to sing!")}">
-<meta property="og:image" content="${esc(base)}/logo.png"><meta property="og:url" content="${esc(base)}/s/${r.id}"><meta property="og:type" content="website">
+<meta property="og:image" content="${esc(base)}/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta property="og:url" content="${esc(base)}/s/${r.id}"><meta property="og:type" content="website">
 <link rel="icon" href="/logo.png"><style>body{margin:0;background:#0a0c0a;color:#eef3ee;font-family:system-ui,-apple-system,sans-serif;display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center}
 img{width:160px;filter:drop-shadow(0 0 20px rgba(57,181,74,.55))}h1{font-family:Georgia,serif;font-size:28px;margin:16px 0 4px}.s{color:#ff6b8a;font-size:24px;font-weight:700;margin-top:6px}p{color:#9fae9f}a{display:inline-block;margin-top:14px;background:#39b54a;color:#041206;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px}</style></head>
 <body><main><img src="/logo.png" alt="The Dive on 495"><h1>${esc(r.name)}</h1><div>sang <b>${esc(r.song)}</b>${r.artist ? " – " + esc(r.artist) : ""}</div><div class="s">${stars}</div>
@@ -2523,7 +2530,7 @@ app.get("/links/:group", (req, res) => {
       .replace(/<link rel="manifest"[^>]*>\s*/, "").replace(/<link rel="apple-touch-icon"[^>]*>\s*/, '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n')
       .replace(/<meta name="apple-mobile-web-app-title"[^>]*>/, '<meta name="apple-mobile-web-app-title" content="' + full + '">')
       .replace('<h1 id="pageTitle">Karaoke Owner List</h1>', '<h1 id="pageTitle">' + esc(title) + '</h1>')
-      .replace("</head>", '<meta property="og:title" content="' + full + '">\n<meta property="og:description" content="' + esc(desc) + '">\n<meta property="og:image" content="' + site + '/logo.png">\n<meta property="og:url" content="' + site + '/links/' + g + '">\n<meta name="description" content="' + esc(desc) + '">\n</head>');
+      .replace("</head>", '<meta property="og:title" content="' + full + '">\n<meta property="og:description" content="' + esc(desc) + '">\n<meta property="og:image" content="' + site + '/og.png">\n<meta property="og:url" content="' + site + '/links/' + g + '">\n<meta name="description" content="' + esc(desc) + '">\n</head>');
     if (!t.house) h = brand(h, t, BASE(), req.get("host"));
     pageCache.set(key, h);
   }
@@ -2549,6 +2556,7 @@ app.get("/update.js", (req, res) => res.type("application/javascript").set("Cach
 app.get("/forgot.js", (req, res) => res.type("application/javascript").set("Cache-Control", "no-cache").sendFile(path.join(__dirname, "forgot.js")));
 app.get("/zoom.js", (req, res) => res.type("application/javascript").sendFile(path.join(__dirname, "zoom.js")));
 app.get("/install.js", (req, res) => res.type("application/javascript").sendFile(path.join(__dirname, "install.js")));
+app.get(["/og.png", "/og-square.png"], (req, res) => TEN().house ? res.set("Cache-Control", "public, max-age=86400").sendFile(path.join(__dirname, req.path.slice(1))) : sendLogo(req, res, "logo.png"));
 app.get("/default-logo.png", (req, res) => res.sendFile(path.join(__dirname, "default-logo.png")));
 app.get("/songs.json", (req, res) => res.sendFile(path.join(__dirname, "songs.json")));
 ["/logo.png", "/icon-192.png", "/icon-512.png", "/icon-maskable.png", "/apple-touch-icon.png", "/kj-icon-192.png", "/kj-icon-512.png", "/kj-apple-touch-icon.png",
