@@ -22,8 +22,8 @@
     "#diveA2hs img{flex:0 0 auto}" +
     "#diveGuide{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.82);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:24px 20px calc(70px + env(safe-area-inset-bottom,0px));color:#fff;font:17px/1.3 Outfit,system-ui,-apple-system,sans-serif}" +
     "#diveGuide.top{justify-content:flex-start;padding-top:calc(24px + env(safe-area-inset-top,0px))}" +
-    "#diveGuide .box{background:#131713;border:2px solid #39b54a;border-radius:18px;padding:18px;max-width:340px;display:flex;flex-direction:column;gap:12px}" +
-    "#diveGuide .st{display:flex;gap:12px;align-items:center}#diveGuide .n{width:30px;height:30px;border-radius:50%;background:#39b54a;color:#041206;font-weight:800;display:grid;place-items:center;flex:none}" +
+    "#diveGuide .box{letter-spacing:normal;white-space:normal;text-transform:none;color:#fff;text-align:left;width:min(340px,100%);box-sizing:border-box;background:#131713;border:2px solid #39b54a;border-radius:18px;padding:18px;max-width:340px;display:flex;flex-direction:column;gap:12px}" +
+    "#diveGuide .dvg-st{display:flex;gap:12px;align-items:center;font-size:17px;letter-spacing:normal;white-space:normal;color:#fff}#diveGuide .dvg-st b{color:#ffd166}#diveGuide .dvg-n{width:30px;height:30px;border-radius:50%;background:#39b54a;color:#041206;font-weight:800;display:grid;place-items:center;flex:none}" +
     "#diveGuide .ar{font-size:64px;line-height:1;color:#5fd36e;margin-top:14px}#diveGuide.top .ar{order:-1;align-self:flex-end;margin:0 10px 8px 0}" +
     "#diveGuide .cl{background:none;border:0;color:#9fae9f;font:inherit;text-decoration:underline;padding:6px;cursor:pointer}" +
     "#diveA2hs[hidden],#diveGuide[hidden]{display:none!important}" +
@@ -34,7 +34,7 @@
   bar.innerHTML = '<img alt=""><div class="dva-tx"><b></b><span>Add it to your home screen.</span></div><button type="button" class="dva-add">Add</button><button type="button" class="dva-x" aria-label="Hide">×</button>';
   bar.querySelector("img").src = icon; bar.querySelector("b").textContent = "Get the " + name + " app";
   var guide = document.createElement("div"); guide.id = "diveGuide"; guide.hidden = true; guide.setAttribute("role", "dialog");
-  guide.innerHTML = '<div class="box"><div class="st"><span class="n">1</span><span>Tap the <b>Share</b> button ⬆︎ ' + (iosChrome ? "at the top right" : "below") + '</span></div><div class="st"><span class="n">2</span><span>Scroll down, tap <b>Add to Home Screen</b></span></div><div class="st"><span class="n">3</span><span>Tap <b>Add</b>. Done!</span></div><button type="button" class="cl">Close</button></div><div class="ar" aria-hidden="true">' + (iosChrome ? "⬆" : "⬇") + "</div>";
+  guide.innerHTML = '<div class="box"><div class="dvg-st"><span class="dvg-n">1</span><span>Tap the <b>Share</b> button ⬆︎ ' + (iosChrome ? "at the top right" : "below") + '</span></div><div class="dvg-st"><span class="dvg-n">2</span><span>Scroll down, tap <b>Add to Home Screen</b></span></div><div class="dvg-st"><span class="dvg-n">3</span><span>Tap <b>Add</b>. Done!</span></div><button type="button" class="cl">Close</button></div><div class="ar" aria-hidden="true">' + (iosChrome ? "⬆" : "⬇") + "</div>";
   if (iosChrome) guide.classList.add("top");
   function mount() { document.body.appendChild(bar); document.body.appendChild(guide); if (ios) setTimeout(function () { bar.hidden = false; }, 1500); }
   if (document.body) mount(); else document.addEventListener("DOMContentLoaded", mount);
