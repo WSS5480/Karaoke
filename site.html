@@ -43,6 +43,10 @@ h2{font-size:clamp(40px,7vw,68px)}
 .btn:active{transform:scale(.97)}
 .btn.main{background:var(--amber);color:#1a1205}
 .btn.main:hover{background:#ffc56e}
+.btn.stack{flex-direction:column;gap:1px;line-height:1.1;padding-top:6px;padding-bottom:6px}
+.btn .at{font-size:10.5px;font-weight:700;letter-spacing:.02em;opacity:.72}
+.mbar .btn .at{font-size:8.5px;white-space:nowrap;letter-spacing:0}
+.mbar .btn.stack{flex:1.4 1 0;padding-left:6px;padding-right:6px}
 .btn.line{border-color:#3a4c40;color:var(--cream)}
 .btn.line:hover{border-color:var(--mint)}
 
@@ -206,7 +210,7 @@ footer a{color:var(--mute)}
   <div class="wrap">
     <a class="brand" href="#top"><img src="/logo.png" alt="">The Dive on 495</a>
     <div class="links"><a href="#live">Tonight</a><a href="#menu">Kitchen</a><a href="#songs">Songs</a><a href="#visit">Visit</a><a href="#parties">Parties</a></div>
-    <a class="btn main sing" href="/">🎤 Sign up to sing</a>
+    <a class="btn main sing stack" href="/"><span>🎤 Sign up to sing</span><small class="at">(must be at The Dive)</small></a>
   </div>
 </nav>
 
@@ -217,7 +221,7 @@ footer a{color:var(--mute)}
       <h1>Bar + <em>Stage</em></h1>
       <p class="lead">Karaoke every night, live bands, a full kitchen and cold beer, right on Pecan in McAllen. Grab the mic, grab some wings, and stay a while.</p>
       <div class="ctas">
-        <a class="btn main" href="/">🎤 Sign up to sing</a>
+        <a class="btn main stack" href="/"><span>🎤 Sign up to sing</span><small class="at">(must be at The Dive)</small></a>
         <a class="btn line" href="/?getapp=1">📲 Get the app</a>
         <a class="btn line" href="#menu">🍔 See the kitchen</a>
         <a class="btn line" href="https://www.google.com/maps/dir/?api=1&destination=The+Dive+on+495+1116+Pecan+Blvd+McAllen+TX+78501" target="_blank" rel="noopener">📍 Directions</a>
@@ -253,7 +257,7 @@ footer a{color:var(--mute)}
         <div><b id="tWait">–</b><small>Est. wait</small></div>
       </div>
       <div class="foot">
-        <a class="btn main" href="/">🎤 Put my name on the list</a>
+        <a class="btn main stack" href="/"><span>🎤 Put my name on the list</span><small class="at">(must be at The Dive)</small></a>
         <a class="btn line" href="/?getapp=1">📲 Get the singer app</a>
         <a class="btn line" href="/wall">⭐ Wall of Fame</a>
       </div>
@@ -342,7 +346,7 @@ footer a{color:var(--mute)}
   </div>
 </footer>
 
-<div class="mbar"><a class="btn main" href="/">🎤 Sing</a><a class="btn line" href="#menu">🍔 Menu</a><a class="btn line" href="tel:+19563394575">📞 Call</a></div>
+<div class="mbar"><a class="btn main stack" href="/"><span>🎤 Sing</span><small class="at">(must be at The Dive)</small></a><a class="btn line" href="#menu">🍔 Menu</a><a class="btn line" href="tel:+19563394575">📞 Call</a></div>
 
 <script>
 (function(){
