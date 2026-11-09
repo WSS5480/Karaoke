@@ -797,6 +797,7 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <div class="step"><span class="n">1</span><span>Tap the <span class="shareic" aria-hidden="true">⬆︎</span> <b>Share</b> button <span id="iosShareWhere">below</span></span></div>
     <div class="step"><span class="n">2</span><span>Scroll down, tap <b>Add to Home Screen</b></span></div>
     <div class="step"><span class="n">3</span><span>Tap <b>Add</b>. Done!</span></div>
+    <div class="step" id="iosStep4" hidden><span class="n">4</span><span>Open <b>The Dive</b> from your home screen and tap <b>Buzz my phone</b></span></div>
     <button class="close" id="iosGuideX" type="button">Close</button>
   </div>
   <div class="arrow" aria-hidden="true">⬇</div>
@@ -2093,7 +2094,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     box.hidden = false;
     if(await isOn()){ $("pushOn").hidden = true; $("pushHow").hidden = true; $("pushOk").hidden = true; return; }
     $("pushOk").hidden = true;
-    if(ios && (!standalone || !can)){ $("pushOn").hidden = true; $("pushHow").hidden = false; $("pushHow").innerHTML = "🔔 <b>Want your iPhone to buzz when you're up?</b> Tap the Share button <b>⬆︎</b> → <b>Add to Home Screen</b>, open <b>The Dive</b> from your home screen, then tap “Buzz my phone”."; return; }
+    if(ios && (!standalone || !can)){ $("pushOn").hidden = false; $("pushOn").dataset.guide = "1"; $("pushHow").hidden = true; return; }   // iPhone in the browser: the button opens the step-by-step guide
     if(Notification.permission === "denied"){ $("pushOn").hidden = true; $("pushHow").hidden = false; $("pushHow").textContent = "🔕 Alerts are blocked for this site. Turn on notifications for it in your phone's settings."; return; }
     $("pushOn").hidden = false; $("pushHow").hidden = true;
   }
@@ -2138,6 +2139,9 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
   });
   $("getApp").addEventListener("click", () => { if(ios){ $("iosGuide").hidden = false; } else if(promptEvt){ promptEvt.prompt(); } else { $("installBar").hidden = false; $("installHow").textContent = "Tap your browser menu ⋮, then Install app."; $("installBtn").hidden = true; } });
   $("iosGuideX").addEventListener("click", () => { $("iosGuide").hidden = true; });
+  // "Buzz my phone" on an iPhone browser: show the steps instead of a paragraph of instructions
+  $("pushOn").addEventListener("click", e => { if($("pushOn").dataset.guide !== "1") return; e.stopImmediatePropagation(); $("iosStep4").hidden = false; $("iosGuide").hidden = false; }, true);
+  $("iosGuideX").addEventListener("click", () => { $("iosStep4").hidden = true; });
   $("iosGuide").addEventListener("click", e => { if(e.target.id === "iosGuide") $("iosGuide").hidden = true; });
   $("installX").addEventListener("click", () => { $("installBar").hidden = true; try{ sessionStorage.setItem("dive_install_x", "1"); }catch(e){} $("getApp").hidden = false; });
   window.addEventListener("appinstalled", () => { $("installBar").hidden = true; });
