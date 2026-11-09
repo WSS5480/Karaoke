@@ -204,7 +204,7 @@ function rawPage(file, appMeta) {
   // every page keeps its installed app up to date by itself
   if (file.endsWith(".html") && !html.includes("/update.js")) html = html.replace("</head>", '<meta name="dive-build" content="' + BUILD + '">\n<script src="/update.js" defer></script>\n</head>');
   // the logo sits faint and fixed behind every screen (like the singer app); not on print pages
-  if (file.endsWith(".html") && !html.includes('class="wm"') && !/^(poster|tent|start)\.html$/.test(file))
+  if (file.endsWith(".html") && !html.includes('class="wm"') && !/^(poster|tent|start|site)\.html$/.test(file))
     html = html.replace("</head>", "<style>.wm{position:fixed;inset:0;z-index:-1;pointer-events:none;background:url(/logo.png) center 55%/min(80vmin,620px) no-repeat;opacity:.045}</style>\n</head>")
                .replace(/<body([^>]*)>/, '<body$1>\n<div class="wm" aria-hidden="true"></div>');
   if (appMeta) {
@@ -2473,6 +2473,8 @@ app.get("/links/:group", (req, res) => {
   }
   res.type("html").set("Cache-Control", "no-cache").send(h);
 });
+// The Dive's public website (menu, hours, live from the stage): only for The Dive itself
+app.get("/site", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "site.html"); });
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => {
   if (route === "/start" && !TEN().house) return res.redirect("/start");          // sign-up is only on the main site
   if (route === "/setup" && TEN().house) return res.redirect("/kj");             // The Dive is set up in Render
