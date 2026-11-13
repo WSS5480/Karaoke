@@ -129,6 +129,9 @@ li.up .av{border-color:var(--green)}
 .shares .main{grid-column:1/-1;background:var(--green);color:#041206;border-color:var(--green)}
 .ok{color:var(--green-hi);font-size:14px;min-height:20px;margin:0}
 .wall{color:var(--green-hi);text-align:center;display:block}
+.appsw{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.appsw a{padding:7px 12px;border-radius:999px;border:1px solid var(--line);color:var(--ink);font-weight:800;font-size:13px;text-decoration:none}
+.appsw a[aria-current]{background:var(--green);border-color:var(--green);color:#041206}
 .sitebtn{display:table;margin:-4px auto 14px;padding:9px 18px;border:1px solid var(--line,#2a3a2f);border-radius:999px;background:rgba(255,255,255,.04);color:var(--ink,#eef3ee);font-weight:700;font-size:15px;text-decoration:none}
 .sitebtn:active{transform:scale(.97)}
 .linkbox{display:flex;flex-direction:column;gap:6px;border:1px dashed var(--line);border-radius:12px;padding:10px;margin-top:8px}
@@ -394,6 +397,8 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 <body class="booting">
 <script>if(esp)document.body.classList.add("esp")</script>
 <main>
+  <nav class="appsw" id="appSw" aria-label="Switch app" hidden><a href="/site">Website</a><a href="/" aria-current="page">Sing</a><a href="/owner" id="swOwner" hidden>Owner</a><a href="/manager">Manager</a></nav>
+  <script>try{var r=localStorage.getItem("dive_role");if(r==="owner"||r==="manager"){document.getElementById("appSw").hidden=false;if(r==="owner")document.getElementById("swOwner").hidden=false;}}catch(e){}</script>
   <div class="shoutbar" id="shoutBar" aria-live="polite"><button type="button" id="langBtn" aria-label="Español / English">ESP</button><div class="tk" id="shoutTk"><span class="still" id="shoutTkText">Send a shout-out to the DJ 📣<span class="es"> / Manda un saludo</span></span></div><button type="button" id="shoutBtn" aria-label="Send a shout-out">📣</button></div>
   <div class="bandbar" id="bandBar" hidden>⏸ Paused for the band<small>You can still sign up<span class="es"> · Pausa para la banda, aún puedes anotarte</span></small></div>
   <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>

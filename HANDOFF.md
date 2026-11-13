@@ -11,7 +11,8 @@ Start here if you are a new AI session picking this up. Update this file in the 
 
 ## The app
 - Node/Express `server.js`, Postgres via `DATABASE_URL` (in-memory when unset). Settings are a key/value store (`db.getSetting/setSetting`).
-- Pages: `/` singer app (index.html), `/kj` DJ page, `/owner` owner list (staff.html), `/bar` bar owner, `/watch` live view, `/stats` analytics, `/history`, `/wall`, `/tv`, `/site` public website (site.html), `/menu-admin` (menuadmin.html).
+- Four apps with a switcher: `/site` Website, `/` Singer app, `/owner` Owner app (owner.html: tabs Tonight=/watch, Money=/bar, Analytics=/stats, Singers=/history, Karaoke & DJs=/kj, Website=/menu-admin, Settings=/setup, Links=/owner/links), `/manager` Store Manager app (manager.html: Karaoke=/kj, Website menu, TV). The shells load the existing pages in an iframe and hand them the PIN through sessionStorage. Staff phones get Owner/Manager switch buttons (localStorage `dive_role`); guests never see them.
+- Pages: `/` singer app (index.html), `/kj` DJ page, `/owner/links` old owner list (staff.html), `/bar` bar owner, `/watch` live view, `/stats` analytics, `/history`, `/wall`, `/tv`, `/site` public website (site.html), `/menu-admin` (menuadmin.html).
 - Identity is the PHONE: each signup row has `device` (raw device id, or `c<uid>` for a signed-in customer). Likes, posts, wall, duets hang off the signup row. Singer # = settings `singernum:<key>` / `singerby:<num>`.
 - `update.js` auto-reloads phones on new builds. `install.js` = Add-to-Home-Screen guide.
 
@@ -21,18 +22,20 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-13 Four-app cleanup: Owner app (/owner, owner PIN) and Store Manager app (/manager) with tabs; switcher bar. New login type "Store manager" (owner adds it on the KJ page next to DJs): runs karaoke and the website menu, sees no money, analytics or logins. /api/kj/whoami added.
 - 2026-11-13 Fix a singer's name (KJ page card): rename a phone everywhere, or move ticked songs to another singer # (likes/posts move with songs; tips don't). Two-tap confirm, logged in setting `namefix:log`, one-tap Undo. Singer app: "Wrong name? Ask the DJ."
 - 2026-11-09 Logo never cropped; "(must be at The Dive)" on website sign-up buttons; likes limit 150/min with no pop-up; "Add to my phone" button; link previews use og.png; menu admin with AI menu reading (needs ANTHROPIC_API_KEY in Render).
 - 2026-11-08 Public website at /site wired to live karaoke data; "Menu, hours & more" button on singer app.
 
 ## Decisions
+- 2026-11-13 Store managers see no money (tips, move-ups) and no all-time analytics; only the owner does. Owner/Manager buttons show only on staff phones.
 - 2026-11-13 Singers can't rename themselves (stops impersonation); only owner/DJs fix names. Reason: protect history and likes.
 - 2026-11-09 DJ may drag a locked singer down; locks only stop move-ups and new sign-ups.
 - 2026-11-08 KJ Total Package App is a later build: Render service suspended, code stays on GitHub; stop syncing Dive changes into it.
 - 2026-11-08 ACASA workspace is live and must not be touched. Catalog app belongs in MY APPS.
 
 ## Open items
-- Four-app cleanup (Website, Singer, Owner, Store Manager with a switcher): mockups made, waiting on Steve's approval and manager-access answers.
+- Four-app cleanup stage 2 (optional): rebuild tab contents natively instead of iframes; Owner "Tonight" with money tiles like the mockup.
 - ANTHROPIC_API_KEY in Render for menu photo reading.
 - CATALOG-ETL-BUILD still used? Move active-customer-mapping to MY APPS, delete CATALOG BUILD.
 - Twilio: close or park (Steve).

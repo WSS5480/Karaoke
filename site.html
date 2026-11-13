@@ -59,6 +59,8 @@ nav .links{margin-left:auto;display:flex;gap:22px;font-weight:700;font-size:14px
 nav .links a{text-decoration:none;color:var(--mute)}
 nav .links a:hover{color:var(--cream)}
 nav .sing{min-height:40px;padding:0 16px;font-size:14px}
+nav .staffsw{min-height:40px;padding:0 12px;font-size:13px;margin-left:8px}
+@media(max-width:820px){nav .staffsw{margin-left:0}#swOwner:not([hidden]),#swOwner[hidden]+#swMgr{margin-left:auto}nav .staffsw:not([hidden])~.sing{margin-left:0}nav .wrap{gap:6px}nav .wrap:has(#swMgr:not([hidden])) .brand{font-size:0;gap:0}}
 @media(max-width:820px){nav .links{display:none}nav .sing{margin-left:auto}}
 
 /* hero */
@@ -211,6 +213,7 @@ footer a{color:var(--mute)}
   <div class="wrap">
     <a class="brand" href="#top"><img src="/logo.png" alt="">The Dive on 495</a>
     <div class="links"><a href="#live">Tonight</a><a href="#menu">Kitchen</a><a href="#songs">Songs</a><a href="#visit">Visit</a><a href="#parties">Parties</a></div>
+    <a class="btn line staffsw" href="/owner" id="swOwner" hidden>Owner</a><a class="btn line staffsw" href="/manager" id="swMgr" hidden>Manager</a>
     <a class="btn main sing stack" href="/"><span>🎤 Sign up to sing</span><small class="at">(must be at The Dive)</small></a>
   </div>
 </nav>
@@ -354,6 +357,8 @@ footer a{color:var(--mute)}
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   $("yr").textContent = new Date().getFullYear();
+  // staff phones get Owner / Manager switch buttons; guests never see them
+  try { const r = localStorage.getItem("dive_role"); if (r === "owner" || r === "manager") { $("swMgr").hidden = false; if (r === "owner") $("swOwner").hidden = false; } } catch(e){}
 
   /* ---- kitchen (crowd favorites; full menu and prices at the bar) ---- */
   const MENU = [

@@ -359,6 +359,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <form id="hostForm" class="row" novalidate>
         <input id="hostName" placeholder="Name" aria-label="Name" maxlength="30" style="flex:1 1 140px;letter-spacing:0;font-size:16px;text-align:left">
         <input id="hostPin" placeholder="PIN" aria-label="Host PIN, 4 to 8 digits" inputmode="numeric" maxlength="8" style="flex:0 1 110px;font-size:16px">
+        <select id="hostRole" aria-label="Login type" style="flex:0 1 150px;font:inherit;font-size:16px;padding:10px;border-radius:10px;background:var(--wall);color:var(--ink);border:1px solid var(--line)"><option value="dj">DJ</option><option value="manager">Store manager</option></select>
         <button type="submit">Add</button>
       </form>
       <p class="err" id="hostErr" role="alert"></p>
@@ -897,7 +898,7 @@ async function loadHosts(){
     if(!j.hosts.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "No hosts yet. Add one below."; ol.appendChild(li); }
     j.hosts.forEach(h => {
       const li = document.createElement("li"), t = document.createElement("div"); t.className = "t";
-      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? "Old staff login (can't sign in, remove it)" : h.off ? "DJ · access OFF" : "DJ") + " · PIN " + h.pin;
+      const b = document.createElement("b"); b.textContent = h.name; const sp = document.createElement("span"); sp.textContent = (h.role === "staff" ? "Old staff login (can't sign in, remove it)" : (h.role === "manager" ? "Store manager" : "DJ") + (h.off ? " · access OFF" : "")) + " · PIN " + h.pin;
       t.append(b, sp); const x = document.createElement("button"); x.className = "danger"; x.textContent = "Remove";
       x.addEventListener("click", async () => {
         if(x.dataset.armed !== "1"){ x.dataset.armed = "1"; x.textContent = "Tap to confirm"; setTimeout(() => { x.dataset.armed = ""; x.textContent = "Remove"; }, 4000); return; }
@@ -963,17 +964,17 @@ function paintMe(){
   $("ownerLink").hidden = !state.me.admin;
   $("crowdCard").hidden = !(state.signups || state.phones); paintCrowd($("crowd"), state.signups, state.phones);
   $("hostPin").placeholder = state.tempPin ? "Start PIN " + state.tempPin : "PIN";
-  $("hostsCard").hidden = state.me.role === "dj"; $("hostForm").hidden = !state.me.admin;
+  $("hostsCard").hidden = !state.me.admin;   // only the owner sees and manages DJ / manager logins $("hostForm").hidden = !state.me.admin;
   $("myPinBtn").hidden = false; $("myPinBtn").textContent = state.me.admin ? "Change house PIN" : "Change my PIN";
-  $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "dj" ? " (DJ)" : " (house)");
-  if(state.me.role !== "dj" && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
+  $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "dj" ? " (DJ)" : state.me.role === "manager" ? " (store manager)" : " (house)");
+  if(state.me.admin && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
 }
 $("hostForm").addEventListener("submit", async e => {
   e.preventDefault(); $("hostErr").textContent = "";
   const name = $("hostName").value.trim(), pin = $("hostPin").value.trim();
   if(!name){ $("hostErr").textContent = "Enter the host's name."; return; }
   if(!(pin === "" && state && state.tempPin) && !/^\d{4,8}$/.test(pin)){ $("hostErr").textContent = "PIN must be 4 to 8 digits."; return; }
-  try{ await api("/api/kj/hosts", { name, pin: pin || (state && state.tempPin) || "" }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
+  try{ await api("/api/kj/hosts", { name, pin: pin || (state && state.tempPin) || "", role: $("hostRole").value }); $("hostName").value = ""; $("hostPin").value = ""; loadHosts(); }
   catch(err){ $("hostErr").textContent = err.message; }
 });
 $("fpForm").addEventListener("submit", async e => {

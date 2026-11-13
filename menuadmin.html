@@ -54,8 +54,8 @@ button:disabled{opacity:.5}
   <p class="sub">Upload photos of the menu. The app reads the items and prices and cuts out any food pictures. Check it, fix anything, then <b>Save</b>.</p>
 
   <div class="card" id="gate">
-    <label for="pin">House PIN</label>
-    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Admin only">
+    <label for="pin">Your PIN</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Owner or manager PIN">
     <div class="row" style="margin-top:12px"><button class="main" id="go" type="button">Open</button></div>
     <p class="err" id="gateErr" role="alert"></p>
   </div>
@@ -84,7 +84,7 @@ button:disabled{opacity:.5}
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  let PIN = ""; try { PIN = sessionStorage.getItem("dive_menu_pin") || ""; } catch(e){}
+  let PIN = ""; try { PIN = sessionStorage.getItem("dive_menu_pin") || sessionStorage.getItem("kj_pin") || ""; } catch(e){}
   let cats = [], dirty = false;
   const api = (u, body) => fetch(u, { method: body ? "POST" : "GET", headers: Object.assign({ "x-kj-pin": PIN }, body ? { "Content-Type": "application/json" } : {}), body: body ? JSON.stringify(body) : undefined })
     .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ("Error " + r.status)); return j; });
@@ -92,8 +92,8 @@ button:disabled{opacity:.5}
 
   async function open(){
     $("gateErr").textContent = "";
-    try { await api("/api/kj/hosts"); }
-    catch(e){ $("gateErr").textContent = /Only the owner/.test(e.message) ? "That PIN can't change the menu. Use the house PIN." : e.message; return; }
+    try { const w = await api("/api/kj/whoami"); if (w.role !== "owner" && w.role !== "manager") throw new Error("That PIN can't change the menu. Use the owner or a store manager PIN."); }
+    catch(e){ $("gateErr").textContent = e.message; return; }
     try { sessionStorage.setItem("dive_menu_pin", PIN); } catch(e){}
     $("gate").hidden = true; $("app").hidden = false; $("bar").hidden = false;
     const m = await fetch("/api/menu", { cache: "no-store" }).then(r => r.json()).catch(() => ({}));

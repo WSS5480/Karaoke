@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Owner · The Dive</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#070a08">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{--bg:#0b100d;--bar:#070a08;--line:#24332a;--ink:#f4efe4;--mute:#a9b5ad;--green:#39b54a;--amber:#ffb547;--blue:#5bc0eb;--red:#ff6b6b}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
+body{display:flex;flex-direction:column;height:100dvh}
+.sw{display:flex;align-items:center;gap:6px;padding:calc(8px + env(safe-area-inset-top)) 10px 8px;background:var(--bar);border-bottom:1px solid var(--line)}
+.sw img{width:30px;height:30px;object-fit:contain}
+.sw nav{display:flex;gap:5px;flex:1;justify-content:flex-end;flex-wrap:wrap}
+.sw a{padding:8px 11px;border-radius:999px;border:1px solid #2f4a38;color:var(--ink);font-weight:800;font-size:13px;text-decoration:none}
+.sw a[aria-current]{background:var(--amber);border-color:var(--amber);color:#1a1205}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px;border-bottom:1px solid var(--line);background:#0d1410}
+.tabs button{font:inherit;font-weight:700;font-size:14px;padding:8px 13px;border-radius:999px;border:1px solid #2f4a38;background:transparent;color:var(--ink);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--green);border-color:var(--green);color:#041206;font-weight:800}
+.tabs .out{margin-left:auto;color:var(--mute)}
+iframe{flex:1;width:100%;border:0;background:var(--bg)}
+.gate{max-width:420px;margin:40px auto;padding:0 16px;text-align:center}
+.gate img{width:120px;height:120px;object-fit:contain}
+.gate h1{margin:10px 0 4px;font-size:28px}
+.gate p{color:var(--mute);margin:0 0 16px}
+.gate input{width:100%;font:inherit;font-size:22px;letter-spacing:.3em;text-align:center;padding:14px;border-radius:12px;border:1px solid var(--line);background:#0d1310;color:var(--ink)}
+.gate button{margin-top:12px;width:100%;min-height:50px;border-radius:999px;border:0;background:var(--green);color:#041206;font:inherit;font-weight:800;font-size:17px;cursor:pointer}
+.err{color:var(--red);font-weight:600;min-height:1.4em;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="sw">
+  <img src="/logo.png" alt="The Dive">
+  <nav aria-label="Switch app">
+    <a href="/site">Website</a>
+    <a href="/">Sing</a>
+    <a href="/owner" aria-current="page">Owner</a>
+    <a href="/manager">Manager</a>
+  </nav>
+</div>
+
+<form class="gate" id="gate" novalidate>
+  <img src="/logo.png" alt="">
+  <h1>Owner</h1>
+  <p>Everything in one place: tonight, money, analytics, singers, karaoke, the website and settings.</p>
+  <label for="pin" style="position:absolute;left:-9999px">Owner PIN</label>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="Owner PIN">
+  <button type="submit">Open</button>
+  <div class="err" id="err" role="alert"></div>
+</form>
+
+<div class="tabs" id="tabs" role="tablist" aria-label="Owner sections" hidden></div>
+<iframe id="view" title="Owner section" hidden></iframe>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const TABS = [
+    ["tonight", "Tonight", "/watch"],
+    ["money", "Money", "/bar"],
+    ["stats", "Analytics", "/stats"],
+    ["singers", "Singers", "/history"],
+    ["karaoke", "Karaoke & DJs", "/kj"],
+    ["site", "Website", "/menu-admin"],
+    ["settings", "Settings", "/setup"],
+    ["links", "Links", "/owner/links"]
+  ];
+  const ss = (k, v) => { try { v === undefined ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch(e){} };
+  const sg = k => { try { return sessionStorage.getItem(k) || ""; } catch(e){ return ""; } };
+  const lg = (k, v) => { try { if (v === undefined) return localStorage.getItem(k) || ""; localStorage.setItem(k, v); } catch(e){ return ""; } };
+
+  async function check(pin){
+    // the owner PIN opens every owner page: Live view, Bar Owner, Analytics, the KJ page and the menu
+    const r = await fetch("/api/watch", { headers: { "x-watch-pin": pin }, cache: "no-store" });
+    if (r.status === 429) throw new Error("Too many tries. Wait 10 minutes.");
+    if (!r.ok) throw new Error("That isn't the owner PIN.");
+  }
+  function open(pin){
+    ["kj_pin", "watch_pin", "bar_pin", "dive_staff_pin", "dive_menu_pin", "dive_owner_pin"].forEach(k => ss(k, pin));
+    lg("dive_role", "owner");
+    $("gate").hidden = true; $("tabs").hidden = false; $("view").hidden = false;
+    const t = $("tabs"); t.textContent = "";
+    TABS.forEach(([id, label, src]) => { const b = document.createElement("button"); b.type = "button"; b.role = "tab"; b.textContent = label; b.dataset.id = id; b.addEventListener("click", () => show(id)); t.appendChild(b); });
+    const out = document.createElement("button"); out.type = "button"; out.className = "out"; out.textContent = "Sign out";
+    out.addEventListener("click", () => { ["kj_pin", "watch_pin", "bar_pin", "dive_staff_pin", "dive_menu_pin", "dive_owner_pin", "kj_name", "bar_name"].forEach(k => ss(k)); location.reload(); });
+    t.appendChild(out);
+    const want = (location.hash || "").slice(1);
+    show(TABS.some(x => x[0] === want) ? want : (lg("dive_owner_tab") || "tonight"));
+  }
+  function show(id){
+    const tab = TABS.find(x => x[0] === id) || TABS[0];
+    document.querySelectorAll("#tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.id === tab[0]));
+    if ($("view").dataset.src !== tab[2]) { $("view").dataset.src = tab[2]; $("view").src = tab[2]; }
+    lg("dive_owner_tab", tab[0]); history.replaceState(null, "", "#" + tab[0]);
+  }
+  $("gate").addEventListener("submit", async e => {
+    e.preventDefault(); $("err").textContent = "";
+    const pin = $("pin").value.replace(/\D/g, ""); if (!pin) return;
+    try { await check(pin); open(pin); } catch(er){ $("err").textContent = er.message; }
+  });
+  const saved = sg("dive_owner_pin");
+  if (saved) check(saved).then(() => open(saved)).catch(() => {});
+})();
+</script>
+</body>
+</html>

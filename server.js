@@ -204,7 +204,7 @@ function rawPage(file, appMeta) {
   // every page keeps its installed app up to date by itself
   if (file.endsWith(".html") && !html.includes("/update.js")) html = html.replace("</head>", '<meta name="dive-build" content="' + BUILD + '">\n<script src="/update.js" defer></script>\n</head>');
   // the logo sits faint and fixed behind every screen (like the singer app); not on print pages
-  if (file.endsWith(".html") && !html.includes('class="wm"') && !/^(poster|tent|start|site|menuadmin)\.html$/.test(file))
+  if (file.endsWith(".html") && !html.includes('class="wm"') && !/^(poster|tent|start|site|menuadmin|owner|manager)\.html$/.test(file))
     html = html.replace("</head>", "<style>.wm{position:fixed;inset:0;z-index:-1;pointer-events:none;background:url(/logo.png) center 55%/min(80vmin,620px) no-repeat;opacity:.045}</style>\n</head>")
                .replace(/<body([^>]*)>/, '<body$1>\n<div class="wm" aria-hidden="true"></div>');
   if (appMeta) {
@@ -1003,7 +1003,10 @@ async function whoIs(pin, name) {
   const hs = (await getHosts()).filter(x => same(pin, x.pin));
   let h = hs[0];
   if (hs.length > 1) { h = name ? hs.find(x => x.name === name) : null; if (!h) return { pick: hs.map(x => x.name) }; }
-  return h && h.role !== "staff" && !h.off ? { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: "dj", manager: false } : null;   // staff logins are retired
+  if (!h || h.role === "staff" || h.off) return null;   // old staff logins are retired
+  // Store managers run karaoke and the website menu, never money, analytics or logins
+  if (h.role === "manager") return { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: "manager", manager: true };
+  return { name: h.name, admin: false, own: h.own === true, agreed: h.agreed === HOST_TERMS_V, role: "dj", manager: false };
 }
 const pinTries = new Map();
 async function kjAuth(req, res, next) {
@@ -1401,7 +1404,7 @@ app.get("/api/kj/stats", wrap(async (req, res) => {
     topLiked: singerList.filter(x => x.likes > 0).sort((a, b) => b.likes - a.likes || b.songs - a.songs).slice(0, 15),
     topSongs: [...songs.values()].sort((a, b) => b.count - a.count).slice(0, 15),
     topArtists: [...artists.values()].sort((a, b) => b.count - a.count).slice(0, 10),
-    tips: (req.kj.owner || req.kj.manager) ? await tipStats(days, kjPick || undefined, (rq === "week" || rq === "month") ? nightOf(since) : "") : req.kj.role === "dj" ? await tipStats(days, req.kj.name, (rq === "week" || rq === "month") ? nightOf(since) : "") : null
+    tips: req.kj.owner ? await tipStats(days, kjPick || undefined, (rq === "week" || rq === "month") ? nightOf(since) : "") : req.kj.role === "dj" ? await tipStats(days, req.kj.name, (rq === "week" || rq === "month") ? nightOf(since) : "") : null
   });
 }));
 /* ---------- singer lookup (analytics): every singer ever, searchable; one singer's totals, songs, hearts and tips ---------- */
@@ -1431,7 +1434,7 @@ app.get("/api/kj/singers", wrap(async (req, res) => {
 app.get("/api/kj/singer-stats/:key", wrap(async (req, res) => {
   const g = (await singerBook()).get(String(req.params.key));
   if (!g) return res.status(404).json({ error: "Singer not found." });
-  const seeMoney = !!(req.kj.owner || req.kj.manager);
+  const seeMoney = !!req.kj.owner;
   let tipped = 0, tipCount = 0, moveups = 0, moveCount = 0;
   if (seeMoney) for (const n of await getTipNights()) for (const t of await getTips(n)) if (g.device && t.who === g.device) { if (t.bump) { moveups += t.amount; moveCount++; } else { tipped += t.amount; tipCount++; } }
   const r2 = x => Math.round(x * 100) / 100;
@@ -1442,7 +1445,7 @@ app.get("/api/kj/singer-stats/:key", wrap(async (req, res) => {
 app.get("/api/kj/singer-record/:key", wrap(async (req, res) => {
   const g = (await singerBook()).get(String(req.params.key));
   if (!g) return res.status(404).json({ error: "Singer not found." });
-  const seeMoney = !!(req.kj.owner || req.kj.manager), all = await db.allSignups(), names = [...g.names].map(n => String(n).toLowerCase());
+  const seeMoney = !!req.kj.owner, all = await db.allSignups(), names = [...g.names].map(n => String(n).toLowerCase());
   const nights = new Map(), audits = new Map(), used = new Set();
   const N = n => { if (!nights.has(n)) nights.set(n, { night: n, signups: [], tips: [], bumps: [], log: [] }); return nights.get(n); };
   const A = async n => { if (!audits.has(n)) audits.set(n, await getAudit(n)); return audits.get(n); };
@@ -1478,6 +1481,8 @@ app.get("/api/kj/singer-record/:key", wrap(async (req, res) => {
 }));
 const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the house PIN can add logins or change their type." });
 const staffOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the owner can do that." });
+const adminOrManager = (req, res, next) => req.kj && (req.kj.admin || req.kj.role === "manager") ? next() : res.status(403).json({ error: "Only the owner or a store manager can do that." });
+app.get("/api/kj/whoami", (req, res) => res.json({ name: req.kj.name, role: req.kj.admin ? "owner" : req.kj.role }));
 app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { const out = []; for (const h of await getHosts()) out.push({ name: h.name, pin: "••••", role: h.role === "staff" ? "staff" : "dj", manager: false, off: h.off === true, logo: !!(await db.getSetting("djlogo:" + h.name)) }); res.json({ hosts: out }); }));
 // owner: turn a DJ's access off or back on (name and PIN stay saved); turning it off signs them out right away
 app.post("/api/kj/hosts/access", staffOnly, wrap(async (req, res) => {
@@ -1511,18 +1516,18 @@ app.get("/api/menuimg/:id", wrap(async (req, res) => {
   const d = await db.getSetting("menuimg:" + id), m = d && LOGO_RE.exec(d); if (!m) return res.status(404).end();
   res.set("Content-Type", "image/" + m[1]).set("Cache-Control", "public, max-age=604800, immutable").send(Buffer.from(m[2], "base64"));
 }));
-app.post("/api/kj/menu", staffOnly, wrap(async (req, res) => {
+app.post("/api/kj/menu", adminOrManager, wrap(async (req, res) => {
   const cats = cleanMenu(req.body || {});
   await db.setSetting("menu", JSON.stringify({ cats, updated: new Date().toISOString(), by: req.kj.name }));
   res.json({ ok: true, cats });
 }));
-app.post("/api/kj/menu/photo", staffOnly, wrap(async (req, res) => {
+app.post("/api/kj/menu/photo", adminOrManager, wrap(async (req, res) => {
   const d = String(req.body.data || "");
   if (d.length > 450000 || !LOGO_RE.test(d)) return res.status(400).json({ error: "That picture didn't work. Try a smaller one." });
   const id = crypto.randomBytes(8).toString("hex"); await db.setSetting("menuimg:" + id, d); res.json({ ok: true, id });
 }));
 // read a menu photo with Claude: items, prices, and where any food pictures sit on the page (so the app can cut them out)
-app.post("/api/kj/menu/read", staffOnly, wrap(async (req, res) => {
+app.post("/api/kj/menu/read", adminOrManager, wrap(async (req, res) => {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return res.status(503).json({ error: "Menu reading isn't turned on yet. Add ANTHROPIC_API_KEY in Render. You can still type the menu in by hand." });
   const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+=*)$/.exec(String(req.body.data || ""));
@@ -1563,7 +1568,7 @@ app.post("/api/kj/hosts", ownerOnly, wrap(async (req, res) => {
   if (isTemp ? (await whoIs(pin) || {}).admin : ((await whoIs(pin)) || hosts.some(h => h.pin === pin))) return res.status(409).json({ error: "That PIN is already used. Pick another." });
   if (T() !== "dive" && hosts.filter(h => h.role !== "staff").length >= HOST_LIMIT) return res.status(403).json({ error: "Your plan includes " + HOST_LIMIT + " DJ logins. Remove one to add another." });
   if (hosts.some(h => h.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: "There's already a host with that name." });
-  hosts.push({ name, pin, own: false, role: "dj" }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
+  hosts.push({ name, pin, own: false, role: req.body.role === "manager" ? "manager" : "dj" }); await db.setSetting("hosts", JSON.stringify(hosts)); res.json({ ok: true });
 }));
 app.post("/api/kj/host-terms", wrap(async (req, res) => {
   if (req.kj.admin) return res.json({ ok: true });
@@ -2602,6 +2607,9 @@ app.get("/links/:group", (req, res) => {
   res.type("html").set("Cache-Control", "no-cache").send(h);
 });
 // The Dive's public website (menu, hours, live from the stage): only for The Dive itself
+app.get("/owner", (req, res) => sendPage(req, res, TEN().house ? "owner.html" : "staff.html"));
+app.get("/owner/links", (req, res) => sendPage(req, res, "staff.html"));
+app.get("/manager", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "manager.html"); });
 app.get("/menu-admin", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "menuadmin.html"); });
 app.get("/site", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "site.html"); });
 Object.entries(PAGES).forEach(([route, file]) => app.get(route, (req, res) => {
