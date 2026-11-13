@@ -343,6 +343,9 @@ if (DB_OK) {
     async add(r) { return (await Q(`INSERT INTO signups (name,song,artist,device,tenant,via,position) VALUES ($1,$2,$3,$4,$5,$6,(SELECT COALESCE(MAX(position),0)+1 FROM signups WHERE tenant=$5)) RETURNING *`, [r.name, r.song, r.artist, r.device, T(), r.via || ""])).rows[0]; },
     async setStatus(id, s) { await Q(`UPDATE signups SET status=$2, done_at=CASE WHEN $2='done' THEN now() ELSE done_at END WHERE id=$1 AND tenant=$3`, [id, s, T()]); },
     async rename(id, n) { await Q(`UPDATE signups SET name=$2 WHERE id=$1 AND tenant=$3`, [id, n, T()]); },
+    async allByDevice(d) { return (await Q(`SELECT id, name, song, artist, device, status, likes, posted_to, created_at, done_at FROM signups WHERE tenant=$2 AND device=$1 ORDER BY created_at DESC LIMIT 2000`, [d, T()])).rows; },
+    async moveRow(id, d, n) { await Q(`UPDATE signups SET device=$2, name=$3 WHERE id=$1 AND tenant=$4`, [id, d, n, T()]); },
+    async findNames(q) { return (await Q(`SELECT device, name, count(*)::int AS songs, max(created_at) AS last FROM signups WHERE tenant=$2 AND lower(name) LIKE $1 GROUP BY device, name ORDER BY max(created_at) DESC LIMIT 40`, ['%' + q.toLowerCase() + '%', T()])).rows; },
     async setSong(id, song, artist) { await Q(`UPDATE signups SET song=$2, artist=$3 WHERE id=$1 AND tenant=$4`, [id, song, artist, T()]); },
     async setPos(id, p) { await Q(`UPDATE signups SET position=$2 WHERE id=$1 AND tenant=$3`, [id, p, T()]); },
     async get(id) { return (await Q(`SELECT * FROM signups WHERE id=$1 AND tenant=$2`, [id, T()])).rows[0]; },
@@ -391,6 +394,9 @@ if (DB_OK) {
     async add(r) { const row = { ...r, tenant: T(), id: ++seq, status: "queued", position: Math.max(0, ...rows.filter(mine).map(x => x.position)) + 1, created_at: now(), done_at: null, rating: null, public: false }; rows.push(row); return row; },
     async setStatus(id, s) { const r = rows.find(x => x.id === id && mine(x)); if (r) { r.status = s; if (s === "done") r.done_at = now(); } },
     async rename(id, n) { const r = rows.find(x => x.id === id && mine(x)); if (r) r.name = n; },
+    async allByDevice(d) { return rows.filter(r => mine(r) && r.device === d).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 2000); },
+    async moveRow(id, d, n) { const r = rows.find(x => x.id === id && mine(x)); if (r) { r.device = d; r.name = n; } },
+    async findNames(q) { const m = new Map(); q = q.toLowerCase(); for (const r of rows) if (mine(r) && String(r.name).toLowerCase().includes(q)) { const k = r.device + "\u0000" + r.name, e = m.get(k) || { device: r.device, name: r.name, songs: 0, last: r.created_at }; e.songs++; if (String(r.created_at) > String(e.last)) e.last = r.created_at; m.set(k, e); } return [...m.values()].sort((a, b) => String(b.last).localeCompare(String(a.last))).slice(0, 40); },
     async setSong(id, song, artist) { const r = rows.find(x => x.id === id && mine(x)); if (r) { r.song = song; r.artist = artist; } },
     async setPos(id, p) { const r = rows.find(x => x.id === id && mine(x)); if (r) r.position = p; },
     async get(id) { return rows.find(x => x.id === id && mine(x)); },
@@ -1881,6 +1887,65 @@ app.post("/api/kj/:id/song", wrap(async (req, res) => {
   const song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!song) return res.status(400).json({ error: "Enter the song." });
   await db.setSong(id, song, artist); await setNoSong(id, false); await clearRepeat(id); res.json({ ok: true });
+}));
+/* ---------- Fix a singer's name (owner + DJs): rename a phone everywhere, or move songs that were really someone else's.
+   Everything hangs off the song entries, so likes, posts, the wall and duets follow the song. Tips stay with whoever paid.
+   Every fix is logged and can be undone. ---------- */
+const isCustKey = k => /^c\d+$/.test(k);
+async function keyName(k) { if (isCustKey(k)) { const c = await db.customer(parseInt(k.slice(1), 10)); return (c && c.name) || ""; } const p = await getProfile(k); return (p && p.name) || ""; }
+async function setKeyName(k, n) { if (isCustKey(k)) return db.setCustomerName(parseInt(k.slice(1), 10), n); const p = await getProfile(k); await setProfile(k, { ...(p || {}), name: n }); }
+async function keyNum(k) { return (await db.getSetting("singernum:" + (isCustKey(k) ? k.slice(1) : "dev:" + k))) || ""; }
+async function nameFixLog() { try { return JSON.parse((await db.getSetting("namefix:log")) || "[]"); } catch (e) { return []; } }
+async function saveNameFix(entry) { const l = await nameFixLog(); l.unshift(entry); await db.setSetting("namefix:log", JSON.stringify(l.slice(0, 100))); singersCache.delete(T()); }
+app.get("/api/kj/namefix/find", wrap(async (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 30); if (q.length < 2) return res.json({ phones: [] });
+  const out = new Map();
+  if (/^\d{6}$/.test(q)) { const k = await ownerOfNum(q); if (k) out.set(k, { device: k, names: [] }); }
+  for (const r of await db.findNames(q)) { const e = out.get(r.device) || { device: r.device, names: [] }; e.names.push(r.name + " (" + r.songs + ")"); out.set(r.device, e); }
+  const phones = [];
+  for (const e of [...out.values()].slice(0, 25)) phones.push({ device: e.device, name: (await keyName(e.device)) || (e.names[0] || "").replace(/ \(\d+\)$/, ""), num: await keyNum(e.device), alsoAs: e.names, dj: e.device.startsWith("kj-") });
+  res.json({ phones });
+}));
+app.get("/api/kj/namefix/phone", wrap(async (req, res) => {
+  const d = String(req.query.device || ""); if (!d) return res.status(400).json({ error: "Pick a singer." });
+  const songs = (await db.allByDevice(d)).map(r => ({ id: r.id, name: r.name, song: r.song, artist: r.artist, status: r.status, likes: r.likes || 0, posted: !!r.posted_to, at: r.done_at || r.created_at }));
+  res.json({ device: d, name: await keyName(d), num: await keyNum(d), songs, log: (await nameFixLog()).filter(x => x.device === d || x.to === d).slice(0, 5).map(x => ({ id: x.id, at: x.at, by: x.by, text: x.text, undone: !!x.undone })) });
+}));
+app.post("/api/kj/namefix/rename", wrap(async (req, res) => {
+  const d = String(req.body.device || ""), n = clean(req.body.name, 30);
+  if (!d || !n) return res.status(400).json({ error: "Enter the right name." });
+  const rows = await db.allByDevice(d), before = rows.map(r => ({ id: r.id, device: r.device, name: r.name })), oldName = await keyName(d);
+  for (const r of rows) if (r.name !== n) await db.rename(r.id, n);
+  await setKeyName(d, n);
+  const text = "Renamed " + (oldName || (rows[0] && rows[0].name) || "a singer") + " to " + n + " (" + rows.length + " songs)";
+  await saveNameFix({ id: crypto.randomBytes(6).toString("hex"), at: new Date().toISOString(), by: req.kj.name, kind: "rename", device: d, rows: before, names: { [d]: oldName }, text });
+  res.json({ ok: true, text });
+}));
+app.post("/api/kj/namefix/move", wrap(async (req, res) => {
+  const d = String(req.body.device || ""), ids = (Array.isArray(req.body.ids) ? req.body.ids : []).map(Number).filter(Boolean), num = String(req.body.toNum || "").trim(), mineName = clean(req.body.newName, 30);
+  if (!d || !ids.length) return res.status(400).json({ error: "Tick the songs that were someone else's." });
+  if (!/^\d{6}$/.test(num)) return res.status(400).json({ error: "Enter their 6-digit singer #. They see it in the app under their name." });
+  const to = await ownerOfNum(num); if (!to) return res.status(404).json({ error: "No singer has #" + num + "." });
+  if (to === d) return res.status(400).json({ error: "That's this same phone's number." });
+  const rows = await db.allByDevice(d), pick = new Set(ids), moving = rows.filter(r => pick.has(r.id)), staying = rows.filter(r => !pick.has(r.id));
+  if (!moving.length) return res.status(400).json({ error: "Those songs aren't on this phone." });
+  const toName = (await keyName(to)) || moving[0].name, oldName = await keyName(d);
+  const before = rows.map(r => ({ id: r.id, device: r.device, name: r.name }));
+  for (const r of moving) await db.moveRow(r.id, to, toName);
+  if (mineName) { for (const r of staying) if (r.name !== mineName) await db.rename(r.id, mineName); await setKeyName(d, mineName); }
+  const text = "Moved " + moving.length + " song" + (moving.length === 1 ? "" : "s") + " to " + toName + " (#" + num + ")" + (mineName ? "; this phone is now " + mineName : "");
+  await saveNameFix({ id: crypto.randomBytes(6).toString("hex"), at: new Date().toISOString(), by: req.kj.name, kind: "move", device: d, to, rows: before, names: { [d]: oldName }, text });
+  res.json({ ok: true, text });
+}));
+app.post("/api/kj/namefix/undo", wrap(async (req, res) => {
+  const l = await nameFixLog(), e = l.find(x => x.id === String(req.body.id || ""));
+  if (!e) return res.status(404).json({ error: "That fix isn't in the log." });
+  if (e.undone) return res.status(409).json({ error: "Already undone." });
+  for (const r of e.rows) await db.moveRow(r.id, r.device, r.name);
+  for (const [k, n] of Object.entries(e.names || {})) if (n) await setKeyName(k, n);
+  e.undone = new Date().toISOString(); e.undoneBy = req.kj.name;
+  await db.setSetting("namefix:log", JSON.stringify(l)); singersCache.delete(T());
+  res.json({ ok: true, text: "Undid: " + e.text });
 }));
 app.post("/api/kj/:id/rename", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), row = await db.get(id), n = clean(req.body.name, 30);

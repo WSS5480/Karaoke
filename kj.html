@@ -368,6 +368,34 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
       <h2>Already sang <span id="doneCount"></span></h2>
       <ol id="done"></ol>
     </section>
+
+    <section class="card" id="fixCard">
+      <h2>Fix a singer's name <span>wrong name on a phone</span></h2>
+      <p style="margin:0 0 8px;color:var(--ink-2);font-size:14px">Someone signed up under another person's name? Find the phone, then rename it or move the songs that were really someone else's. Likes, posts and the wall go with the songs. Tips don't change. Every fix can be undone.</p>
+      <form id="fixFind" class="row" novalidate>
+        <input id="fixQ" placeholder="Name or singer #" aria-label="Name or singer number" maxlength="30" style="flex:1 1 160px;letter-spacing:0;font-size:16px;text-align:left">
+        <button type="submit">Find</button>
+      </form>
+      <div id="fixHits" class="row" style="margin-top:8px"></div>
+      <div id="fixPhone" hidden style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+        <div id="fixHead" style="font-weight:700;font-size:17px"></div>
+        <div id="fixSongs" style="max-height:340px;overflow-y:auto;margin:8px 0;border:1px solid var(--line);border-radius:12px;padding:4px 10px"></div>
+        <div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px">
+          <b>1. It was always this person, wrong name</b>
+          <p style="margin:4px 0 8px;color:var(--ink-2);font-size:14px">Renames the phone and every song on it. Singer #, likes and posts stay.</p>
+          <div class="row"><input id="fixNew" placeholder="Right name" aria-label="Right name" maxlength="30" style="flex:1 1 160px;letter-spacing:0;font-size:16px;text-align:left"><button type="button" id="fixRename">Rename everywhere</button></div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px">
+          <b>2. Some songs were someone else's</b>
+          <p style="margin:4px 0 8px;color:var(--ink-2);font-size:14px">Tick their songs above, enter their singer # (they see it in the app under their name). Their songs, likes and posts move to them.</p>
+          <div class="row"><input id="fixTo" placeholder="Their singer #" aria-label="Their singer number" inputmode="numeric" maxlength="6" style="flex:1 1 120px;font-size:16px"><input id="fixMine" placeholder="This phone is now… (optional)" aria-label="New name for this phone" maxlength="30" style="flex:1 1 160px;letter-spacing:0;font-size:16px;text-align:left"></div>
+          <div class="row" style="margin-top:8px"><button type="button" id="fixMove">Move ticked songs</button></div>
+        </div>
+        <p class="err" id="fixErr" role="alert"></p>
+        <p id="fixOk" role="status" style="color:var(--green-hi);font-weight:700;margin:6px 0 0"></p>
+        <div id="fixLog" style="margin-top:8px"></div>
+      </div>
+    </section>
   </div>
 </main>
 <div class="forcepin" id="shoutModal" hidden role="dialog" aria-modal="true" aria-labelledby="shoutTitle">
@@ -1069,6 +1097,60 @@ $("bumpPriceRow").addEventListener("submit", async e => {
   try{ await api("/api/kj/bump-price", { price: v }); $("bumpPriceMsg").textContent = "Saved ✓ $" + v + " a spot"; $("bumpPriceIn").blur(); }
   catch(er){ if(er.message !== "pin") $("bumpPriceMsg").textContent = er.message; }
 });
+
+/* ---------- Fix a singer's name ---------- */
+(function(){
+  const $f = id => document.getElementById(id);
+  let cur = null, armed = "";
+  const el = (tag, txt, st) => { const e = document.createElement(tag); if(txt != null) e.textContent = txt; if(st) e.style.cssText = st; return e; };
+  const msg = (err, ok) => { $f("fixErr").textContent = err || ""; $f("fixOk").textContent = ok || ""; };
+  $f("fixFind").addEventListener("submit", async e => {
+    e.preventDefault(); msg(); $f("fixHits").textContent = ""; $f("fixPhone").hidden = true;
+    const q = $f("fixQ").value.trim(); if(q.length < 2) return;
+    try{ const j = await api("/api/kj/namefix/find?q=" + encodeURIComponent(q));
+      if(!j.phones.length){ $f("fixHits").appendChild(el("span", "Nobody found.", "color:var(--ink-2)")); return; }
+      j.phones.forEach(p => { const b = el("button", (p.name || "?") + (p.num ? " · #" + p.num : "") + (p.dj ? " · added by DJ" : "")); b.type = "button"; b.title = "Signed up as: " + p.alsoAs.join(", "); b.addEventListener("click", () => open(p.device)); $f("fixHits").appendChild(b); });
+    }catch(er){ if(er.message !== "pin") msg(er.message); }
+  });
+  async function open(device){
+    msg(); armed = "";
+    try{ cur = await api("/api/kj/namefix/phone?device=" + encodeURIComponent(device)); }catch(er){ if(er.message !== "pin") msg(er.message); return; }
+    $f("fixPhone").hidden = false;
+    $f("fixHead").textContent = "This phone: " + (cur.name || "(no name)") + (cur.num ? " · singer #" + cur.num : "") + " · " + cur.songs.length + " songs";
+    $f("fixNew").value = ""; $f("fixTo").value = ""; $f("fixMine").value = "";
+    const box = $f("fixSongs"); box.textContent = "";
+    if(!cur.songs.length) box.appendChild(el("p", "No songs on this phone.", "color:var(--ink-2)"));
+    cur.songs.forEach(r => {
+      const lab = el("label", null, "display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer");
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = r.id; cb.style.cssText = "width:22px;height:22px;flex:none";
+      const t = el("div", null, "flex:1;min-width:0");
+      t.appendChild(el("div", r.song + (r.artist ? " · " + r.artist : ""), "font-weight:600"));
+      t.appendChild(el("div", "as " + r.name + " · " + (r.at ? new Date(r.at).toLocaleDateString() : "") + (r.likes ? " · ❤ " + r.likes : "") + (r.posted ? " · posted" : "") + (r.status === "queued" || r.status === "up" ? " · in line now" : ""), "font-size:13px;color:var(--ink-2)"));
+      lab.appendChild(cb); lab.appendChild(t); box.appendChild(lab);
+    });
+    const lg = $f("fixLog"); lg.textContent = "";
+    (cur.log || []).forEach(x => { const row = el("div", null, "display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px;padding:6px 0;border-top:1px solid var(--line)");
+      row.appendChild(el("span", x.text + " · " + (x.by || "") + (x.undone ? " · undone" : ""), "flex:1 1 200px;color:var(--ink-2)"));
+      if(!x.undone){ const u = el("button", "Undo"); u.type = "button"; u.addEventListener("click", async () => { msg(); try{ const j = await api("/api/kj/namefix/undo", { id: x.id }); await open(cur.device); msg("", j.text); }catch(er){ if(er.message !== "pin") msg(er.message); } }); row.appendChild(u); }
+      lg.appendChild(row); });
+  }
+  // two taps: the first shows exactly what will change, the second does it
+  $f("fixRename").addEventListener("click", async () => {
+    msg(); const n = $f("fixNew").value.trim(); if(!cur || !n){ msg("Enter the right name."); return; }
+    const key = "r|" + n;
+    if(armed !== key){ armed = key; msg("", "Tap again to rename " + (cur.name || "this phone") + " → " + n + " on all " + cur.songs.length + " songs."); return; }
+    armed = ""; try{ const j = await api("/api/kj/namefix/rename", { device: cur.device, name: n }); await open(cur.device); msg("", "✅ " + j.text); }catch(er){ if(er.message !== "pin") msg(er.message); }
+  });
+  $f("fixMove").addEventListener("click", async () => {
+    msg(); if(!cur) return;
+    const ids = [...$f("fixSongs").querySelectorAll("input:checked")].map(c => +c.value), to = $f("fixTo").value.trim(), mine = $f("fixMine").value.trim();
+    if(!ids.length){ msg("Tick the songs that were someone else's."); return; }
+    if(!/^\d{6}$/.test(to)){ msg("Enter their 6-digit singer #."); return; }
+    const likes = cur.songs.filter(r => ids.includes(r.id)).reduce((a, r) => a + r.likes, 0), key = "m|" + ids.join(",") + "|" + to + "|" + mine;
+    if(armed !== key){ armed = key; msg("", "Tap again to move " + ids.length + " song" + (ids.length === 1 ? "" : "s") + (likes ? " and " + likes + " likes" : "") + " to singer #" + to + (mine ? ", and call this phone " + mine : "") + "."); return; }
+    armed = ""; try{ const j = await api("/api/kj/namefix/move", { device: cur.device, ids, toNum: to, newName: mine }); await open(cur.device); msg("", "✅ " + j.text); }catch(er){ if(er.message !== "pin") msg(er.message); }
+  });
+})();
 </script>
 </body>
 </html>
