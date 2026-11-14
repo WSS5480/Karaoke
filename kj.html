@@ -147,6 +147,9 @@ li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywher
 li .acts{display:none;flex-basis:100%;gap:6px;flex-wrap:wrap}
 li.open .acts{display:flex}
 li .more{margin-left:auto;flex:none;width:40px;height:36px;padding:0;border-radius:999px;font-size:22px;line-height:1;letter-spacing:0}
+li .cpy{margin-left:auto;flex:none;height:36px;padding:0 12px;border-radius:999px;font-size:13px;font-weight:800;letter-spacing:0}
+li .cpy+.more{margin-left:6px}
+li .cpy.done,.statsBtn.cpy.done{border-color:var(--green);color:var(--green-hi)}
 li.open .more{border-color:var(--green);color:var(--green-hi)}
 li .acts button{padding:6px 11px;font-size:14px}
 .empty{padding:14px;color:var(--ink-2);text-align:center;display:block}
@@ -615,6 +618,12 @@ async function showSinger(r, pinned){
   });
   box.appendChild(ol);
 }
+// Copy song: puts "Song Artist" on the clipboard so the DJ can paste it into the karaoke software's search
+function copySong(r, btn){
+  const txt = (r.song + (r.artist ? " " + r.artist : "")).trim(), done = () => { const o = btn.textContent; btn.textContent = "Copied ✓"; btn.classList.add("done"); setTimeout(() => { btn.textContent = o; btn.classList.remove("done"); }, 1500); };
+  const old = () => { const ta = document.createElement("textarea"); ta.value = txt; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length); try{ document.execCommand("copy"); done(); }catch(e){ prompt("Copy this:", txt); } ta.remove(); };
+  if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, old); else old();
+}
 // rows look like the singer app: number, photo, name, song. The DJ's buttons open with ⋯ and stay open while they work on that singer.
 const openRows = new Set();
 function item(r, i, waiting){
@@ -633,6 +642,7 @@ function item(r, i, waiting){
   const more = document.createElement("button"); more.type = "button"; more.className = "more"; more.textContent = "⋯"; more.setAttribute("aria-label", "Buttons for " + r.name); more.setAttribute("aria-expanded", String(openRows.has(r.id)));
   more.addEventListener("click", () => { if(openRows.has(r.id)) openRows.delete(r.id); else openRows.add(r.id); li.classList.toggle("open", openRows.has(r.id)); more.setAttribute("aria-expanded", String(openRows.has(r.id))); });
   li.append(more);
+  if(waiting && r.song){ const cp = document.createElement("button"); cp.type = "button"; cp.className = "cpy"; cp.textContent = "Copy song"; cp.setAttribute("aria-label", "Copy " + r.song + " to paste in the karaoke system"); cp.addEventListener("click", () => copySong(r, cp)); li.insertBefore(cp, more); }
   const info = document.createElement("button"); info.textContent = "History"; info.addEventListener("click", () => { showSinger(r, true); $("now").scrollIntoView({ behavior: "smooth", block: "start" }); });
   if(!waiting){
     const a = document.createElement("div"); a.className = "acts";
@@ -719,7 +729,8 @@ function render(){
     const st = document.createElement("button"); st.type = "button"; st.className = "statsBtn"; st.textContent = up.photoSt === "pending" ? "📷 Photo to approve · stats" : "📊 Singer stats";
     st.setAttribute("aria-expanded", String(!$("singer").hidden && singerFor === up.id));
     st.addEventListener("click", () => { if(!$("singer").hidden && singerFor === up.id){ $("singer").hidden = true; singerPinned = false; singerFor = null; st.setAttribute("aria-expanded", "false"); } else { showSinger(up, true); st.setAttribute("aria-expanded", "true"); } });
-    now.appendChild(st); }
+    now.appendChild(st);
+    if(up.song){ const cp = document.createElement("button"); cp.type = "button"; cp.className = "statsBtn cpy"; cp.textContent = "📋 Copy song"; cp.addEventListener("click", () => copySong(up, cp)); now.appendChild(cp); } }
   else now.textContent = waiting.length ? "Tap Next singer to start" : "Nobody yet";
   // a new singer is up: close the last one's panel; theirs opens on request
   if(up && up.id !== lastUp){ lastUp = up.id; if(singerFor !== up.id){ $("singer").hidden = true; singerPinned = false; singerFor = null; } }

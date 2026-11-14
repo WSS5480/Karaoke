@@ -22,6 +22,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-14 KJ page: "Copy song" button on every waiting singer and "📋 Copy song" on the singer up now. Copies "Song Artist" for pasting into the karaoke software's search.
 - 2026-11-13 Four-app cleanup: Owner app (/owner, owner PIN) and Store Manager app (/manager) with tabs; switcher bar. New login type "Store manager" (owner adds it on the KJ page next to DJs): runs karaoke and the website menu, sees no money, analytics or logins. /api/kj/whoami added.
 - 2026-11-13 Fix a singer's name (KJ page card): rename a phone everywhere, or move ticked songs to another singer # (likes/posts move with songs; tips don't). Two-tap confirm, logged in setting `namefix:log`, one-tap Undo. Singer app: "Wrong name? Ask the DJ."
 - 2026-11-09 Logo never cropped; "(must be at The Dive)" on website sign-up buttons; likes limit 150/min with no pop-up; "Add to my phone" button; link previews use og.png; menu admin with AI menu reading (needs ANTHROPIC_API_KEY in Render).
