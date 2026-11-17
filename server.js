@@ -946,6 +946,26 @@ app.get("/api/photo/:id", wrap(async (req, res) => {
   const p = r && await getPhoto(r.device), b = p && photoSt(p) === "ok" && photoBytes(p); if (!b) return res.status(404).end();
   res.set({ "Content-Type": b.type, "Cache-Control": "public, max-age=600", "X-Content-Type-Options": "nosniff" }).send(b.buf);
 }));
+// A singer can change the name on their own phone. Everything stays tied to the phone (history, singer #, likes, posts);
+// only the name shown changes. Limits stop name games: 3 changes a day, and not to a name another phone has in line right now.
+app.post("/api/me/name", wrap(async (req, res) => {
+  const n = clean(req.body && req.body.name, 30), d = owner(req, res), dv = device(req, res), u = currentUser(req);
+  if (!n) return res.status(400).json({ error: "Type your name." });
+  const p = await getProfile(dv), oldName = (p && p.name) || "";
+  if (oldName && nameKey(oldName) === nameKey(n) && oldName === n) return res.json({ ok: true, name: n });
+  let hist = []; try { hist = JSON.parse((await db.getSetting("namechg:" + d)) || "[]"); } catch (e) {}
+  hist = hist.filter(t => Date.now() - t < 864e5);
+  if (hist.length >= 3) return res.status(429).json({ error: "You've changed your name 3 times today. Ask the DJ if it still isn't right." });
+  const nk = nameKey(n);
+  if ((await db.active()).some(r => r.device !== d && nameKey(r.name) === nk)) return res.status(409).json({ error: n + " is already on the list on another phone. Add your last initial (like " + n + " R)." });
+  const rows = await db.allByDevice(d), before = rows.map(r => ({ id: r.id, device: r.device, name: r.name }));
+  for (const r of rows) if (r.name !== n) await db.rename(r.id, n);
+  await setProfile(dv, { ...(p || {}), name: n });
+  if (u) await db.setCustomerName(u, n);
+  hist.push(Date.now()); await db.setSetting("namechg:" + d, JSON.stringify(hist));
+  await saveNameFix({ id: crypto.randomBytes(6).toString("hex"), at: new Date().toISOString(), by: "the singer", kind: "rename", device: d, rows: before, names: { [d]: oldName }, text: "Singer changed their name" + (oldName ? " from " + oldName : "") + " to " + n + " (" + rows.length + " songs)" });
+  res.json({ ok: true, name: n });
+}));
 app.get("/api/me", wrap(async (req, res) => {
   const u = currentUser(req), c = u ? await db.customer(u) : null, p = await getProfile(device(req, res));
   const dv = device(req, res);

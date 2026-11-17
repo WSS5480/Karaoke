@@ -2052,7 +2052,7 @@ async function loadMe(){
     termsV = j.terms || ""; termsAccepted = !!j.termsOk; $("termsHint").hidden = !termsAccepted;
     paintPhoto(j.photo, j.photoSt, j.photoLock);
     loadLists();
-    if(j.profileName){ $("name").value = j.profileName; $("name").readOnly = true; $("nameLock").hidden = false; $("nameLock").textContent = "This phone signs up as " + j.profileName + ". One person per phone. Wrong name? Ask the DJ."; }
+    if(j.profileName){ $("name").value = j.profileName; $("name").readOnly = true; $("nameLock").hidden = false; $("nameLock").textContent = "This phone signs up as " + j.profileName + ". One person per phone. "; $("nameLock").appendChild(nameChgBtn()); }
     if(authOn && !me) showAuth("stepPhone");
     else if(me && !me.name) showAuth("stepName");
     else showAuth(null);
@@ -2352,6 +2352,21 @@ $("nowPop").checked = popOn;
 $("nowPop").addEventListener("change", () => { popOn = $("nowPop").checked; try{ localStorage.setItem("dive_singalong", popOn ? "1" : "0"); }catch(e){} });
 let prevUp = null;   // who was singing, so we know when their song ends
 /* crowd likes */
+// change my name: the phone keeps its history, singer # and likes; only the name changes (everywhere, past songs too)
+function nameChgBtn(){
+  const b = document.createElement("button"); b.type = "button"; b.className = "linkbtn"; b.textContent = esp ? "Cambiar mi nombre" : "Change my name";
+  b.style.cssText = "background:none;border:0;padding:0;color:var(--green-hi);font:inherit;text-decoration:underline;cursor:pointer";
+  b.addEventListener("click", async () => {
+    const cur = $("name").value, n = prompt(esp ? "Tu nombre (se cambia en todas tus canciones):" : "Your name (changes on all your songs):", cur);
+    if(n === null || !n.trim() || n.trim() === cur) return;
+    try{ const r = await fetch("/api/me/name", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: n.trim() }) }); const j = await r.json().catch(() => ({}));
+      if(!r.ok){ alert(j.error || "That didn't work. Try again."); return; }
+      $("name").value = j.name; $("nameLock").textContent = (esp ? "Este teléfono se anota como " : "This phone signs up as ") + j.name + (esp ? ". Una persona por teléfono. " : ". One person per phone. "); $("nameLock").appendChild(nameChgBtn());
+      try{ refresh(); }catch(e){}
+    }catch(e){ alert("No connection. Try again."); }
+  });
+  return b;
+}
 const likeBusy = new Set();   // one request per singer at a time, so liking down the list never gets dropped
 async function sendLike(id, on){
   if(likeBusy.has(id)) return; likeBusy.add(id);

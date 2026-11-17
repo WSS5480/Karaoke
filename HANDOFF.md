@@ -22,6 +22,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-16 Singers can change their own name: "Change my name" under the name on the singer app (POST /api/me/name). Name changes on the phone and all its past songs; history, singer #, likes, posts stay with the phone. Limits: 3 changes a day; not to a name another phone has in line. Logged in `namefix:log`, so the DJ can Undo from Fix a singer's name.
 - 2026-11-14 KJ page: "Copy song" button on every waiting singer and "📋 Copy song" on the singer up now. Copies "Song Artist" for pasting into the karaoke software's search.
 - 2026-11-13 Four-app cleanup: Owner app (/owner, owner PIN) and Store Manager app (/manager) with tabs; switcher bar. New login type "Store manager" (owner adds it on the KJ page next to DJs): runs karaoke and the website menu, sees no money, analytics or logins. /api/kj/whoami added.
 - 2026-11-13 Fix a singer's name (KJ page card): rename a phone everywhere, or move ticked songs to another singer # (likes/posts move with songs; tips don't). Two-tap confirm, logged in setting `namefix:log`, one-tap Undo. Singer app: "Wrong name? Ask the DJ."
@@ -30,7 +31,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 
 ## Decisions
 - 2026-11-13 Store managers see no money (tips, move-ups) and no all-time analytics; only the owner does. Owner/Manager buttons show only on staff phones.
-- 2026-11-13 Singers can't rename themselves (stops impersonation); only owner/DJs fix names. Reason: protect history and likes.
+- 2026-11-16 (replaces 2026-11-13) Singers may change their own name; it stays locked to their phone. Reason: Steve asked. Guards: 3 a day, no taking a name in line on another phone, DJ can undo.
 - 2026-11-09 DJ may drag a locked singer down; locks only stop move-ups and new sign-ups.
 - 2026-11-08 KJ Total Package App is a later build: Render service suspended, code stays on GitHub; stop syncing Dive changes into it.
 - 2026-11-08 ACASA workspace is live and must not be touched. Catalog app belongs in MY APPS.
