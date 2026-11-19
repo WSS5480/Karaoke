@@ -1140,13 +1140,17 @@ $("form").addEventListener("submit", async e => {
 /* Change my song: borrow the sign-up form's song + artist boxes (with their search lists), then hand them back */
 const songField = $("song").closest(".field"), artistField = $("artist").closest(".field");
 const songHome = document.createComment("song"), artistHome = document.createComment("artist");
-songField.before(songHome); artistField.before(artistHome);
+const withField = $("withRow"), withHome = document.createComment("with");
+songField.before(songHome); artistField.before(artistHome); withField.before(withHome);
 let editDraft = null;
 function resetPick(){ $("artistPick").hidden = true; $("artist").hidden = false; $("artistHint").hidden = true; $("sugg").hidden = true; $("asugg").hidden = true; }
 function openEdit(song, artist, focus){
   const f = $("editForm");
   if(!editDraft) editDraft = { song: $("song").value, artist: $("artist").value, mine: artistMine, chosen: artistChosen };
   f.insertBefore(songField, $("editSave")); f.insertBefore(artistField, $("editSave"));
+  // singing with someone: change or add a partner while waiting (same picker as sign-up)
+  if(!withField.hidden){ f.insertBefore(withField, $("editSave")); const wn = (mine && mine.withNum) || "";
+    $("withChk").checked = !!wn; $("withBox").hidden = !wn; $("withNum").value = wn; $("withPick").value = ""; $("withFind").value = ""; if(wn) loadPick(); }
   resetPick(); $("song").value = song || ""; $("artist").value = artist || "";
   artistMine = false; artistChosen = "";   // the current artist clears once they type a new song, so the list searches every artist
   paintClr(); $("editErr").textContent = ""; f.hidden = false;
@@ -1156,6 +1160,7 @@ function closeEdit(){
   $("editForm").hidden = true;
   if(!editDraft) return;
   songHome.after(songField); artistHome.after(artistField); resetPick();
+  if(withField.parentNode === $("editForm")){ withHome.after(withField); $("withChk").checked = false; $("withBox").hidden = true; $("withNum").value = ""; $("withPick").value = ""; $("withFind").value = ""; }
   $("song").value = editDraft.song; $("artist").value = editDraft.artist; artistMine = editDraft.mine; artistChosen = editDraft.chosen;
   editDraft = null; paintClr();
 }
@@ -1169,7 +1174,7 @@ $("editForm").addEventListener("submit", async e => {
   if(!song){ $("editErr").textContent = "Enter the song."; $("song").focus(); return; }
   if(!$("artistPick").hidden && !$("artistPick").value){ $("editErr").textContent = "Pick which artist's version you're singing."; $("artistPick").focus(); return; }
   $("editSave").disabled = true;
-  try{ const r = await fetch("/api/mysong", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song, artist }) }); const j = await r.json().catch(() => ({}));
+  try{ const r = await fetch("/api/mysong", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ song, artist }, withField.parentNode === $("editForm") ? { with: $("withChk").checked ? $("withNum").value.replace(/\D/g, "") : "" } : {})) }); const j = await r.json().catch(() => ({}));
     if(!r.ok) throw new Error(j.error || "Couldn't save. Try again."); closeEdit(); refresh(); }
   catch(err){ $("editErr").textContent = err.message; }
   $("editSave").disabled = false;

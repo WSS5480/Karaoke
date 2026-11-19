@@ -687,7 +687,7 @@ app.get("/api/queue", wrap(async (req, res) => {
   const last = mine ? null : await lastSungWith(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
   res.json({ venue: TEN().venue || "", closeHour: Number(TEN().closeHour ?? 2), shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), dj: await djPublic(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(), mask = req.query.g === "1" && (await db.getSetting("mask_line")) !== "off"; let wn = 0;   // singer app: hide everyone after #5 except the phone's own song (managers turn it off on the KJ page)
-      return (await withPhotos(list.map(publicRow), list)).map(r => { if (r.status === "queued" && ++wn > LOCK_TOP && mask && !(mine && r.id === mine.id)) return { id: r.id, status: "queued", masked: true }; return paid.has(r.id) ? { ...r, paid: true } : r; }); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
+      return (await withPhotos(list.map(publicRow), list)).map(r => { if (r.status === "queued" && ++wn > LOCK_TOP && mask && !(mine && r.id === mine.id)) return { id: r.id, status: "queued", masked: true }; return paid.has(r.id) ? { ...r, paid: true } : r; }); })(), mine: mine ? { ...publicRow(mine), withNum: await (async () => { const pk = await duetPartner(mine.id); return pk ? await singerNum(numKeyOf(pk)) : ""; })(), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
     last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, mine) });
 }));
 
@@ -810,7 +810,27 @@ app.post("/api/mysong", wrap(async (req, res) => {
   if (mine.status === "up") return res.status(409).json({ error: "You're up! Ask the DJ to change it." });
   const song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!song) return res.status(400).json({ error: "Enter the song." });
-  await db.setSong(mine.id, song, artist); await setNoSong(mine.id, false); await clearRepeat(mine.id); res.json({ ok: true });
+  // singing with someone: add, change or drop the duet partner while waiting (sent only when the "Singing with someone?" box was shown)
+  let duet = null;
+  if (req.body.with !== undefined) {
+    const wn = String(req.body.with || "").replace(/\D/g, ""), oldPk = await duetPartner(mine.id);
+    let pk = "", pname = "";
+    if (wn) {
+      pk = await ownerOfNum(wn);
+      if (!pk) return res.status(400).json({ error: "That singer number isn't right. Ask your partner to check it in their app." });
+      if (pk === d || pk === mine.device) return res.status(400).json({ error: "That's your own number. Enter your partner's." });
+      pname = await nameOfOwner(pk);
+    }
+    if (pk !== oldPk) {
+      let base = mine.name; if (oldPk) { const on = await nameOfOwner(oldPk); if (on && base.endsWith(" & " + on)) base = base.slice(0, -(on.length + 3)); }
+      if (oldPk) { await db.setSetting("duet:" + mine.id, ""); await db.setSetting("duets:" + oldPk, JSON.stringify((await duetIds(oldPk)).filter(x => x !== mine.id))); }
+      if (pk) { await db.setSetting("duet:" + mine.id, pk); const L = (await duetIds(pk)).filter(x => x !== mine.id); L.push(mine.id); await db.setSetting("duets:" + pk, JSON.stringify(L.slice(-200))); }
+      duet = clean(pname ? base + " & " + pname : base, 60);
+    }
+  }
+  await db.setSong(mine.id, song, artist); await setNoSong(mine.id, false); await clearRepeat(mine.id);
+  if (duet && duet !== mine.name) await db.rename(mine.id, duet);
+  res.json({ ok: true });
 }));
 app.post("/api/cancel", wrap(async (req, res) => {
   const d = owner(req, res), mine = await db.byDevice(d);
@@ -2389,6 +2409,17 @@ app.post("/api/staff-list", wrap(async (req, res) => {
   const ok = await pinIs("list", req.body.pin);
   if (!ok) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ ok: false, error: "Wrong PIN." }); }
   res.json({ ok: true });
+}));
+// Owner app: change the owner PIN (the "list" PIN that opens /owner, /watch, Analytics). Needs the current one.
+// The new PIN is kept hashed in settings and wins over STAFF_LIST_PIN in Render.
+app.post("/api/owner/pin", wrap(async (req, res) => {
+  const t = Date.now(), l = (listTries.get(req.ip) || []).filter(x => t - x < 600000);
+  if (l.length >= 10) return res.status(429).json({ error: "Too many tries. Wait 10 minutes." });
+  if (!(await pinIs("list", req.body.current))) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "The current owner PIN isn't right." }); }
+  const pin = String(req.body.pin || "").replace(/\D/g, "");
+  if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "New PIN must be 4 to 8 digits." });
+  if (pin === TEMP_PIN || (await getHosts()).some(h => h.pin === pin) || await pinIs("house", pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
+  await setOwnerPin("list", pin); audit("App owner", "owner", "Changed the owner PIN"); res.json({ ok: true });
 }));
 app.post("/api/kj-lyrics", kjAuth, auditKj, wrap(async (req, res) => {
   await db.setSetting("lyrics", req.body.on ? "on" : "off"); res.json({ ok: true });
