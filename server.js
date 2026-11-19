@@ -1947,7 +1947,27 @@ app.post("/api/kj/:id/song", wrap(async (req, res) => {
   if (!row) return res.status(404).json({ error: "That singer isn't on the list anymore." });
   const song = clean(req.body.song, 80), artist = clean(req.body.artist, 60);
   if (!song) return res.status(400).json({ error: "Enter the song." });
-  await db.setSong(id, song, artist); await setNoSong(id, false); await clearRepeat(id); res.json({ ok: true });
+  // DJ: who they sing with. A 6-digit singer # links the duet (song shows in both lists); a name just goes on the line; blank = solo
+  let newName = null;
+  if (req.body.with !== undefined) {
+    const w = String(req.body.with || "").trim(), oldPk = await duetPartner(id);
+    let base = row.name; const on = oldPk ? await nameOfOwner(oldPk) : "";
+    if (oldPk && on && base.endsWith(" & " + on)) base = base.slice(0, -(on.length + 3)); else if (base.includes(" & ")) base = base.split(" & ")[0];
+    let pk = "", pname = "";
+    if (/^\d{6}$/.test(w)) {
+      pk = await ownerOfNum(w); if (!pk) return res.status(400).json({ error: "No singer has #" + w + ". Check the number, or type their name instead." });
+      if (pk === row.device) return res.status(400).json({ error: "That's this singer's own number." });
+      pname = await nameOfOwner(pk);
+    } else if (w) pname = cleanName(w, 30);
+    if (pk !== oldPk) {
+      if (oldPk) { await db.setSetting("duet:" + id, ""); await db.setSetting("duets:" + oldPk, JSON.stringify((await duetIds(oldPk)).filter(x => x !== id))); }
+      if (pk) { await db.setSetting("duet:" + id, pk); const L = (await duetIds(pk)).filter(x => x !== id); L.push(id); await db.setSetting("duets:" + pk, JSON.stringify(L.slice(-200))); }
+    }
+    newName = clean(pname ? base + " & " + pname : base, 60);
+  }
+  await db.setSong(id, song, artist); await setNoSong(id, false); await clearRepeat(id);
+  if (newName && newName !== row.name) await db.rename(id, newName);
+  res.json({ ok: true });
 }));
 /* ---------- Fix a singer's name (owner + DJs): rename a phone everywhere, or move songs that were really someone else's.
    Everything hangs off the song entries, so likes, posts, the wall and duets follow the song. Tips stay with whoever paid.

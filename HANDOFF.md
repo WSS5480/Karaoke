@@ -22,6 +22,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-18 KJ page "Edit song / duet": third prompt "Singing with?" takes a name (just shown on the line) or a 6-digit singer # (links the duet, song in both lists); blank = solo. POST /api/kj/:id/song takes `with`. Singer app button renamed "Change song / add duet".
 - 2026-11-18 Developer PIN: Steve's PIN from Render (DEV_PIN, else STAFF_LIST_PIN) always passes the owner check at The Dive (isDevPin in pinIs("list") and whoIs, signs in as "Developer"), even after the owner PIN is changed in Team & PINs. Nobody can set a house/bar/owner/DJ PIN equal to it.
 - 2026-11-18 Singer app asks about phone alerts every time it opens (and after 10+ min away) for anyone without alerts on, even if they said no before (#pushAsk modal): Turn on (asks the phone), blocked → how to unblock in settings, iPhone in browser → Add to Home Screen guide.
 - 2026-11-18 Singer app pinned bars: shout-out, band pause and the ad now pin as one `.topbars` block (they overlapped before); Now singing sticks under it (--tbh), and the My time to sing clock is placed under whatever is pinned.

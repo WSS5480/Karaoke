@@ -664,8 +664,8 @@ function item(r, i, waiting){
     const mk = (label, action, cls) => { const x = document.createElement("button"); x.textContent = label; if(cls) x.className = cls; x.addEventListener("click", () => act(`/api/kj/${r.id}/${action}`)); return x; };
     const fix = document.createElement("button"); fix.textContent = "Fix name";
     fix.addEventListener("click", () => { const n = window.prompt("Correct name for this singer (also fixes their phone):", r.name); if(n && n.trim()) act(`/api/kj/${r.id}/rename`, { name: n.trim() }); });
-    const fs = document.createElement("button"); fs.textContent = "Edit song";
-    fs.addEventListener("click", () => { const so = prompt("Song for " + r.name + ":", r.song); if(so === null || !so.trim()) return; const ar = prompt("Artist (optional):", r.artist || ""); if(ar === null) return; act(`/api/kj/${r.id}/song`, { song: so.trim(), artist: ar.trim() }); });
+    const fs = document.createElement("button"); fs.textContent = "Edit song / duet";
+    fs.addEventListener("click", () => { const so = prompt("Song for " + r.name + ":", r.song); if(so === null || !so.trim()) return; const ar = prompt("Artist (optional):", r.artist || ""); if(ar === null) return; const cur = String(r.name || "").includes(" & ") ? String(r.name).split(" & ").slice(1).join(" & ") : ""; const w = prompt("Singing with? Type their name or 6-digit singer # (singer # puts the song in both of their lists). Leave blank for solo.", cur); if(w === null) return; act(`/api/kj/${r.id}/song`, { song: so.trim(), artist: ar.trim(), with: w.trim() }); });
     const mv = document.createElement("button"); mv.textContent = "Move to #";
     mv.addEventListener("click", async () => {
       const n = prompt("Move " + r.name + " to which spot in line? (" + (LOCK_TOP + 1) + " or later; the next " + LOCK_TOP + " are locked)", String(i + 1)); if(n === null) return; const v = parseInt(n, 10); if(!(v >= 1)) return;
