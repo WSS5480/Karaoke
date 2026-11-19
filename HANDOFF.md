@@ -22,6 +22,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-18 Singer app line: only the singer up and #1-3, nothing else (not even the phone's own song when it's #4+; its spot and time show in the My song card).
 - 2026-11-18 KJ page: the pinned Shout-outs bar and Pause-for-band bar overlapped (band bar was pinned at a fixed 52px under a taller shout bar). Both now sit in one sticky `.topbars` wrapper; the floating "Last song ends" clock is placed just under it by JS.
 - 2026-11-18 Owner app "Team & PINs" tab (/owner/team, team.html): add store managers/DJs with a starting PIN, change a login's PIN, make manager/DJ (new POST /api/kj/hosts/role), turn off, remove; change the Owner PIN (POST /api/owner/pin, needs current; hashed `list_pin` wins over STAFF_LIST_PIN), House PIN (/api/kj/my-pin) and Bar Owner PIN (/api/bar/pin). Fixed GET /api/kj/hosts returning managers as "dj". Owner sets PINs himself; never type his PINs into Render or code.
 - 2026-11-18 Singers can add, change or drop a duet partner when they edit their song ("Change my song" now shows "Singing with someone?" with the same picker as sign-up). POST /api/mysong takes `with` (partner's singer #, "" = solo); renames the row "Name & Partner" and moves the duet link. `mine.withNum` pre-fills the box.
