@@ -58,7 +58,8 @@ a{color:var(--green-hi)}
 </head>
 <body>
 <main>
-  <header><img src="/logo.png" alt="The Dive on 495"><h1>Daily ads</h1><a href="/kj">← Queue</a></header>
+  <header><img src="/logo.png" alt="The Dive on 495"><h1>Daily ads</h1><a href="/kj" id="backQ">← Queue</a></header>
+  <script>try{ if(window.top !== window) document.getElementById("backQ").hidden = true; }catch(e){}</script>
 
   <section class="card" id="login">
     <h2>Host PIN</h2>

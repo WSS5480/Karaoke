@@ -5,6 +5,7 @@
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(function () {});
   var standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   if (standalone) return;
+  try { if (window.top !== window) return; } catch (e) { return; }   // inside the Owner / Manager app tabs: no install bar
   var name = (document.querySelector('meta[name="apple-mobile-web-app-title"]') || {}).content || "The Dive";
   var icon = (document.querySelector('link[rel="apple-touch-icon"]') || {}).href || "/logo.png";
   var KEY = "dive_install_x_" + location.pathname;

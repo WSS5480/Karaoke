@@ -1336,8 +1336,10 @@ app.get("/api/promos", wrap(async (req, res) => {
   const d = barDay();
   res.json({ items: (await getPromos()).filter(p => promoLive(p, d)).map(({ id, title, text, img }) => ({ id, title, text, img })) });
 }));
-app.get("/api/kj/promos", wrap(async (req, res) => { const d = barDay(); res.json({ items: (await getPromos()).map(p => ({ ...p, live: promoLive(p, d) })), today: d }); }));
+app.get("/api/kj/promos", wrap(async (req, res) => {
+  if (isDjOnly(req)) return res.status(403).json({ error: "Only a manager or the owner can change the ads." }); const d = barDay(); res.json({ items: (await getPromos()).map(p => ({ ...p, live: promoLive(p, d) })), today: d }); }));
 app.post("/api/kj/promos", wrap(async (req, res) => {
+  if (isDjOnly(req)) return res.status(403).json({ error: "Only a manager or the owner can change the ads." });
   const b = req.body || {}, clean = v => String(v || "").trim();
   const title = clean(b.title).slice(0, 60), text = clean(b.text).slice(0, 240);
   if (!title) return res.status(400).json({ error: "Add a headline." });
@@ -1351,6 +1353,7 @@ app.post("/api/kj/promos", wrap(async (req, res) => {
   await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true, item });
 }));
 app.post("/api/kj/promos/remove", wrap(async (req, res) => {
+  if (isDjOnly(req)) return res.status(403).json({ error: "Only a manager or the owner can change the ads." });
   const list = (await getPromos()).filter(p => p.id !== String((req.body || {}).id));
   await db.setSetting("promos", JSON.stringify(list)); res.json({ ok: true });
 }));

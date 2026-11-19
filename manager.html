@@ -63,6 +63,7 @@ iframe{flex:1;width:100%;border:0;background:var(--bg)}
   const TABS = [
     ["karaoke", "Karaoke tonight", "/kj"],
     ["site", "Website menu", "/menu-admin"],
+    ["ads", "Ads banner", "/ads"],
     ["tv", "TV screen", "/tv"]
   ];  const ss = (k, v) => { try { v === undefined ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch(e){} };
   const sg = k => { try { return sessionStorage.getItem(k) || ""; } catch(e){ return ""; } };
