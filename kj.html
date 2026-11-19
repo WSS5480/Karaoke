@@ -338,7 +338,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
         <button id="togglePhone" hidden></button>
         <button id="togglePhotoReview"></button>
         <button id="toggleLyrics" title="Lyrics buttons in the customer app"></button>
-        <button id="toggleMask" title="Singer app shows #1-5 and the singer's own spot; everyone after #5 is hidden" hidden></button>
+        <button id="toggleMask" title="Singer app shows #1-5 and the singer's own spot; everyone after the locked top is hidden" hidden></button>
         <a href="/stats">Analytics</a>
         <a href="/history">Customer history</a>
         <a href="/ads">Daily ads</a>
@@ -626,8 +626,8 @@ function copySong(r, btn){
   const old = () => { const ta = document.createElement("textarea"); ta.value = txt; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length); try{ document.execCommand("copy"); done(); }catch(e){ prompt("Copy this:", txt); } ta.remove(); };
   if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, old); else old();
 }
-const LOCK_TOP = 5;
-const canMask = () => !!(state && state.me && state.me.role !== "dj");   // hiding the line from singers: managers and above only   // on stage + the next 5 are locked (server enforces it too)
+const LOCK_TOP = 3;   // on stage + the next 3 are locked (server enforces it too)
+const canMask = () => !!(state && state.me && state.me.role !== "dj");   // hiding the line from singers: managers and above only
 // rows look like the singer app: number, photo, name, song. The DJ's buttons open with ⋯ and stay open while they work on that singer.
 const openRows = new Set();
 function item(r, i, waiting){
@@ -785,7 +785,7 @@ function render(){
   $("toggleOpen").textContent = state.open ? "Close sign-ups" : "Open sign-ups";
   $("multiChk").checked = !state.multi;
   $("toggleLyrics").textContent = state.lyrics === false ? "Lyrics: off" : "Lyrics: on";
-  $("toggleMask").hidden = !canMask(); $("toggleMask").textContent = state.maskLine === false ? "Singers see whole line" : "Singers see top 5 only";
+  $("toggleMask").hidden = !canMask(); $("toggleMask").textContent = state.maskLine === false ? "Singers see whole line" : "Singers see top " + LOCK_TOP + " only";
   $("togglePhone").hidden = !state.twilioReady;
   $("togglePhone").textContent = state.phoneSignin ? "Phone sign-in: on" : "Phone sign-in: off";
   const wait = (state.queue || []).filter(x => x.photo && x.photoSt === "pending").length;

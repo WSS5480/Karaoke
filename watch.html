@@ -201,7 +201,7 @@ function pic(r, big){
   return im;
 }
 function row(r, n){
-  const li = document.createElement("li"); if(r.status === "queued" && (r.paid || (typeof n === "number" && n <= 5))) li.classList.add("locked");   // paid spots + the locked top 5 (LOCK_TOP in server.js)
+  const li = document.createElement("li"); if(r.status === "queued" && (r.paid || (typeof n === "number" && n <= 3))) li.classList.add("locked");   // paid spots + the locked top 3 (LOCK_TOP in server.js)
   const a = document.createElement("span"); a.className = "n"; a.textContent = n;
   const t = document.createElement("div"); t.className = "t";
   const b = document.createElement("b"); b.textContent = r.name + (r.likes ? "  ❤️ " + r.likes : "");
