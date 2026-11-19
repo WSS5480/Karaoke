@@ -30,10 +30,6 @@ iframe{flex:1;width:100%;border:0;background:var(--bg)}
 .gate p{color:var(--mute);margin:0 0 16px}
 .gate input{width:100%;font:inherit;font-size:22px;letter-spacing:.3em;text-align:center;padding:14px;border-radius:12px;border:1px solid var(--line);background:#0d1310;color:var(--ink)}
 .gate button{margin-top:12px;width:100%;min-height:50px;border-radius:999px;border:0;background:var(--green);color:#041206;font:inherit;font-weight:800;font-size:17px;cursor:pointer}
-.pinbox{display:flex;flex-direction:column;gap:8px;padding:12px;border-bottom:1px solid var(--line);background:#0d1410}
-.pinbox input{font:inherit;font-size:20px;letter-spacing:.2em;text-align:center;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0b100d;color:var(--ink)}
-.pinbox .pb{display:flex;gap:8px}.pinbox .pb button{flex:1;min-height:46px;border-radius:999px;border:0;background:var(--green);color:#041206;font:inherit;font-weight:800;cursor:pointer}
-.pinbox .pb .ghost{background:transparent;border:1px solid #2f4a38;color:var(--ink)}
 .err{color:var(--red);font-weight:600;min-height:1.4em;margin-top:10px}
 </style>
 </head>
@@ -59,13 +55,6 @@ iframe{flex:1;width:100%;border:0;background:var(--bg)}
 </form>
 
 <div class="tabs" id="tabs" role="tablist" aria-label="Owner sections" hidden></div>
-<form class="pinbox" id="pinBox" hidden novalidate>
-  <b>Change owner PIN</b>
-  <input id="newPin" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" placeholder="New PIN (4–8 digits)" aria-label="New owner PIN">
-  <input id="newPin2" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" placeholder="Type it again" aria-label="New owner PIN again">
-  <div class="pb"><button type="submit">Save PIN</button><button type="button" id="pinCancel" class="ghost">Cancel</button></div>
-  <p class="err" id="pinErr" role="alert"></p>
-</form>
 <iframe id="view" title="Owner section" hidden></iframe>
 
 <script>
@@ -78,6 +67,7 @@ iframe{flex:1;width:100%;border:0;background:var(--bg)}
     ["singers", "Singers", "/history"],
     ["karaoke", "Karaoke & DJs", "/kj"],
     ["site", "Website", "/menu-admin"],
+    ["team", "Team & PINs", "/owner/team"],
     ["settings", "Settings", "/setup"],
     ["links", "Links", "/owner/links"]
   ];
@@ -97,10 +87,7 @@ iframe{flex:1;width:100%;border:0;background:var(--bg)}
     $("gate").hidden = true; $("tabs").hidden = false; $("view").hidden = false;
     const t = $("tabs"); t.textContent = "";
     TABS.forEach(([id, label, src]) => { const b = document.createElement("button"); b.type = "button"; b.role = "tab"; b.textContent = label; b.dataset.id = id; b.addEventListener("click", () => show(id)); t.appendChild(b); });
-    const pb = document.createElement("button"); pb.type = "button"; pb.className = "out"; pb.textContent = "🔑 PIN";
-    pb.addEventListener("click", () => { $("pinBox").hidden = !$("pinBox").hidden; $("pinErr").textContent = ""; if(!$("pinBox").hidden) $("newPin").focus(); });
-    t.appendChild(pb);
-    const out = document.createElement("button"); out.type = "button"; out.textContent = "Sign out"; out.style.color = "var(--mute)";
+    const out = document.createElement("button"); out.type = "button"; out.className = "out"; out.textContent = "Sign out";
     out.addEventListener("click", () => { ["kj_pin", "watch_pin", "bar_pin", "dive_staff_pin", "dive_menu_pin", "dive_owner_pin", "kj_name", "bar_name"].forEach(k => ss(k)); location.reload(); });
     t.appendChild(out);
     const want = (location.hash || "").slice(1);
@@ -112,19 +99,6 @@ iframe{flex:1;width:100%;border:0;background:var(--bg)}
     if ($("view").dataset.src !== tab[2]) { $("view").dataset.src = tab[2]; $("view").src = tab[2]; }
     lg("dive_owner_tab", tab[0]); history.replaceState(null, "", "#" + tab[0]);
   }
-  $("pinCancel").addEventListener("click", () => { $("pinBox").hidden = true; $("newPin").value = ""; $("newPin2").value = ""; });
-  $("pinBox").addEventListener("submit", async e => {
-    e.preventDefault(); const a = $("newPin").value.replace(/\D/g, ""), b = $("newPin2").value.replace(/\D/g, ""); $("pinErr").textContent = "";
-    if (a.length < 4) { $("pinErr").textContent = "Use 4 to 8 digits."; return; }
-    if (a !== b) { $("pinErr").textContent = "The two PINs don't match."; return; }
-    try {
-      const r = await fetch("/api/owner/pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ current: sg("dive_owner_pin"), pin: a }) });
-      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "Couldn't save. Try again.");
-      ["kj_pin", "watch_pin", "bar_pin", "dive_staff_pin", "dive_menu_pin", "dive_owner_pin"].forEach(k => ss(k, a));
-      $("newPin").value = ""; $("newPin2").value = ""; $("pinErr").style.color = "var(--green)"; $("pinErr").textContent = "Saved. Your owner PIN is now the new one.";
-      setTimeout(() => { $("pinBox").hidden = true; $("pinErr").style.color = ""; $("pinErr").textContent = ""; $("view").src = $("view").src; }, 1800);
-    } catch (er) { $("pinErr").textContent = er.message; }
-  });
   $("gate").addEventListener("submit", async e => {
     e.preventDefault(); $("err").textContent = "";
     const pin = $("pin").value.replace(/\D/g, ""); if (!pin) return;

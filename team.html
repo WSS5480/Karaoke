@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Team &amp; PINs · The Dive</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#070a08">
+<link rel="icon" href="/icon-192.png">
+<style>
+:root{--bg:#0b100d;--card:#111813;--line:#24332a;--ink:#f4efe4;--mute:#a9b5ad;--green:#39b54a;--green-hi:#5fd36e;--amber:#ffb547;--blue:#5bc0eb;--red:#ff6b6b}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:640px;margin:0 auto;padding:14px 14px 40px;display:flex;flex-direction:column;gap:14px}
+h1{margin:4px 0 0;font-size:24px}
+.sub{color:var(--mute);font-size:14px;margin:0}
+section{border:1px solid var(--line);border-radius:18px;background:var(--card);padding:14px;display:flex;flex-direction:column;gap:10px}
+section h2{margin:0;font-size:18px}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+li{border:1px solid var(--line);border-radius:14px;background:#0d1410;padding:12px;display:flex;flex-direction:column;gap:8px}
+li .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+li .top b{font-size:18px;overflow-wrap:anywhere}
+.tag{font-size:12px;font-weight:800;padding:3px 9px;border-radius:999px;background:#143a20;color:#7fe0a4}
+.tag.mgr{background:#0f2e3d;color:var(--blue)}.tag.off{background:#3a1414;color:var(--red)}.tag.new{background:#3a2a10;color:var(--amber)}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+button,select,input{font:inherit}
+button{min-height:42px;padding:8px 14px;border-radius:999px;border:1px solid #2f4a38;background:transparent;color:var(--ink);font-weight:700;cursor:pointer}
+button.go{background:var(--green);border-color:var(--green);color:#041206;font-weight:800}
+button.danger{color:var(--red);border-color:#5a2a2a}
+input,select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0b100d;color:var(--ink);font-size:16px}
+input.pin{letter-spacing:.2em;text-align:center;font-size:20px}
+.grid{display:flex;flex-wrap:wrap;gap:8px}.grid>*{flex:1 1 160px}
+.err{color:var(--red);font-weight:600;margin:0;min-height:0}
+.ok{color:var(--green-hi);font-weight:700;margin:0}
+.pinrow{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#0d1410}
+.pinrow .hd{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.pinrow .hd span{color:var(--mute);font-size:13px}
+.edit{display:flex;flex-direction:column;gap:8px}
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>Team &amp; PINs</h1>
+    <p class="sub">Store managers, DJs and the owner PINs. Only the owner sees this page.</p>
+  </div>
+  <p class="err" id="gateErr" hidden>Open this from the Owner app (/owner) with the owner PIN.</p>
+
+  <section id="teamCard" aria-labelledby="teamH">
+    <h2 id="teamH">Managers &amp; DJs</h2>
+    <p class="sub">A store manager runs karaoke and the website menu, and sees no money. A DJ runs the line only.</p>
+    <ul id="team"></ul>
+    <form id="addForm" class="edit" novalidate>
+      <b>Add a login</b>
+      <div class="grid">
+        <input id="addName" maxlength="30" placeholder="Name" aria-label="Name" autocomplete="off">
+        <select id="addRole" aria-label="Login type"><option value="manager">Store manager</option><option value="dj">DJ</option></select>
+      </div>
+      <input id="addPin" class="pin" inputmode="numeric" maxlength="8" placeholder="Starting PIN (4–8 digits)" aria-label="Starting PIN" autocomplete="off">
+      <p class="sub">Give them this PIN. They make their own the first time they sign in.</p>
+      <button class="go" type="submit">Add login</button>
+      <p class="err" id="addErr" role="alert"></p>
+    </form>
+  </section>
+
+  <section aria-labelledby="pinsH">
+    <h2 id="pinsH">Owner PINs</h2>
+    <div class="pinrow" data-kind="owner">
+      <div class="hd"><b>Owner PIN</b><span>Owner app, Tonight, Money, Analytics</span></div>
+    </div>
+    <div class="pinrow" data-kind="house">
+      <div class="hd"><b>House PIN</b><span>KJ page, full control</span></div>
+    </div>
+    <div class="pinrow" data-kind="bar">
+      <div class="hd"><b>Bar Owner PIN</b><span>Bar Owner app (/bar)</span></div>
+    </div>
+  </section>
+</main>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const sg = k => { try { return sessionStorage.getItem(k) || ""; } catch(e){ return ""; } };
+  const ss = (k, v) => { try { sessionStorage.setItem(k, v); } catch(e){} };
+  let PIN = sg("dive_owner_pin");
+  if (!PIN) { $("gateErr").hidden = false; document.querySelectorAll("section").forEach(s => s.hidden = true); return; }
+  async function api(path, body){
+    const r = await fetch(path, { method: body ? "POST" : "GET", cache: "no-store", headers: Object.assign({ "x-kj-pin": PIN, "x-bar-pin": PIN }, body ? { "Content-Type": "application/json" } : {}), body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "Something went wrong. Try again."); return j;
+  }
+  const btn = (txt, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (cls) b.className = cls; b.addEventListener("click", fn); return b; };
+  const digits = v => String(v || "").replace(/\D/g, "");
+
+  async function load(){
+    const ul = $("team"); let j;
+    try { j = await api("/api/kj/hosts"); } catch(e){ ul.innerHTML = ""; const li = document.createElement("li"); li.textContent = e.message; ul.appendChild(li); return; }
+    ul.innerHTML = "";
+    const list = j.hosts.filter(h => h.role !== "staff").sort((a, b) => (a.role === "manager" ? 0 : 1) - (b.role === "manager" ? 0 : 1) || a.name.localeCompare(b.name));
+    if (!list.length) { const li = document.createElement("li"); li.textContent = "No managers or DJs yet. Add one below."; ul.appendChild(li); }
+    list.forEach(h => {
+      const li = document.createElement("li"), top = document.createElement("div"); top.className = "top";
+      const b = document.createElement("b"); b.textContent = h.name;
+      const t = document.createElement("span"); t.className = "tag" + (h.role === "manager" ? " mgr" : ""); t.textContent = h.role === "manager" ? "Store manager" : "DJ";
+      top.append(b, t);
+      if (h.off) { const o = document.createElement("span"); o.className = "tag off"; o.textContent = "Turned off"; top.appendChild(o); }
+      if (!h.own) { const n = document.createElement("span"); n.className = "tag new"; n.textContent = "On starting PIN"; top.appendChild(n); }
+      const acts = document.createElement("div"); acts.className = "acts";
+      const msg = document.createElement("p"); msg.className = "err"; msg.setAttribute("role", "alert");
+      const edit = document.createElement("form"); edit.className = "edit"; edit.hidden = true; edit.noValidate = true;
+      const np = document.createElement("input"); np.className = "pin"; np.inputMode = "numeric"; np.maxLength = 8; np.placeholder = "New starting PIN"; np.setAttribute("aria-label", "New PIN for " + h.name);
+      const save = document.createElement("button"); save.className = "go"; save.type = "submit"; save.textContent = "Save new PIN";
+      edit.append(np, save);
+      edit.addEventListener("submit", async e => { e.preventDefault(); msg.className = "err"; msg.textContent = "";
+        const p = digits(np.value); if (p.length < 4) { msg.textContent = "Use 4 to 8 digits."; return; }
+        try { await api("/api/kj/hosts/reset", { name: h.name, pin: p }); msg.className = "ok"; msg.textContent = "Saved. Give " + h.name + " the new PIN; they'll make their own when they sign in."; edit.hidden = true; np.value = ""; setTimeout(load, 2500); }
+        catch(er){ msg.textContent = er.message; } });
+      acts.append(
+        btn("Change PIN", "", () => { edit.hidden = !edit.hidden; msg.textContent = ""; if (!edit.hidden) np.focus(); }),
+        btn(h.role === "manager" ? "Make DJ" : "Make manager", "", async () => { try { await api("/api/kj/hosts/role", { name: h.name, role: h.role === "manager" ? "dj" : "manager" }); load(); } catch(er){ msg.textContent = er.message; } }),
+        btn(h.off ? "Turn on" : "Turn off", "", async () => { try { await api("/api/kj/hosts/access", { name: h.name, on: !!h.off }); load(); } catch(er){ msg.textContent = er.message; } })
+      );
+      const rm = btn("Remove", "danger", async () => {
+        if (rm.dataset.armed !== "1") { rm.dataset.armed = "1"; rm.textContent = "Tap to confirm"; setTimeout(() => { rm.dataset.armed = ""; rm.textContent = "Remove"; }, 4000); return; }
+        try { await api("/api/kj/hosts/remove", { name: h.name }); load(); } catch(er){ msg.textContent = er.message; } });
+      acts.appendChild(rm);
+      li.append(top, acts, edit, msg); ul.appendChild(li);
+    });
+  }
+  $("addForm").addEventListener("submit", async e => {
+    e.preventDefault(); $("addErr").className = "err"; $("addErr").textContent = "";
+    const name = $("addName").value.trim(), pin = digits($("addPin").value), role = $("addRole").value;
+    if (!name) { $("addErr").textContent = "Enter a name."; return; }
+    if (pin.length < 4) { $("addErr").textContent = "Starting PIN: 4 to 8 digits."; return; }
+    try { await api("/api/kj/hosts", { name, pin, role }); $("addErr").className = "ok"; $("addErr").textContent = "Added " + name + ". Give them the PIN."; $("addName").value = ""; $("addPin").value = ""; load(); }
+    catch(er){ $("addErr").textContent = er.message; }
+  });
+
+  // owner, house and Bar Owner PINs
+  const PATH = { owner: "/api/owner/pin", house: "/api/kj/my-pin", bar: "/api/bar/pin" };
+  document.querySelectorAll(".pinrow").forEach(row => {
+    const kind = row.dataset.kind, msg = document.createElement("p"); msg.className = "err"; msg.setAttribute("role", "alert");
+    const f = document.createElement("form"); f.className = "edit"; f.hidden = true; f.noValidate = true;
+    const a = document.createElement("input"), b = document.createElement("input");
+    [a, b].forEach((x, i) => { x.className = "pin"; x.type = "password"; x.inputMode = "numeric"; x.maxLength = 8; x.autocomplete = "new-password"; x.placeholder = i ? "Type it again" : "New PIN (4–8 digits)"; x.setAttribute("aria-label", (i ? "Repeat new " : "New ") + kind + " PIN"); });
+    const sv = document.createElement("button"); sv.className = "go"; sv.type = "submit"; sv.textContent = "Save PIN";
+    f.append(a, b, sv);
+    const open = btn("Change", "", () => { f.hidden = !f.hidden; msg.textContent = ""; if (!f.hidden) a.focus(); });
+    row.querySelector(".hd").appendChild(open); row.append(f, msg);
+    f.addEventListener("submit", async e => {
+      e.preventDefault(); msg.className = "err"; msg.textContent = "";
+      const p = digits(a.value); if (p.length < 4) { msg.textContent = "Use 4 to 8 digits."; return; }
+      if (p !== digits(b.value)) { msg.textContent = "The two PINs don't match."; return; }
+      try {
+        await api(PATH[kind], kind === "owner" ? { current: PIN, pin: p } : { pin: p });
+        if (kind === "owner") { PIN = p; ["kj_pin", "watch_pin", "bar_pin", "dive_staff_pin", "dive_menu_pin", "dive_owner_pin"].forEach(k => ss(k, p)); }
+        a.value = ""; b.value = ""; f.hidden = true; msg.className = "ok"; msg.textContent = "Saved. The old PIN no longer works.";
+      } catch(er){ msg.textContent = er.message; }
+    });
+  });
+  load();
+})();
+</script>
+</body>
+</html>

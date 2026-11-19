@@ -1524,8 +1524,16 @@ const ownerOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.stat
 const staffOnly = (req, res, next) => req.kj && req.kj.admin ? next() : res.status(403).json({ error: "Only the owner can do that." });
 const adminOrManager = (req, res, next) => req.kj && (req.kj.admin || req.kj.role === "manager") ? next() : res.status(403).json({ error: "Only the owner or a store manager can do that." });
 app.get("/api/kj/whoami", (req, res) => res.json({ name: req.kj.name, role: req.kj.admin ? "owner" : req.kj.role }));
-app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { const out = []; for (const h of await getHosts()) out.push({ name: h.name, pin: "••••", role: h.role === "staff" ? "staff" : "dj", manager: false, off: h.off === true, logo: !!(await db.getSetting("djlogo:" + h.name)) }); res.json({ hosts: out }); }));
+app.get("/api/kj/hosts", staffOnly, wrap(async (req, res) => { const out = []; for (const h of await getHosts()) out.push({ name: h.name, pin: "••••", role: h.role === "staff" ? "staff" : h.role === "manager" ? "manager" : "dj", manager: h.role === "manager", own: h.own === true, off: h.off === true, logo: !!(await db.getSetting("djlogo:" + h.name)) }); res.json({ hosts: out }); }));
 // owner: turn a DJ's access off or back on (name and PIN stay saved); turning it off signs them out right away
+// owner: switch a login between DJ and Store manager (signs a DJ session out so the new type applies)
+app.post("/api/kj/hosts/role", ownerOnly, wrap(async (req, res) => {
+  const hosts = await getHosts(), h = hosts.find(x => x.name === String(req.body.name || ""));
+  if (!h) return res.status(404).json({ error: "Login not found." });
+  h.role = req.body.role === "manager" ? "manager" : "dj"; await db.setSetting("hosts", JSON.stringify(hosts));
+  await endDj(h.name, "The owner changed your login type. Sign in again."); audit("App owner", "owner", "Made " + h.name + " a " + (h.role === "manager" ? "store manager" : "DJ"));
+  res.json({ ok: true });
+}));
 app.post("/api/kj/hosts/access", staffOnly, wrap(async (req, res) => {
   const hosts = await getHosts(), h = hosts.find(x => x.name === String(req.body.name || ""));
   if (!h) return res.status(404).json({ error: "Login not found." });
@@ -2679,6 +2687,7 @@ app.get("/links/:group", (req, res) => {
 // The Dive's public website (menu, hours, live from the stage): only for The Dive itself
 app.get("/owner", (req, res) => sendPage(req, res, TEN().house ? "owner.html" : "staff.html"));
 app.get("/owner/links", (req, res) => sendPage(req, res, "staff.html"));
+app.get("/owner/team", (req, res) => sendPage(req, res, "team.html"));
 app.get("/manager", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "manager.html"); });
 app.get("/menu-admin", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "menuadmin.html"); });
 app.get("/site", (req, res) => { if (!TEN().house) return res.redirect(BASE() + "/"); sendPage(req, res, "site.html"); });
