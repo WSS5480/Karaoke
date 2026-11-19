@@ -22,6 +22,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-19 Singer app: the floating "My time to sing" clock (#myClk) is off (paintMyClock returns early). The singer's card still shows their # and how many are ahead; the time to sing isn't shown anywhere now (it was moved off the card earlier).
 - 2026-11-18 Ads banner (daily promos, /ads) is managers-and-above only: "Ads banner" tab in the Owner and Manager apps; Daily ads link removed from the KJ page; /api/kj/promos* return 403 to DJs. Inside the app tabs the ads page hides its ← Queue link, and install.js never shows the install bar in a frame.
 - 2026-11-18 Duet partners see the duet: /api/queue finds a row where this phone is the duet partner (duetIds + duetPartner). Partner with no song of their own gets it as `mine` with partner:true, by:<who signed up> ("Mags added you to sing with them"), no edit/cancel/move-up, sign-up form still open. Partner with their own song gets `myDuet` ("Also in line: duet with Mags at #2"). The row stays locked to the phone that signed it up (mysong/cancel/bump use byDevice). Being someone's partner never blocks your own sign-up.
 - 2026-11-18 KJ page "Edit song / duet": third prompt "Singing with?" takes a name (just shown on the line) or a 6-digit singer # (links the duet, song in both lists); blank = solo. POST /api/kj/:id/song takes `with`. Singer app button renamed "Change song / add duet".
@@ -46,6 +47,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - 2026-11-08 Public website at /site wired to live karaoke data; "Menu, hours & more" button on singer app.
 
 ## Decisions
+- 2026-11-19 No floating time banner on the singer app. Reason: Steve asked.
 - 2026-11-18 Only managers and above set the ads banner; DJs can't. Reason: Steve asked.
 - 2026-11-18 A singer can be on the list twice: their own song plus a duet someone else signed up. The duet belongs to the phone that signed it up; the partner only sees it. Reason: Steve asked.
 - 2026-11-18 Steve's developer PIN must keep working everywhere; the bar's owner PIN can change separately. Reason: Steve asked.

@@ -928,6 +928,7 @@ const byArtist = (sa, art) => { const a = norm(sa || ""); return a === art || a.
 let artistChosen = "";   // set only when the guest picks an artist from the artist list
 function paintMyClock(m){
   const el = $("myClk"); if(!el) return;
+  el.hidden = true; return;   // Steve 2026-11-19: no floating "My time to sing" banner on the singer app
   const e = m && m.eta;
   if(!m || m.status !== "queued" || !e || !e.at){ el.hidden = true; return; }
   const ahead = typeof m.spot === "number" ? m.spot : null;
