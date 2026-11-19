@@ -1274,7 +1274,7 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
   let wn = 0;
   data.queue.forEach((r, i) => {
     const li = document.createElement("li"); if(r.status === "up") li.classList.add("up"); if(mine && r.id === mine.id) li.classList.add("me"); const n = document.createElement("span"); n.className = "n"; n.textContent = r.status === "up" ? "▶" : ++wn;
-    if(r.status === "queued" && (r.paid || wn <= 5)) li.classList.add("locked");   // next 5 are locked (LOCK_TOP in server.js), plus paid spots
+    // locks (top 5 and paid spots) show only on the KJ page and staff views, never in the singer line
     const t = document.createElement("div"); t.className = "t";
     const b = document.createElement("b"); b.textContent = r.name;
     const s = document.createElement("span"); s.textContent = r.song + (r.artist ? " – " + r.artist : "");
