@@ -22,6 +22,8 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-18 Singer app asks about phone alerts every time it opens (and after 10+ min away) for anyone without alerts on, even if they said no before (#pushAsk modal): Turn on (asks the phone), blocked → how to unblock in settings, iPhone in browser → Add to Home Screen guide.
+- 2026-11-18 Singer app pinned bars: shout-out, band pause and the ad now pin as one `.topbars` block (they overlapped before); Now singing sticks under it (--tbh), and the My time to sing clock is placed under whatever is pinned.
 - 2026-11-18 The Dive's House PIN is now a store manager login (whoIs returns role manager, house:true, admin:false): karaoke + website menu, no money/analytics/logins. Owner powers come from the owner PIN (list PIN). House PIN is changed by the owner in Team & PINs (its own "Change my PIN" is hidden). Other bars: house = account PIN, still full control.
 - 2026-11-18 Singer app line: only the singer up and #1-3, nothing else (not even the phone's own song when it's #4+; its spot and time show in the My song card).
 - 2026-11-18 KJ page: the pinned Shout-outs bar and Pause-for-band bar overlapped (band bar was pinned at a fixed 52px under a taller shout bar). Both now sit in one sticky `.topbars` wrapper; the floating "Last song ends" clock is placed just under it by JS.

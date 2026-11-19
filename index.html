@@ -272,7 +272,7 @@ body.posting .myclk{display:none}
 textarea{width:100%;background:var(--wall);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:16px;resize:vertical}
 .lyr{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--green-hi);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 10px;flex:none}
 .spot .lyr{font-size:15px;padding:8px 16px;align-self:center}
-.nowbar{position:sticky;top:0;z-index:20;margin:0 -16px;padding:10px 16px;background:rgba(10,12,10,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.nowbar{position:sticky;top:var(--tbh,0px);z-index:20;margin:0 -16px;padding:10px 16px;background:rgba(10,12,10,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
 .nowbar .t{flex:1;min-width:0}
 .nowbar .t small{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--green-hi)}
 .nowbar .t b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -304,18 +304,20 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 #postCard.sheet{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;max-height:92vh;max-height:92dvh;overflow:auto;z-index:2147482001;border-radius:22px 22px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 40px rgba(0,0,0,.6);-webkit-overflow-scrolling:touch}
 body.posting{overflow:hidden}
 /* specials stay pinned at the top while scrolling */
-#promo{position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);z-index:50}
+
 /* shout-outs run across the top: everyone's, plus the DJ's announcements */
-.shoutbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:60;display:flex;align-items:center;gap:8px;background:#0f140f;border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 10px;min-height:44px}
+.topbars{position:sticky;top:env(safe-area-inset-top,0px);z-index:60;display:flex;flex-direction:column;gap:6px;margin:0 -16px;padding:4px 16px 6px;background:var(--wall)}
+.topbars>*{margin-top:0!important;margin-bottom:0!important}
+.shoutbar{display:flex;align-items:center;gap:8px;background:#0f140f;border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 10px;min-height:44px}
 .shoutbar .tk{flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-size:15px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
 .shoutbar .tk>span{display:inline-block;padding-left:100%;animation:tkrun var(--dur,18s) linear infinite}
 .shoutbar .tk>span.still{padding-left:0;animation:none;color:var(--ink-2)}
 .shoutbar .tk b{color:#ffc93c;font-weight:700}
 .shoutbar .tk .dj{color:var(--green-hi);font-weight:800}
 .shoutbar>button{font:inherit;font-size:20px;line-height:1;border-radius:10px;padding:7px 12px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer}
-.bandbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);z-index:59;background:#f5c518;color:#141015;border-radius:12px;padding:10px 12px;text-align:center;font-weight:800;font-size:16px;line-height:1.25;margin-top:6px}
+.bandbar{background:#f5c518;color:#141015;border-radius:12px;padding:10px 12px;text-align:center;font-weight:800;font-size:16px;line-height:1.25;margin-top:6px}
 .bandbar small{display:block;font-weight:600;font-size:13px}
-body.bandpause #promo{top:calc(env(safe-area-inset-top,0px) + 112px)}
+
 body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 .es{display:none!important}
 .postchip{position:fixed;right:0;top:46%;z-index:55;display:flex;align-items:center;background:var(--green);color:#0a0c0a;border-radius:14px 0 0 14px;box-shadow:0 4px 14px rgba(0,0,0,.5);font-weight:800;font-size:14px;line-height:1.15}
@@ -399,9 +401,11 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 <main>
   <nav class="appsw" id="appSw" aria-label="Switch app" hidden><a href="/site">Website</a><a href="/" aria-current="page">Sing</a><a href="/owner" id="swOwner" hidden>Owner</a><a href="/manager">Manager</a></nav>
   <script>try{var r=localStorage.getItem("dive_role");if(r==="owner"||r==="manager"){document.getElementById("appSw").hidden=false;if(r==="owner")document.getElementById("swOwner").hidden=false;}}catch(e){}</script>
+  <div class="topbars" id="topBars">
   <div class="shoutbar" id="shoutBar" aria-live="polite"><button type="button" id="langBtn" aria-label="Español / English">ESP</button><div class="tk" id="shoutTk"><span class="still" id="shoutTkText">Send a shout-out to the DJ 📣<span class="es"> / Manda un saludo</span></span></div><button type="button" id="shoutBtn" aria-label="Send a shout-out">📣</button></div>
   <div class="bandbar" id="bandBar" hidden>⏸ Paused for the band<small>You can still sign up<span class="es"> · Pausa para la banda, aún puedes anotarte</span></small></div>
   <section class="promo" id="promo" hidden aria-live="polite"><img id="promoImg" alt="" hidden><div class="tx"><b id="promoTitle"></b><span id="promoText"></span></div><div class="dots" id="promoDots" aria-hidden="true"></div></section>
+  </div>
   <div class="install" id="installBar" hidden>
     <img src="/icon-192.png?v=2" alt="">
     <div class="tx"><b>📲 Get The Dive app</b><span id="installHow">Faster sign-up, and your phone buzzes when you're up.</span></div>
@@ -680,6 +684,15 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
     <p id="singWho" style="margin:0;color:var(--ink-2)"></p>
     <a class="go" id="singLyr" target="_blank" rel="noopener" style="text-decoration:none;display:block">🔎 Lyrics<span class="es"> / Letra</span></a>
     <button class="linkbtn" id="singClose" type="button">Not this one</button>
+  </div>
+</div>
+<div class="tmodal" id="pushAsk" hidden role="dialog" aria-modal="true" aria-labelledby="paTitle">
+  <div class="tbox" style="text-align:center;gap:12px">
+    <div style="font-size:54px;line-height:1">🔔</div>
+    <h2 id="paTitle" style="font-size:24px;letter-spacing:.04em">Get buzzed when you're up? <span class="es" data-keep style="display:block;font-size:16px;font-weight:400;color:var(--ink-2);letter-spacing:0;text-transform:none">¿Te avisamos cuando te toque?</span></h2>
+    <p id="paLine" style="margin:0;font-size:16px;color:var(--ink-2)">Sound + vibrate when you're next and when you're up, even with the app closed.</p>
+    <button class="go" id="paOn" type="button">🔔 Turn on alerts</button>
+    <button class="ghost" id="paNo" type="button">Not now</button>
   </div>
 </div>
 <div class="tmodal" id="nextModal" hidden role="dialog" aria-modal="true" aria-labelledby="nextTitle">
@@ -2140,6 +2153,28 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catc
     btn.disabled = false; paint();
   }
   if($("pushOn")){ $("pushOn").addEventListener("click", turnOn); paint(); }
+  // every time the app opens (and when coming back after 10+ minutes), ask anyone who doesn't have alerts on, even if they said no before
+  let mode = "";
+  async function ask(){
+    if(!$("pushAsk") || !$("pushAsk").hidden) return;
+    if((!can && !ios) || await isOn()) return;
+    if(document.querySelector(".tmodal:not([hidden]),.iosguide:not([hidden])") || document.body.classList.contains("posting")) { setTimeout(ask, 4000); return; }
+    const L = $("paLine"), B = $("paOn");
+    if(ios && (!standalone || !can)){ mode = "guide"; L.textContent = "On iPhone, alerts work once The Dive is on your Home Screen. It takes 10 seconds."; B.textContent = "📲 Show me how"; }
+    else if(Notification.permission === "denied"){ mode = "blocked"; L.textContent = "Alerts are off for this site. Turn on notifications for the-dive-karaoke.onrender.com in your phone's settings (Settings → Notifications, or the 🔒 next to the address), then come back."; B.textContent = "OK, I'll turn them on"; }
+    else { mode = "ask"; L.textContent = "Sound + vibrate when you're next and when you're up, even with the app closed."; B.textContent = "🔔 Turn on alerts"; }
+    $("pushAsk").hidden = false;
+  }
+  if($("pushAsk")){
+    $("paNo").addEventListener("click", () => { $("pushAsk").hidden = true; });
+    $("paOn").addEventListener("click", async () => {
+      $("pushAsk").hidden = true;
+      if(mode === "guide"){ if($("iosStep4")) $("iosStep4").hidden = false; if($("iosGuide")) $("iosGuide").hidden = false; return; }
+      if(mode === "ask") await turnOn();
+    });
+    setTimeout(ask, 2500);
+    let away = 0; document.addEventListener("visibilitychange", () => { if(document.hidden) away = Date.now(); else if(away && Date.now() - away > 600000) setTimeout(ask, 1200); });
+  }
   window.divePushPaint = paint;
   // already on: re-send the subscription so it's tied to this phone's spot on the list
   isOn().then(async on => { if(!on) return; try{ const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if(sub) fetch("/api/push/sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON() }) }); }catch(e){} });
@@ -2490,6 +2525,16 @@ loadMe(); setInterval(refresh, 5000);
   window.addEventListener("online", back);
 })();
 
+</script>
+<script>
+/* pinned bars: Now singing sticks right under the top bars, and the "My time to sing" clock sits under whatever is pinned */
+(function(){ const tb = document.getElementById("topBars"), nb = document.getElementById("nowBar"), ck = document.getElementById("myClk"); if(!tb) return;
+  const place = () => { const r = tb.getBoundingClientRect(), h = Math.max(0, Math.round(r.bottom));
+    document.documentElement.style.setProperty("--tbh", h + "px");
+    let low = h; if(nb && !nb.hidden){ const n = nb.getBoundingClientRect(); if(n.top <= h + 1) low = Math.max(low, Math.round(n.bottom)); }
+    if(ck) ck.style.top = (low + 8) + "px"; };
+  place(); addEventListener("scroll", place, { passive: true }); addEventListener("resize", place); try{ const ro = new ResizeObserver(place); ro.observe(tb); if(nb) ro.observe(nb); }catch(e){} setInterval(place, 1500);
+})();
 </script>
 </body>
 </html>
