@@ -1037,7 +1037,8 @@ const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.fr
 const TEMP_PIN = String(process.env.HOST_TEMP_PIN || "").replace(/\D/g, "");
 async function whoIs(pin, name) {
   if (!pin) return null;
-  if (await pinIs("house", pin)) return { name: "Owner", admin: true, role: "house" };
+  // The Dive: the House PIN is a store manager login (Steve, 2026-11-18); owner powers come from the owner PIN. Other bars: house = their account PIN, full control.
+  if (await pinIs("house", pin)) return T() === "dive" ? { name: "House", admin: false, own: true, agreed: true, role: "manager", manager: true, house: true } : { name: "Owner", admin: true, role: "house" };
   // the Bar Owner PIN (and the app owner's list PIN at The Dive) can run the host page with the house controls
   if (await pinIs("bar", pin)) return { name: "Bar owner", admin: true, role: "house", ownerLogin: true };
   if (T() === "dive" && await pinIs("list", pin)) return { name: "App owner", admin: true, role: "house", ownerLogin: true };

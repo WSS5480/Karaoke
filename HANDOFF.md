@@ -22,6 +22,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-18 The Dive's House PIN is now a store manager login (whoIs returns role manager, house:true, admin:false): karaoke + website menu, no money/analytics/logins. Owner powers come from the owner PIN (list PIN). House PIN is changed by the owner in Team & PINs (its own "Change my PIN" is hidden). Other bars: house = account PIN, still full control.
 - 2026-11-18 Singer app line: only the singer up and #1-3, nothing else (not even the phone's own song when it's #4+; its spot and time show in the My song card).
 - 2026-11-18 KJ page: the pinned Shout-outs bar and Pause-for-band bar overlapped (band bar was pinned at a fixed 52px under a taller shout bar). Both now sit in one sticky `.topbars` wrapper; the floating "Last song ends" clock is placed just under it by JS.
 - 2026-11-18 Owner app "Team & PINs" tab (/owner/team, team.html): add store managers/DJs with a starting PIN, change a login's PIN, make manager/DJ (new POST /api/kj/hosts/role), turn off, remove; change the Owner PIN (POST /api/owner/pin, needs current; hashed `list_pin` wins over STAFF_LIST_PIN), House PIN (/api/kj/my-pin) and Bar Owner PIN (/api/bar/pin). Fixed GET /api/kj/hosts returning managers as "dj". Owner sets PINs himself; never type his PINs into Render or code.
@@ -39,6 +40,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - 2026-11-08 Public website at /site wired to live karaoke data; "Menu, hours & more" button on singer app.
 
 ## Decisions
+- 2026-11-18 House PIN = store manager at The Dive. Reason: Steve said "House is manager."
 - 2026-11-18 Singers see only the singer up, #1-3 and their own spot; the switch is manager-and-above only. DJs can lock #4 and later. Reason: Steve asked.
 - 2026-11-18 Lock icons never show in the singer app's line; only on the KJ page and owner/manager views. Reason: Steve asked.
 - 2026-11-13 Store managers see no money (tips, move-ups) and no all-time analytics; only the owner does. Owner/Manager buttons show only on staff phones.

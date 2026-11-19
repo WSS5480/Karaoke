@@ -994,7 +994,7 @@ function paintMe(){
   $("crowdCard").hidden = !(state.signups || state.phones); paintCrowd($("crowd"), state.signups, state.phones);
   $("hostPin").placeholder = state.tempPin ? "Start PIN " + state.tempPin : "PIN";
   $("hostsCard").hidden = !state.me.admin;   // only the owner sees and manages DJ / manager logins $("hostForm").hidden = !state.me.admin;
-  $("myPinBtn").hidden = false; $("myPinBtn").textContent = state.me.admin ? "Change house PIN" : "Change my PIN";
+  $("myPinBtn").hidden = !!state.me.house; $("myPinBtn").textContent = state.me.admin ? "Change house PIN" : "Change my PIN";   // the House PIN is changed by the owner (Owner app → Team & PINs)
   $("meLine").textContent = "Signed in as " + state.me.name + (state.me.role === "dj" ? " (DJ)" : state.me.role === "manager" ? " (store manager)" : " (house)");
   if(state.me.admin && !hostsLoaded){ hostsLoaded = true; loadHosts(); }
 }
