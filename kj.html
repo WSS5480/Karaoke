@@ -625,7 +625,8 @@ function copySong(r, btn){
   const old = () => { const ta = document.createElement("textarea"); ta.value = txt; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length); try{ document.execCommand("copy"); done(); }catch(e){ prompt("Copy this:", txt); } ta.remove(); };
   if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, old); else old();
 }
-const LOCK_TOP = 5;   // on stage + the next 5 are locked (server enforces it too)
+const LOCK_TOP = 5;
+const canLock = () => !!(state && state.me && state.me.role !== "dj");   // DJs can't lock spots; managers and above can   // on stage + the next 5 are locked (server enforces it too)
 // rows look like the singer app: number, photo, name, song. The DJ's buttons open with ⋯ and stay open while they work on that singer.
 const openRows = new Set();
 function item(r, i, waiting){
@@ -666,7 +667,7 @@ function item(r, i, waiting){
       try{
         const j = await api(`/api/kj/${r.id}/move`, { spot: v });
         if(j && j.note){ $("err").textContent = "🔒 " + j.note; errUntil = Date.now() + 6000; }
-        else if(!r.paid && confirm("🔒 Lock " + r.name + "'s spot at #" + v + "?\n\nOK = lock it (nobody can push them down)\nCancel = leave it unlocked")) await api(`/api/kj/${r.id}/lock`, {});
+        else if(!r.paid && canLock() && confirm("🔒 Lock " + r.name + "'s spot at #" + v + "?\n\nOK = lock it (nobody can push them down)\nCancel = leave it unlocked")) await api(`/api/kj/${r.id}/lock`, {});
       }catch(e){ if(e.message !== "pin"){ $("err").textContent = e.message; errUntil = Date.now() + 6000; } }
       load();
     });
@@ -692,7 +693,7 @@ function item(r, i, waiting){
       no.title = "The singer keeps their spot and gets a pop-up to pick a different song.";
       row.append(y, no); box.append(p, row); li.appendChild(box);
     }
-    if(r.djLock) a.appendChild(mk("🔓 Unlock", "unlock")); else if(!r.paid) a.appendChild(mk("🔒 Lock", "lock"));
+    if(canLock()){ if(r.djLock) a.appendChild(mk("🔓 Unlock", "unlock")); else if(!r.paid) a.appendChild(mk("🔒 Lock", "lock")); }
     li.appendChild(a);
   }
   return li;
@@ -877,7 +878,7 @@ $("addForm").addEventListener("submit", async e => {
   if(!body.song){ $("addErr").textContent = "Enter the song."; return; }
   try{ const j = await api("/api/kj/add", body);
     if(j && j.autoLocked){ $("err").textContent = "🔒 " + body.name + " took a locked spot, so their spot is locked too."; errUntil = Date.now() + 6000; }
-    else if(body.spot && confirm("🔒 Lock " + body.name + "'s spot at #" + body.spot + "?\n\nOK = lock it (nobody can push them down)\nCancel = leave it unlocked")) await api("/api/kj/" + j.id + "/lock", {}); $("addName").value = ""; $("addSong").value = ""; $("addArtist").value = ""; $("addSpot").value = ""; load(); }
+    else if(body.spot && canLock() && confirm("🔒 Lock " + body.name + "'s spot at #" + body.spot + "?\n\nOK = lock it (nobody can push them down)\nCancel = leave it unlocked")) await api("/api/kj/" + j.id + "/lock", {}); $("addName").value = ""; $("addSong").value = ""; $("addArtist").value = ""; $("addSpot").value = ""; load(); }
   catch(err){ if(err.message !== "pin") $("addErr").textContent = err.message; }
 });
 $("toggleLyrics").addEventListener("click", () => act("/api/kj-lyrics", { on: state.lyrics === false }));

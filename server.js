@@ -1995,6 +1995,8 @@ async function paidIds() { return new Set((await getBumps()).filter(b => b.statu
 // The singer on stage and the next LOCK_TOP singers are locked in place: nobody (not even the DJ) moves them
 // or moves anyone ahead of them. The DJ can only remove one of them.
 const LOCK_TOP = 5;
+// DJs can't lock or unlock spots (Steve, 2026-11-18): only store managers, house and the owner
+const isDjOnly = req => !!(req.kj && req.kj.role === "dj" && !req.kj.admin && !req.kj.owner);
 const TOP_MSG = "The singer on stage and the next " + LOCK_TOP + " are locked. You can only remove them, not move them.";
 // DJ moves and adds go to any spot, locked or not. Taking a locked singer's spot locks the new singer too,
 // so the locked group stays locked (the locked singers behind them each move down one).
@@ -2049,13 +2051,14 @@ app.post("/api/kj/add", wrap(async (req, res) => {
   const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex"), via: "dj" });
   let auto = false;
   if (req.body.spot) auto = (await djPlace(row.id, req.body.spot, req.kj.name, true)).locked;
-  if (req.body.lock && !auto) await djLock(row, true, req.kj.name);
+  if (req.body.lock && !auto && !isDjOnly(req)) await djLock(row, true, req.kj.name);   // only managers and above lock spots
   res.json({ ok: true, id: row.id, autoLocked: auto });
 }));
 app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), action = req.params.action, row = await db.get(id);
   if (!row) return res.status(404).json({ error: "That singer isn't on the list anymore." });
   if (action === "lock" || action === "unlock") {
+    if (isDjOnly(req)) return res.status(403).json({ error: "Only a manager or the owner can lock or unlock a spot." });
     if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be locked." });
     if (action === "unlock" && !(await getBumps()).some(b => b.sid === id && b.status === "approved" && b.manual)) return res.status(409).json({ error: row.name + " paid for this spot, so it stays locked." });
     await djLock(row, action === "lock", req.kj.name); return res.json({ ok: true });

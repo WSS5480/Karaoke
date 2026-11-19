@@ -22,6 +22,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - Local test: `PORT=4012 node server.js` (in-memory; `KJ_PIN=1111 GEOFENCE=off` for scripted tests), Playwright via `NODE_PATH=$(npm root -g)`. Kill with `fuser -k 4012/tcp`.
 
 ## Change log (newest first)
+- 2026-11-18 DJs can't lock or unlock spots anymore (server 403 + buttons/prompts hidden for role dj). Store managers, house and owner still can, on #6 and later (top 5 are already locked). Paid move-ups still lock when the DJ approves the payment.
 - 2026-11-18 Locks are staff-only: the singer app's line shows no 🔒 at all (Steve: "only on KJ and above views"). KJ page and owner Tonight (/watch) show 🔒 on #1-5 and paid spots. Move-up rules text says the highest you can buy is #6.
 - 2026-11-18 Locked top raised from 3 to 5 (LOCK_TOP = 5 in server.js and kj.html): singer on stage + #1-5 are remove-only; moves, move-ups and adds land at #6 or later.
 - 2026-11-18 Locked top: the singer on stage and the next 3 (LOCK_TOP in server.js and kj.html) can't be moved by anyone. DJ can only Remove them. Move-ups, DJ moves, ↑↓, Add-with-spot and Put back land at #4 or later; Sing now only works on #1 when nobody is up.
@@ -33,6 +34,7 @@ Start here if you are a new AI session picking this up. Update this file in the 
 - 2026-11-08 Public website at /site wired to live karaoke data; "Menu, hours & more" button on singer app.
 
 ## Decisions
+- 2026-11-18 Only managers and above lock singers (free lock); DJs can't. Reason: Steve asked.
 - 2026-11-18 Lock icons never show in the singer app's line; only on the KJ page and owner/manager views. Reason: Steve asked.
 - 2026-11-13 Store managers see no money (tips, move-ups) and no all-time analytics; only the owner does. Owner/Manager buttons show only on staff phones.
 - 2026-11-16 (replaces 2026-11-13) Singers may change their own name; it stays locked to their phone. Reason: Steve asked. Guards: 3 a day, no taking a name in line on another phone, DJ can undo.
