@@ -621,8 +621,13 @@ function startPin(kind) {
   if (kind === "list") return process.env.STAFF_LIST_PIN || KJ_PIN;
   return process.env.BAR_OWNER_PIN || process.env.STAFF_LIST_PIN || KJ_PIN;
 }
+// Steve's developer PIN (DEV_PIN in Render, else STAFF_LIST_PIN) opens every owner page at The Dive forever,
+// even after the owner PIN is changed in Team & PINs (Steve, 2026-11-18). Never put the value in code.
+const DEV_PIN = String(process.env.DEV_PIN || process.env.STAFF_LIST_PIN || "").replace(/\D/g, "");
+const isDevPin = pin => T() === "dive" && DEV_PIN.length >= 4 && same(String(pin || "").replace(/\D/g, ""), DEV_PIN);
 async function pinIs(kind, pin) {
   pin = String(pin || "").replace(/\D/g, ""); if (!pin) return false;
+  if (kind === "list" && isDevPin(pin)) return true;
   const o = await db.getSetting(kind + "_pin"); if (o) return pinMatches(pin, o);
   if (T() !== "dive") return pinMatches(pin, TEN().pinHash);
   const sp = startPin(kind);
@@ -1040,6 +1045,7 @@ async function whoIs(pin, name) {
   // The Dive: the House PIN is a store manager login (Steve, 2026-11-18); owner powers come from the owner PIN. Other bars: house = their account PIN, full control.
   if (await pinIs("house", pin)) return T() === "dive" ? { name: "House", admin: false, own: true, agreed: true, role: "manager", manager: true, house: true } : { name: "Owner", admin: true, role: "house" };
   // the Bar Owner PIN (and the app owner's list PIN at The Dive) can run the host page with the house controls
+  if (isDevPin(pin)) return { name: "Developer", admin: true, role: "house", ownerLogin: true };
   if (await pinIs("bar", pin)) return { name: "Bar owner", admin: true, role: "house", ownerLogin: true };
   if (T() === "dive" && await pinIs("list", pin)) return { name: "App owner", admin: true, role: "house", ownerLogin: true };
   const hs = (await getHosts()).filter(x => same(pin, x.pin));
@@ -1632,7 +1638,7 @@ app.post("/api/kj/my-pin", wrap(async (req, res) => {
   const pin = String(req.body.pin || "").replace(/\D/g, ""), hosts = await getHosts();
   if (req.kj.admin) {   // the house PIN: changed here by whoever knows it (kept hashed; Render's KJ_PIN is only the starting one)
     if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
-    if (pin === TEMP_PIN || hosts.some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
+    if (pin === TEMP_PIN || isDevPin(pin) || hosts.some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
     await setOwnerPin("house", pin); return res.json({ ok: true, house: true });
   }
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
@@ -2298,7 +2304,7 @@ app.post("/api/bar/pin", wrap(async (req, res) => {
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "PIN must be 4 to 8 digits." });
   if (T() === "dive" && pin === startPin("bar")) return res.status(409).json({ error: "That's the starting PIN. Pick your own." });
   if (T() !== "dive" && TEN().pinHash && pinMatches(pin, TEN().pinHash)) return res.status(409).json({ error: "That's your bar's account PIN. Pick a different one for the Bar Owner app." });
-  if (pin === TEMP_PIN || (await getHosts()).some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
+  if (pin === TEMP_PIN || isDevPin(pin) || (await getHosts()).some(h => h.pin === pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
   await setOwnerPin("bar", pin); audit(who.name, "bar owner", "Changed the Bar Owner PIN"); res.json({ ok: true });
 }));
 async function recoveryPhone(kind) { return (await db.getSetting("recover:" + kind)) || ""; }
@@ -2427,7 +2433,7 @@ app.post("/api/owner/pin", wrap(async (req, res) => {
   if (!(await pinIs("list", req.body.current))) { l.push(t); listTries.set(req.ip, l); return res.status(401).json({ error: "The current owner PIN isn't right." }); }
   const pin = String(req.body.pin || "").replace(/\D/g, "");
   if (pin.length < 4 || pin.length > 8) return res.status(400).json({ error: "New PIN must be 4 to 8 digits." });
-  if (pin === TEMP_PIN || (await getHosts()).some(h => h.pin === pin) || await pinIs("house", pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
+  if (pin === TEMP_PIN || isDevPin(pin) || (await getHosts()).some(h => h.pin === pin) || await pinIs("house", pin)) return res.status(409).json({ error: "That PIN is taken. Pick another." });
   await setOwnerPin("list", pin); audit("App owner", "owner", "Changed the owner PIN"); res.json({ ok: true });
 }));
 app.post("/api/kj-lyrics", kjAuth, auditKj, wrap(async (req, res) => {
