@@ -1754,7 +1754,7 @@ async function bumpInfo(list, mine) {
     // locked (paid) spots ahead can't be bought; numbered like the DJ page (1 = next up)
     { const paid = await paidIds(), q = list.filter(r => r.status === "queued"), me = q.findIndex(r => r.id === mine.id);
       out.locked = q.map((r, k) => k < me && paid.has(r.id) ? k + 1 : 0).filter(Boolean);
-      let f = 1; q.forEach((r, k) => { if (k < me && paid.has(r.id)) f = Math.max(f, k + 1); }); out.max = Math.max(0, me - f); }   // next up is never jumped
+      let f = LOCK_TOP; q.forEach((r, k) => { if (k < me && paid.has(r.id)) f = Math.max(f, k + 1); }); out.max = Math.max(0, me - f); }   // the locked top spots are never jumped
     const req = (await getBumps()).filter(b => b.sid === mine.id).pop();
     if (req) out.req = { status: req.status, spots: req.spots, amount: req.amount, manual: !!req.manual };
   }
@@ -1992,12 +1992,19 @@ async function djLock(row, on, who) {
   await saveBumps(all);
 }
 async function paidIds() { return new Set((await getBumps()).filter(b => b.status === "approved").map(b => b.sid)); }
+// The singer on stage and the next LOCK_TOP singers are locked in place: nobody (not even the DJ) moves them
+// or moves anyone ahead of them. The DJ can only remove one of them.
+const LOCK_TOP = 3;
+const TOP_MSG = "The singer on stage and the next " + LOCK_TOP + " are locked. You can only remove them, not move them.";
 // DJ moves and adds go to any spot, locked or not. Taking a locked singer's spot locks the new singer too,
 // so the locked group stays locked (the locked singers behind them each move down one).
-async function djPlace(id, spot, kjName) {
+async function djPlace(id, spot, kjName, fresh) {
   const act = await db.active(), all = act.filter(r => r.status === "queued"), me = all.find(r => r.id === id);
   if (!me) return { locked: false };
-  const q = all.filter(r => r.id !== id), i = Math.min(Math.max((parseInt(spot, 10) || q.length + 1) - 1, 0), q.length);
+  const q = all.filter(r => r.id !== id), minI = Math.min(LOCK_TOP, q.length);
+  if (!fresh && all.findIndex(r => r.id === id) < LOCK_TOP) return { error: TOP_MSG };
+  let i = Math.min(Math.max((parseInt(spot, 10) || q.length + 1) - 1, 0), q.length);
+  if (i < minI) { if (!fresh) return { error: "The next " + LOCK_TOP + " spots are locked. Pick spot " + (minI + 1) + " or later." }; i = minI; }
   const at = all.findIndex(r => r.id === id), paid = await paidIds(), wasLocked = i < at && !!(q[i] && paid.has(q[i].id));   // only moving UP into a locked spot
   q.splice(i, 0, me);
   for (let k = 0; k < q.length; k++) await db.setPos(q[k].id, k + 1);
@@ -2012,11 +2019,12 @@ async function placeAt(id, spot, fresh) {
   if (!me) return;
   const N = all.length, at = all.findIndex(r => r.id === id), paid = await paidIds();
   if (at < 0) return;
+  if (!fresh && at < LOCK_TOP) return;   // the next LOCK_TOP are locked in place
   let i = Math.min(Math.max((parseInt(spot, 10) || N) - 1, 0), N - 1);
   if (paid.has(id) && !fresh) i = Math.min(i, at);
   const pins = new Map(); all.forEach((r, k) => { if (r.id !== id && paid.has(r.id)) pins.set(k, r); });
   // nobody jumps a locked spot: you can't land ahead of a locked singer who is ahead of you
-  { const orig = fresh ? N : at; pins.forEach((r, k) => { if (k < orig) i = Math.max(i, k + 1); }); if (orig > 0) i = Math.max(i, 1); i = Math.min(i, N - 1); }   // next up can't be jumped either (only the DJ can)
+  { const orig = fresh ? N : at; pins.forEach((r, k) => { if (k < orig) i = Math.max(i, k + 1); }); if (orig > 0) i = Math.max(i, Math.min(LOCK_TOP, orig)); i = Math.min(i, N - 1); }   // nobody jumps into the locked top spots
   while (pins.has(i) && i < N - 1) i++;          // that spot is locked: take the next open one behind it
   while (pins.has(i) && i > 0) i--;
   const out = new Array(N); pins.forEach((r, k) => { out[k] = r; }); out[i] = me;
@@ -2040,7 +2048,7 @@ app.post("/api/kj/add", wrap(async (req, res) => {
   if (!song) return res.status(400).json({ error: "Enter the song." });
   const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex"), via: "dj" });
   let auto = false;
-  if (req.body.spot) auto = (await djPlace(row.id, req.body.spot, req.kj.name)).locked;
+  if (req.body.spot) auto = (await djPlace(row.id, req.body.spot, req.kj.name, true)).locked;
   if (req.body.lock && !auto) await djLock(row, true, req.kj.name);
   res.json({ ok: true, id: row.id, autoLocked: auto });
 }));
@@ -2055,12 +2063,14 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   if (action === "remove") await db.setStatus(id, "removed");
   else if (action === "done") await db.setStatus(id, "done");
   else if (action === "up") {
-    const list = await db.active(), cur = list.find(r => r.status === "up");
+    const list = await db.active(), cur = list.find(r => r.status === "up"), q = list.filter(r => r.status === "queued");
+    if (cur || !q.length || q[0].id !== id) return res.status(409).json({ error: TOP_MSG + " Use Done, next singer." });
     if (cur && cur.id !== id) await db.setStatus(cur.id, "queued");
     await db.setStatus(id, "up"); await markUp(id);
   } else if (action === "raise" || action === "lower") {
     const q = (await db.active()).filter(r => r.status === "queued"), i = q.findIndex(r => r.id === id);
     const j = action === "raise" ? i - 1 : i + 1;
+    if (i < LOCK_TOP || j < LOCK_TOP) return res.status(409).json({ error: TOP_MSG });
     if (i > -1 && j >= 0 && j < q.length) { const r = await djPlace(id, j + 1, req.kj.name); if (r.locked) return res.json({ ok: true, autoLocked: true, note: row.name + " moved into the locked group, so their spot is locked too." }); }
   } else if (action === "repeatok" || action === "repeatno") {
     if (row.status !== "queued") return res.status(400).json({ error: "They're not waiting in line." });
@@ -2072,10 +2082,11 @@ app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   } else if (action === "readd") {
     // undo an accidental skip: back into line (next up by default)
     if (row.status === "up" || row.status === "queued") return res.status(400).json({ error: "They're already in line." });
-    await db.setStatus(id, "queued"); await djPlace(id, req.body.spot || 1, req.kj.name);
+    await db.setStatus(id, "queued"); await djPlace(id, req.body.spot || LOCK_TOP + 1, req.kj.name, true);
   } else if (action === "move") {
     if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be moved." });
     const r = await djPlace(id, req.body.spot, req.kj.name);
+    if (r.error) return res.status(409).json({ error: r.error });
     if (r.locked) return res.json({ ok: true, autoLocked: true, note: row.name + " took a locked spot, so their spot is locked too." });
   } else return res.status(400).json({ error: "Unknown action." });
   res.json({ ok: true });

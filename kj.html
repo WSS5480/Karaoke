@@ -147,6 +147,7 @@ li .t span{display:block;font-size:14px;color:var(--ink-2);overflow-wrap:anywher
 li .acts{display:none;flex-basis:100%;gap:6px;flex-wrap:wrap}
 li.open .acts{display:flex}
 li .more{margin-left:auto;flex:none;width:40px;height:36px;padding:0;border-radius:999px;font-size:22px;line-height:1;letter-spacing:0}
+.toplock{flex:1 1 100%;font-size:13px;font-weight:700;color:var(--amber,#ffb547)}
 li .cpy{margin-left:auto;flex:none;height:36px;padding:0 12px;border-radius:999px;font-size:13px;font-weight:800;letter-spacing:0}
 li .cpy+.more{margin-left:6px}
 li .cpy.done,.statsBtn.cpy.done{border-color:var(--green);color:var(--green-hi)}
@@ -624,6 +625,7 @@ function copySong(r, btn){
   const old = () => { const ta = document.createElement("textarea"); ta.value = txt; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length); try{ document.execCommand("copy"); done(); }catch(e){ prompt("Copy this:", txt); } ta.remove(); };
   if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, old); else old();
 }
+const LOCK_TOP = 3;   // on stage + the next 3 are locked (server enforces it too)
 // rows look like the singer app: number, photo, name, song. The DJ's buttons open with ⋯ and stay open while they work on that singer.
 const openRows = new Set();
 function item(r, i, waiting){
@@ -648,7 +650,7 @@ function item(r, i, waiting){
     const a = document.createElement("div"); a.className = "acts";
     const back = document.createElement("button"); back.textContent = "↩ Put back"; back.className = "next";
     back.title = "Skipped by mistake? Puts them back in line as next up";
-    back.addEventListener("click", () => { const n = prompt("Put " + r.name + " back at which spot? (1 = next up)", "1"); if(n === null) return; act(`/api/kj/${r.id}/readd`, { spot: parseInt(n, 10) || 1 }); });
+    back.addEventListener("click", () => { const n = prompt("Put " + r.name + " back at which spot? (the next " + LOCK_TOP + " are locked, so " + (LOCK_TOP + 1) + " or later)", String(LOCK_TOP + 1)); if(n === null) return; act(`/api/kj/${r.id}/readd`, { spot: parseInt(n, 10) || 1 }); });
     a.append(back, info); li.appendChild(a);
   }
   if(waiting){
@@ -660,7 +662,7 @@ function item(r, i, waiting){
     fs.addEventListener("click", () => { const so = prompt("Song for " + r.name + ":", r.song); if(so === null || !so.trim()) return; const ar = prompt("Artist (optional):", r.artist || ""); if(ar === null) return; act(`/api/kj/${r.id}/song`, { song: so.trim(), artist: ar.trim() }); });
     const mv = document.createElement("button"); mv.textContent = "Move to #";
     mv.addEventListener("click", async () => {
-      const n = prompt("Move " + r.name + " to which spot in line? (1 = next up)", String(i + 1)); if(n === null) return; const v = parseInt(n, 10); if(!(v >= 1)) return;
+      const n = prompt("Move " + r.name + " to which spot in line? (" + (LOCK_TOP + 1) + " or later; the next " + LOCK_TOP + " are locked)", String(i + 1)); if(n === null) return; const v = parseInt(n, 10); if(!(v >= 1)) return;
       try{
         const j = await api(`/api/kj/${r.id}/move`, { spot: v });
         if(j && j.note){ $("err").textContent = "🔒 " + j.note; errUntil = Date.now() + 6000; }
@@ -670,8 +672,16 @@ function item(r, i, waiting){
     });
     const nsb = r.nosong ? mk("↩ Have it", "hassong") : mk("✗ Don't have it", "nosong", "danger");
     nsb.title = r.nosong ? "Undo: you have this song" : "Tell the singer you don't have this song. They keep their spot and pick another.";
-    a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mv, fix, fs, info, mk("Remove", "remove", "danger"));
-    a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
+    if(i < LOCK_TOP){
+      // the next 3 are locked in place: the DJ can only remove them (or start #1 when nobody is on stage)
+      const lk = document.createElement("span"); lk.className = "toplock"; lk.textContent = "🔒 Next " + LOCK_TOP + " are locked · remove only";
+      const noneUp = !(state && state.queue.some(x => x.status === "up"));
+      a.append(lk); if(i === 0 && noneUp) a.append(mk("Sing now", "up")); a.append(fix, fs, info, mk("Remove", "remove", "danger"));
+    } else {
+      a.append(mk("Sing now", "up"), mk("↑", "raise"), mk("↓", "lower"), mv, fix, fs, info, mk("Remove", "remove", "danger"));
+      a.children[1].setAttribute("aria-label", "Move up"); a.children[2].setAttribute("aria-label", "Move down");
+      a.children[0].hidden = true;   // only #1 can be started; the rest go through Done, next singer
+    }
     a.appendChild(nsb);
     if(r.repeat){
       const box = document.createElement("div"); box.className = "rpt"; box.setAttribute("role", "alert");
@@ -739,7 +749,7 @@ function render(){
   $("undoNext").hidden = !state.undo;
   $("waitCount").textContent = waiting.length + " waiting";
   { const sel = $("addSpot"), keep = sel.value; sel.innerHTML = ""; const o = new Option("End of line (#" + (waiting.length + 1) + ")", ""); sel.add(o);
-    for(let k = 1; k <= waiting.length; k++) sel.add(new Option("#" + k + (k === 1 ? " (next up)" : ""), String(k)));
+    for(let k = LOCK_TOP + 1; k <= waiting.length; k++) sel.add(new Option("#" + k, String(k)));   // the next 3 are locked
     if([...sel.options].some(x => x.value === keep)) sel.value = keep; }
   { const PAY = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
     const bl = state.bumps || [], box = $("bumpList"); $("bumpCard").hidden = !bl.length; box.innerHTML = "";
