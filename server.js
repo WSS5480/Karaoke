@@ -1994,7 +1994,7 @@ async function djLock(row, on, who) {
 async function paidIds() { return new Set((await getBumps()).filter(b => b.status === "approved").map(b => b.sid)); }
 // The singer on stage and the next LOCK_TOP singers are locked in place: nobody (not even the DJ) moves them
 // or moves anyone ahead of them. The DJ can only remove one of them.
-const LOCK_TOP = 3;
+const LOCK_TOP = 5;
 const TOP_MSG = "The singer on stage and the next " + LOCK_TOP + " are locked. You can only remove them, not move them.";
 // DJ moves and adds go to any spot, locked or not. Taking a locked singer's spot locks the new singer too,
 // so the locked group stays locked (the locked singers behind them each move down one).

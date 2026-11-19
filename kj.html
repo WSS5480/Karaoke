@@ -625,7 +625,7 @@ function copySong(r, btn){
   const old = () => { const ta = document.createElement("textarea"); ta.value = txt; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length); try{ document.execCommand("copy"); done(); }catch(e){ prompt("Copy this:", txt); } ta.remove(); };
   if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, old); else old();
 }
-const LOCK_TOP = 3;   // on stage + the next 3 are locked (server enforces it too)
+const LOCK_TOP = 5;   // on stage + the next 5 are locked (server enforces it too)
 // rows look like the singer app: number, photo, name, song. The DJ's buttons open with ⋯ and stay open while they work on that singer.
 const openRows = new Set();
 function item(r, i, waiting){
@@ -673,7 +673,7 @@ function item(r, i, waiting){
     const nsb = r.nosong ? mk("↩ Have it", "hassong") : mk("✗ Don't have it", "nosong", "danger");
     nsb.title = r.nosong ? "Undo: you have this song" : "Tell the singer you don't have this song. They keep their spot and pick another.";
     if(i < LOCK_TOP){
-      // the next 3 are locked in place: the DJ can only remove them (or start #1 when nobody is on stage)
+      // the next LOCK_TOP are locked in place: the DJ can only remove them (or start #1 when nobody is on stage)
       const lk = document.createElement("span"); lk.className = "toplock"; lk.textContent = "🔒 Next " + LOCK_TOP + " are locked · remove only";
       const noneUp = !(state && state.queue.some(x => x.status === "up"));
       a.append(lk); if(i === 0 && noneUp) a.append(mk("Sing now", "up")); a.append(fix, fs, info, mk("Remove", "remove", "danger"));
@@ -749,7 +749,7 @@ function render(){
   $("undoNext").hidden = !state.undo;
   $("waitCount").textContent = waiting.length + " waiting";
   { const sel = $("addSpot"), keep = sel.value; sel.innerHTML = ""; const o = new Option("End of line (#" + (waiting.length + 1) + ")", ""); sel.add(o);
-    for(let k = LOCK_TOP + 1; k <= waiting.length; k++) sel.add(new Option("#" + k, String(k)));   // the next 3 are locked
+    for(let k = LOCK_TOP + 1; k <= waiting.length; k++) sel.add(new Option("#" + k, String(k)));   // the next LOCK_TOP are locked
     if([...sel.options].some(x => x.value === keep)) sel.value = keep; }
   { const PAY = { cashapp: "Cash App", venmo: "Venmo", paypal: "PayPal", zelle: "Zelle", apple: "Apple Cash" };
     const bl = state.bumps || [], box = $("bumpList"); $("bumpCard").hidden = !bl.length; box.innerHTML = "";
