@@ -57,14 +57,16 @@ h2 span{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:
 .namepick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 .namepick p{width:100%;margin:0;color:var(--ink-2);font-size:14px}
 /* shout-outs from the crowd run across the top; the DJ puts them on everyone's screen or takes them down, and can announce things */
-.shoutbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:70;display:flex;align-items:center;gap:8px;background:#0f140f;border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 10px;min-height:46px}
+.topbars{position:sticky;top:env(safe-area-inset-top,0px);z-index:70;display:flex;flex-direction:column;gap:6px;background:var(--wall);padding:4px 0 6px;margin-top:-4px}
+.topbars .bandbar{margin-top:0!important}
+.shoutbar{display:flex;align-items:center;gap:8px;background:#0f140f;border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 10px;min-height:46px}
 .shoutbar .tk{flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-size:15px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
 .shoutbar .tk>span{display:inline-block;padding-left:100%;animation:tkrun var(--dur,18s) linear infinite}
 .shoutbar .tk>span.still{padding-left:0;animation:none;color:var(--ink-2)}
 .shoutbar .tk b{color:#ffc93c;font-weight:700}.shoutbar .tk .dj{color:var(--green-hi);font-weight:800}.shoutbar .tk .new{color:var(--ink-2);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
 .shoutbar>button{position:relative;font-size:15px;padding:8px 12px;border-radius:10px;letter-spacing:0;text-transform:none;white-space:nowrap}
 .shoutbar>button .badge{position:absolute;top:-7px;right:-6px;background:#ff3d6e;color:#fff;font-size:12px;font-weight:800;border-radius:999px;min-width:20px;height:20px;line-height:20px;text-align:center;padding:0 5px}
-.bandbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);z-index:69;display:block;width:100%;font:inherit;font-weight:800;font-size:16px;letter-spacing:0;text-transform:none;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#0f140f;color:var(--ink);cursor:pointer;margin-top:6px}
+.bandbar{display:block;width:100%;font:inherit;font-weight:800;font-size:16px;letter-spacing:0;text-transform:none;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#0f140f;color:var(--ink);cursor:pointer;margin-top:6px}
 .bandbar.on{background:#f5c518;border-color:#f5c518;color:#141015}
 @keyframes tkrun{to{transform:translateX(-100%)}}
 .shlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;border:0}
@@ -208,8 +210,10 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
 </head>
 <body>
 <main>
+  <div class="topbars" id="topBars">
   <div class="shoutbar" id="shoutBar" aria-live="polite"><div class="tk"><span class="still" id="shoutTkText">Shout-outs from the crowd run here 📣</span></div><button type="button" id="shoutOpen">📢 Announce<span class="badge" id="shoutBadge" hidden>0</span></button></div>
   <button type="button" class="bandbar" id="bandBar">⏸ Pause for band</button>
+  </div>
   <div class="install" id="installBar" hidden>
     <img src="/kj-icon-192.png" alt="">
     <div class="tx"><b>Get the Dive KJ app</b><span id="installHow">Open the queue in one tap.</span></div>
@@ -1176,6 +1180,12 @@ $("bumpPriceRow").addEventListener("submit", async e => {
     if(armed !== key){ armed = key; msg("", "Tap again to move " + ids.length + " song" + (ids.length === 1 ? "" : "s") + (likes ? " and " + likes + " likes" : "") + " to singer #" + to + (mine ? ", and call this phone " + mine : "") + "."); return; }
     armed = ""; try{ const j = await api("/api/kj/namefix/move", { device: cur.device, ids, toNum: to, newName: mine }); await open(cur.device); msg("", "✅ " + j.text); }catch(er){ if(er.message !== "pin") msg(er.message); }
   });
+})();
+</script>
+<script>
+(function(){ const tb = document.getElementById("topBars"), ck = document.getElementById("lastClk"); if(!tb || !ck) return;
+  const place = () => { const r = tb.getBoundingClientRect(); ck.style.top = Math.max(8, Math.round(r.bottom) + 8) + "px"; };
+  place(); addEventListener("scroll", place, { passive: true }); addEventListener("resize", place); try{ new ResizeObserver(place).observe(tb); }catch(e){}
 })();
 </script>
 </body>
