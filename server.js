@@ -686,7 +686,8 @@ app.get("/api/queue", wrap(async (req, res) => {
   const mine = list.find(r => r.device === d);
   const last = mine ? null : await lastSungWith(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
-  res.json({ venue: TEN().venue || "", closeHour: Number(TEN().closeHour ?? 2), shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), dj: await djPublic(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(); return (await withPhotos(list.map(publicRow), list)).map(r => paid.has(r.id) ? { ...r, paid: true } : r); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
+  res.json({ venue: TEN().venue || "", closeHour: Number(TEN().closeHour ?? 2), shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), dj: await djPublic(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(), mask = req.query.g === "1" && (await db.getSetting("mask_line")) !== "off"; let wn = 0;   // singer app: hide everyone after #5 except the phone's own song (managers turn it off on the KJ page)
+      return (await withPhotos(list.map(publicRow), list)).map(r => { if (r.status === "queued" && ++wn > LOCK_TOP && mask && !(mine && r.id === mine.id)) return { id: r.id, status: "queued", masked: true }; return paid.has(r.id) ? { ...r, paid: true } : r; }); })(), mine: mine ? { ...publicRow(mine), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
     last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, mine) });
 }));
 
@@ -1323,7 +1324,7 @@ app.post("/api/kj/promos/remove", wrap(async (req, res) => {
 }));
 app.get("/api/kj/state", wrap(async (req, res) => {
   const djNow = await djSession();
-  res.json({ shouts: liveShouts(await getShouts(), true), lastSong: await lastSongEnd().catch(() => null), myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), band: await bandPauseOn(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), rp = await repeatsFor(l), rOk = await idSet("repeat_ok"), rAsk = await idSet("repeat_ask"), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}), ...(rAsk.has(r.id) && ns.has(r.id) ? { repeatAsk: true } : rp.has(r.id) && !rOk.has(r.id) && r.status === "queued" ? { repeat: rp.get(r.id) } : {}) })); })(), done: (await tonightDone()).map(kjRow) });
+  res.json({ shouts: liveShouts(await getShouts(), true), lastSong: await lastSongEnd().catch(() => null), myPhone: req.kj.admin ? maskPhone(await recoveryPhone("house")) : maskPhone(((await getHosts()).find(h => h.name === req.kj.name) || {}).phone || ""), undo: (await nextUndo()).length, bumps: await bumpsFor(req.kj), bumpOn: await bumpOn(), bumpPrice: seesBumps(req.kj) ? await bumpPrice() : null, signups: (req.kj.admin || req.kj.manager) ? await signupStats() : null, phones: (req.kj.admin || req.kj.manager) ? await phoneStats() : null, maskLine: (await db.getSetting("mask_line")) !== "off", me: req.kj, tempPin: req.kj.admin ? TEMP_PIN : "", hostTermsV: HOST_TERMS_V, lyrics: (await db.getSetting("lyrics")) !== "off", djOn: djNow ? djNow.name : null, multi: (await db.getSetting("multi")) === "on", open: (await db.getSetting("open")) !== "no", geofence: geofenceActive(await db.getSetting("geofence")), hasSpot: TEN().lat != null && TEN().lat !== "", tenant: tenantPublic(TEN()), plan: planSummary(TEN()), hostLimit: TEN().house ? null : HOST_LIMIT, pause: await pauseState(), band: await bandPauseOn(), phoneSignin: await authOn(), twilioReady: TW_READY, photoReview: await photoReview(), queue: await (async () => { const l = await db.active(), paid = await paidIds(), ns = await noSongs(), rp = await repeatsFor(l), rOk = await idSet("repeat_ok"), rAsk = await idSet("repeat_ask"), man = new Set((await getBumps()).filter(b => b.status === "approved" && b.manual).map(b => b.sid)); return (await withPhotosKJ(l.map(kjRow), l)).map(r => ({ ...r, ...(paid.has(r.id) ? { paid: true } : {}), ...(man.has(r.id) ? { djLock: true } : {}), ...(ns.has(r.id) ? { nosong: true } : {}), ...(rAsk.has(r.id) && ns.has(r.id) ? { repeatAsk: true } : rp.has(r.id) && !rOk.has(r.id) && r.status === "queued" ? { repeat: rp.get(r.id) } : {}) })); })(), done: (await tonightDone()).map(kjRow) });
 }));
 // everything we know about the singer on this row: past songs, nights, ratings, posts
 app.post("/api/kj/photo/:id/remove", wrap(async (req, res) => {
@@ -1995,7 +1996,7 @@ async function paidIds() { return new Set((await getBumps()).filter(b => b.statu
 // The singer on stage and the next LOCK_TOP singers are locked in place: nobody (not even the DJ) moves them
 // or moves anyone ahead of them. The DJ can only remove one of them.
 const LOCK_TOP = 5;
-// DJs can't lock or unlock spots (Steve, 2026-11-18): only store managers, house and the owner
+// manager-and-above only settings (e.g. hiding the line after #5 from singers)
 const isDjOnly = req => !!(req.kj && req.kj.role === "dj" && !req.kj.admin && !req.kj.owner);
 const TOP_MSG = "The singer on stage and the next " + LOCK_TOP + " are locked. You can only remove them, not move them.";
 // DJ moves and adds go to any spot, locked or not. Taking a locked singer's spot locks the new singer too,
@@ -2051,14 +2052,13 @@ app.post("/api/kj/add", wrap(async (req, res) => {
   const row = await db.add({ name, song, artist, device: "kj-" + crypto.randomBytes(6).toString("hex"), via: "dj" });
   let auto = false;
   if (req.body.spot) auto = (await djPlace(row.id, req.body.spot, req.kj.name, true)).locked;
-  if (req.body.lock && !auto && !isDjOnly(req)) await djLock(row, true, req.kj.name);   // only managers and above lock spots
+  if (req.body.lock && !auto) await djLock(row, true, req.kj.name);
   res.json({ ok: true, id: row.id, autoLocked: auto });
 }));
 app.post("/api/kj/:id/:action", wrap(async (req, res) => {
   const id = parseInt(req.params.id, 10), action = req.params.action, row = await db.get(id);
   if (!row) return res.status(404).json({ error: "That singer isn't on the list anymore." });
   if (action === "lock" || action === "unlock") {
-    if (isDjOnly(req)) return res.status(403).json({ error: "Only a manager or the owner can lock or unlock a spot." });
     if (row.status !== "queued") return res.status(400).json({ error: "Only singers waiting in line can be locked." });
     if (action === "unlock" && !(await getBumps()).some(b => b.sid === id && b.status === "approved" && b.manual)) return res.status(409).json({ error: row.name + " paid for this spot, so it stays locked." });
     await djLock(row, action === "lock", req.kj.name); return res.json({ ok: true });
@@ -2392,6 +2392,11 @@ app.post("/api/staff-list", wrap(async (req, res) => {
 }));
 app.post("/api/kj-lyrics", kjAuth, auditKj, wrap(async (req, res) => {
   await db.setSetting("lyrics", req.body.on ? "on" : "off"); res.json({ ok: true });
+}));
+// hide singers after #5 in the singer app (on unless a manager or above turns it off); KJ page, staff views and TV keep the full line
+app.post("/api/kj-mask", kjAuth, auditKj, wrap(async (req, res) => {
+  if (isDjOnly(req)) return res.status(403).json({ error: "Only a manager or the owner can change this." });
+  await db.setSetting("mask_line", req.body.on ? "on" : "off"); res.json({ ok: true });
 }));
 app.post("/api/kj-multi", kjAuth, auditKj, wrap(async (req, res) => {
   await db.setSetting("multi", req.body.on ? "on" : "off"); res.json({ ok: true });

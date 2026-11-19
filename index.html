@@ -66,7 +66,7 @@ li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
 #queue li .t .eta{display:block;font-size:13px;color:#9fb3a2;margin-top:2px}
 #queue li .t b{font-size:20px;font-weight:700;color:#ffc93c;line-height:1.2}
 li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
-li.up{background:rgba(57,181,74,.14)}
+li.up{background:rgba(57,181,74,.14)}li.masked{opacity:.75}li.masked .t b{color:var(--ink-2);font-style:italic}
 li.up .n{color:var(--green-hi)}
 li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 li .av{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none;background:#fff;border:2px solid var(--line)}
@@ -1273,6 +1273,14 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
   if(!data.queue || !data.queue.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Nobody's signed up yet. Be the first."; ol.appendChild(li); return; }
   let wn = 0;
   data.queue.forEach((r, i) => {
+    if(r.masked){   // everyone after #5 is hidden from singers (a manager setting); show one line per hidden run
+      ++wn; const prev = ol.lastElementChild;
+      if(prev && prev.classList.contains("masked")){ prev._n++; prev.querySelector(".t b").textContent = prev._n + " more singers in line"; return; }
+      const li = document.createElement("li"); li.className = "masked"; li._n = 1;
+      const n = document.createElement("span"); n.className = "n"; n.textContent = "…";
+      const t = document.createElement("div"); t.className = "t"; const b = document.createElement("b"); b.textContent = "1 more singer in line"; t.append(b);
+      li.append(n, t); ol.appendChild(li); return;
+    }
     const li = document.createElement("li"); if(r.status === "up") li.classList.add("up"); if(mine && r.id === mine.id) li.classList.add("me"); const n = document.createElement("span"); n.className = "n"; n.textContent = r.status === "up" ? "▶" : ++wn;
     // locks (top 5 and paid spots) show only on the KJ page and staff views, never in the singer line
     const t = document.createElement("div"); t.className = "t";

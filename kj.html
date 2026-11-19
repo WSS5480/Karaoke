@@ -338,6 +338,7 @@ li.locked .t b{color:#5fd36e!important}li.locked .t b::before{content:"🔒 ";}
         <button id="togglePhone" hidden></button>
         <button id="togglePhotoReview"></button>
         <button id="toggleLyrics" title="Lyrics buttons in the customer app"></button>
+        <button id="toggleMask" title="Singer app shows #1-5 and the singer's own spot; everyone after #5 is hidden" hidden></button>
         <a href="/stats">Analytics</a>
         <a href="/history">Customer history</a>
         <a href="/ads">Daily ads</a>
@@ -626,7 +627,7 @@ function copySong(r, btn){
   if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, old); else old();
 }
 const LOCK_TOP = 5;
-const canLock = () => !!(state && state.me && state.me.role !== "dj");   // DJs can't lock spots; managers and above can   // on stage + the next 5 are locked (server enforces it too)
+const canMask = () => !!(state && state.me && state.me.role !== "dj");   // hiding the line from singers: managers and above only   // on stage + the next 5 are locked (server enforces it too)
 // rows look like the singer app: number, photo, name, song. The DJ's buttons open with ⋯ and stay open while they work on that singer.
 const openRows = new Set();
 function item(r, i, waiting){
@@ -667,7 +668,7 @@ function item(r, i, waiting){
       try{
         const j = await api(`/api/kj/${r.id}/move`, { spot: v });
         if(j && j.note){ $("err").textContent = "🔒 " + j.note; errUntil = Date.now() + 6000; }
-        else if(!r.paid && canLock() && confirm("🔒 Lock " + r.name + "'s spot at #" + v + "?\n\nOK = lock it (nobody can push them down)\nCancel = leave it unlocked")) await api(`/api/kj/${r.id}/lock`, {});
+        else if(!r.paid && confirm("🔒 Lock " + r.name + "'s spot at #" + v + "?\n\nOK = lock it (nobody can push them down)\nCancel = leave it unlocked")) await api(`/api/kj/${r.id}/lock`, {});
       }catch(e){ if(e.message !== "pin"){ $("err").textContent = e.message; errUntil = Date.now() + 6000; } }
       load();
     });
@@ -693,7 +694,7 @@ function item(r, i, waiting){
       no.title = "The singer keeps their spot and gets a pop-up to pick a different song.";
       row.append(y, no); box.append(p, row); li.appendChild(box);
     }
-    if(canLock()){ if(r.djLock) a.appendChild(mk("🔓 Unlock", "unlock")); else if(!r.paid) a.appendChild(mk("🔒 Lock", "lock")); }
+    if(r.djLock) a.appendChild(mk("🔓 Unlock", "unlock")); else if(!r.paid) a.appendChild(mk("🔒 Lock", "lock"));
     li.appendChild(a);
   }
   return li;
@@ -784,6 +785,7 @@ function render(){
   $("toggleOpen").textContent = state.open ? "Close sign-ups" : "Open sign-ups";
   $("multiChk").checked = !state.multi;
   $("toggleLyrics").textContent = state.lyrics === false ? "Lyrics: off" : "Lyrics: on";
+  $("toggleMask").hidden = !canMask(); $("toggleMask").textContent = state.maskLine === false ? "Singers see whole line" : "Singers see top 5 only";
   $("togglePhone").hidden = !state.twilioReady;
   $("togglePhone").textContent = state.phoneSignin ? "Phone sign-in: on" : "Phone sign-in: off";
   const wait = (state.queue || []).filter(x => x.photo && x.photoSt === "pending").length;
@@ -878,10 +880,11 @@ $("addForm").addEventListener("submit", async e => {
   if(!body.song){ $("addErr").textContent = "Enter the song."; return; }
   try{ const j = await api("/api/kj/add", body);
     if(j && j.autoLocked){ $("err").textContent = "🔒 " + body.name + " took a locked spot, so their spot is locked too."; errUntil = Date.now() + 6000; }
-    else if(body.spot && canLock() && confirm("🔒 Lock " + body.name + "'s spot at #" + body.spot + "?\n\nOK = lock it (nobody can push them down)\nCancel = leave it unlocked")) await api("/api/kj/" + j.id + "/lock", {}); $("addName").value = ""; $("addSong").value = ""; $("addArtist").value = ""; $("addSpot").value = ""; load(); }
+    else if(body.spot && confirm("🔒 Lock " + body.name + "'s spot at #" + body.spot + "?\n\nOK = lock it (nobody can push them down)\nCancel = leave it unlocked")) await api("/api/kj/" + j.id + "/lock", {}); $("addName").value = ""; $("addSong").value = ""; $("addArtist").value = ""; $("addSpot").value = ""; load(); }
   catch(err){ if(err.message !== "pin") $("addErr").textContent = err.message; }
 });
 $("toggleLyrics").addEventListener("click", () => act("/api/kj-lyrics", { on: state.lyrics === false }));
+$("toggleMask").addEventListener("click", () => act("/api/kj-mask", { on: state.maskLine === false }));
 $("multiChk").addEventListener("change", () => act("/api/kj-multi", { on: !$("multiChk").checked }));
 $("togglePhone").addEventListener("click", () => act("/api/kj-phone", { on: !state.phoneSignin }));
 $("togglePhotoReview").addEventListener("click", () => act("/api/kj-photoreview", { on: !state.photoReview }));
