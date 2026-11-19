@@ -66,7 +66,7 @@ li .t b{display:block;font-weight:500;overflow-wrap:anywhere}
 #queue li .t .eta{display:block;font-size:13px;color:#9fb3a2;margin-top:2px}
 #queue li .t b{font-size:20px;font-weight:700;color:#ffc93c;line-height:1.2}
 li .t span{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
-li.up{background:rgba(57,181,74,.14)}li.masked{opacity:.75}li.masked .t b{color:var(--ink-2);font-style:italic}
+li.up{background:rgba(57,181,74,.14)}#mineDuo{margin:0;color:var(--green-hi);font-weight:800;text-align:center}#myDuet{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:rgba(57,181,74,.12);border:1px solid var(--green);font-weight:700}li.masked{opacity:.75}li.masked .t b{color:var(--ink-2);font-style:italic}
 li.up .n{color:var(--green-hi)}
 li.me .t b::after{content:" · you";color:var(--green-hi);font-weight:400}
 li .av{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none;background:#fff;border:2px solid var(--line)}
@@ -520,11 +520,13 @@ body.bandpause #upNext{filter:grayscale(1);opacity:.5}
 
   <section class="card spot" id="mineCard" hidden>
     <div class="num" id="mineNum"></div>
+    <p class="duo" id="mineDuo" hidden></p>
     <p id="mineLine"></p>
     <p class="eta" id="mineEta" hidden></p>
     <div class="myclk" id="myClk" hidden aria-live="polite"><span class="k">My time to sing</span><span class="v" id="myClkV">–</span><span class="s" id="myClkS"></span><span class="lk" id="myClkLk" hidden>🔒 Lock my spot</span></div>
     <p class="nosong" id="noSongMsg" hidden role="alert">🎵 The DJ doesn't have that song. Pick another one. You keep your spot.<span class="es"> / El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.</span></p>
     <div class="song" id="mineSong"></div>
+    <p class="duo2" id="myDuet" hidden></p>
     <a class="lyr" id="mineLyr" target="_blank" rel="noopener">🔎 Lyrics<span class="es"> / Letra</span></a>
     <div class="bumpbox" id="bumpBox" hidden>
       <button class="go" id="bumpOpen" type="button">🔒 Lock your spot<small class="bsub">Move up · $<span id="bumpPrice">1</span> a spot · nobody can bump you</small></button>
@@ -1247,7 +1249,7 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
   $("closedMsg").textContent = !data.open ? "Sign-ups are closed right now. Ask the KJ." : data.pausedUntil ? "Sign-ups are paused. Back at " + new Date(data.pausedUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + "." : "Sign-ups are paused for a bit. Check back soon.";
   $("picCard").hidden = !!(authOn && (!me || !me.name));
   // (layout) form first for a fresh scan
-  $("formCard").hidden = (!!mine && !multiOn) || !data.open || data.paused || (authOn && (!me || !me.name));
+  $("formCard").hidden = (!!mine && !mine.partner && !multiOn) || !data.open || data.paused || (authOn && (!me || !me.name));
   $("mineCard").hidden = !mine;
   if(!mine && editDraft) closeEdit();
   if(!mine && (fobTimer || !$("nextModal").hidden || !$("upModal").hidden)){ stopFob(); $("nextModal").hidden = true; $("upModal").hidden = true; }
@@ -1265,9 +1267,14 @@ function render(data){ try{ paintDj(data.dj); }catch(e){}
     setLyr($("mineLyr"), mine);
     if(window.paintBump) window.paintBump(data.bump || { on: false }, mine);
     $("editSong").hidden = mine.status === "up"; if(mine.status === "up") closeEdit();
+    // a duet someone else signed up with you: you see it and get buzzed, but only their phone can change or cancel it
+    $("editSong").parentElement.hidden = !!mine.partner; if(mine.partner){ closeEdit(); if(window.paintBump) window.paintBump({ on: false }, null); }
+    $("mineDuo").hidden = !mine.partner; $("mineDuo").textContent = mine.partner ? "🎤 " + mine.by + " added you to sing with them" : "";
+    { const dd = data.myDuet; $("myDuet").hidden = !dd; if(dd){ const wq = (data.queue || []).filter(r => r.status === "queued"), wi = wq.findIndex(r => r.id === dd.id);
+        $("myDuet").textContent = "🎤 Also in line: duet with " + dd.by + (dd.status === "up" ? " · on stage now" : wi >= 0 ? " at #" + (wi + 1) : "") + " · " + dd.song + (dd.eta && dd.eta.at ? " · about " + new Date(dd.eta.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""); } }
     $("noSongMsg").hidden = !mine.nosong;
     $("noSongMsg").textContent = mine.repeat ? bi("🔁 That song was already sung tonight. The DJ asks you to pick a different one. You keep your spot.", "Esa canción ya se cantó hoy. Escoge otra; no pierdes tu lugar.") : bi("🎵 The DJ doesn't have that song. Pick another one. You keep your spot.", "El DJ no tiene esa canción. Escoge otra; no pierdes tu lugar.");
-    if(mine.nosong && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; openEdit("", "", false); try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
+    if(mine.nosong && !mine.partner && mine.status !== "up" && $("editForm").hidden && window.__noSongFor !== mine.id + mine.song){ window.__noSongFor = mine.id + mine.song; openEdit("", "", false); try{ navigator.vibrate && navigator.vibrate([300, 150, 300]); }catch(e){} }
     // heads-up when you're next (a couple of buzzes), then a restaurant-pager buzz when you're up
     { window.__lastQueue = data.queue || []; const upNow = (data.queue || []).some(r => r.status === "up" && r.id !== mine.id);
       if(mine.status === "queued" && upNow && ahead - 1 === 0) alertOnce("deck", mine.id);

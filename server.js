@@ -688,12 +688,17 @@ app.get("/api/queue", wrap(async (req, res) => {
   if (req.query.g === "1") seenPhone(device(req, res), req.query.app === "1");
   const list = await db.active();
   const open = (await db.getSetting("open")) !== "no";
-  const mine = list.find(r => r.device === d);
+  const own = list.find(r => r.device === d);
+  // a duet someone else signed up with this phone as the partner: they see it as theirs (read-only; only the phone that signed up can change it)
+  let duetRow = null;
+  { const ds = new Set((await duetIds(d)).map(Number)); for (const r of list) if (ds.has(Number(r.id)) && r.device !== d && (await duetPartner(r.id)) === d) { duetRow = r; break; } }
+  const mine = own || duetRow;
+  const mineView = async r => ({ ...publicRow(r), withNum: await (async () => { const pk = await duetPartner(r.id); return pk ? await singerNum(numKeyOf(pk)) : ""; })(), spot: list.indexOf(r), nosong: (await noSongs()).has(r.id), repeat: (await idSet("repeat_ask")).has(r.id), eta: await etaFor(list, r), ...(r === own ? {} : { partner: true, by: String(r.name || "").split(" & ")[0] }) });
   const last = mine ? null : await lastSungWith(d);
   const geofence = geofenceActive(await db.getSetting("geofence")), ps = await pauseState();
   res.json({ venue: TEN().venue || "", closeHour: Number(TEN().closeHour ?? 2), shouts: liveShouts(await getShouts()), lyrics: (await db.getSetting("lyrics")) !== "off", multi: (await db.getSetting("multi")) === "on", open, geofence, band: await bandPauseOn(), dj: await djPublic(), paused: ps.paused, pausedUntil: ps.until, queue: await (async () => { const paid = await paidIds(), mask = req.query.g === "1" && (await db.getSetting("mask_line")) !== "off"; let wn = 0;   // singer app: only the singer up and #1-3; everyone after is hidden, their own song too (their spot shows in their My song card); managers turn it off on the KJ page
-      return (await withPhotos(list.map(publicRow), list)).map(r => { if (r.status === "queued" && ++wn > LOCK_TOP && mask) return { id: r.id, status: "queued", masked: true }; return paid.has(r.id) ? { ...r, paid: true } : r; }); })(), mine: mine ? { ...publicRow(mine), withNum: await (async () => { const pk = await duetPartner(mine.id); return pk ? await singerNum(numKeyOf(pk)) : ""; })(), spot: list.indexOf(mine), nosong: (await noSongs()).has(mine.id), repeat: (await idSet("repeat_ask")).has(mine.id), eta: await etaFor(list, mine) } : null,
-    last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, mine) });
+      return (await withPhotos(list.map(publicRow), list)).map(r => { if (r.status === "queued" && ++wn > LOCK_TOP && mask) return { id: r.id, status: "queued", masked: true }; return paid.has(r.id) ? { ...r, paid: true } : r; }); })(), mine: mine ? await mineView(mine) : null, myDuet: own && duetRow ? await mineView(duetRow) : null,
+    last: last ? { ...publicRow(last), public: !!last.public } : null, sung: await sungTonightFor(owner(req, res)), bump: await bumpInfo(list, own || null) });
 }));
 
 /* ---------- singer numbers + duets: every signed-in singer has a permanent 6-digit number; give it to a partner and the song counts for both ---------- */
