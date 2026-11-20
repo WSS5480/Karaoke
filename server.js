@@ -2423,7 +2423,7 @@ async function djLogView() {
 async function setMoney(on, who) {
   await db.setSetting("money_off", on ? "" : "on");
   if (!on) { const all = await getBumps(); all.forEach(b => { if (b.status === "pending") { b.status = "canceled"; b.by = who + " turned tips & move-ups off"; } }); await saveBumps(all); }
-  else { await setTipsOff(null); await db.setSetting("bump", "on"); }
+  else { await setTipsOff(null); }   // tips back on does NOT turn paid move-ups back on (Steve stopped those 2026-11-20); that has its own switch
 }
 app.post("/api/bar/money", wrap(async (req, res) => { const who = await barAuth(req, res); if (!who) return; await setMoney(!!req.body.on, who.name); audit(who.name, who.owner ? "bar owner" : "manager", req.body.on ? "Turned tips & lock-your-spot back on" : "Killed all tips & lock-your-spot"); res.json({ ok: true, off: !req.body.on }); }));
 app.post("/api/watch/money", wrap(async (req, res) => {
@@ -2752,6 +2752,8 @@ app.get("/healthz", (req, res) => res.send("ok"));
 
 db.init().then(async () => {
   if (!SESSION_SECRET) { SESSION_SECRET = await db.getSetting("session_secret"); if (!SESSION_SECRET) { SESSION_SECRET = crypto.randomBytes(32).toString("hex"); await db.setSetting("session_secret", SESSION_SECRET); } }
+  // one time (Steve 2026-11-20): paid "Lock your spot" move-ups were stopped but came back on when tips were turned back on; switch them off again
+  if (!(await db.getSetting("fix:bump_off_20261120"))) { await db.setSetting("bump", "off"); await db.setSetting("fix:bump_off_20261120", "1"); console.log("Paid move-ups switched off (one-time fix)"); }
   await setupTwilio();
   console.log(TW_READY ? "Twilio ready. Phone sign-in switch: " + ((await db.getSetting("phone_signin")) || process.env.PHONE_SIGNIN || "on") : "Phone sign-in: off (set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN)");
 }).then(() => app.listen(PORT, () => console.log(`Dive sign-up running on port ${PORT}`)));
